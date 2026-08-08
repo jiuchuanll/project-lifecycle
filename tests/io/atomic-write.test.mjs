@@ -35,6 +35,10 @@ async function createSandbox() {
       files.push(path);
       return path;
     },
+    trackDirectory(path) {
+      directories.push(path);
+      return path;
+    },
     async file(relativePath, content) {
       const path = join(root, relativePath);
       files.push(path);
@@ -175,6 +179,98 @@ test('rejects an absolute path outside the allowed root without changing it', as
   }
 });
 
+test('rejects a raw absolute target even when it is inside the allowed root', async () => {
+  const sandbox = await createSandbox();
+  try {
+    const allowedRoot = await sandbox.directory('allowed');
+    const target = await sandbox.file('allowed/project-map.json', 'previous\n');
+    const temp = sandbox.trackFile(temporarySibling(target));
+
+    await assert.rejects(
+      atomicWriteValidated({
+        root: allowedRoot,
+        target,
+        content: 'replacement\n',
+        validate: acceptsContent('replacement\n'),
+      }),
+      { code: 'PATH_ESCAPE' },
+    );
+
+    assert.equal(await readFile(target, 'utf8'), 'previous\n');
+    await assertAbsent(temp);
+  } finally {
+    await sandbox.cleanup();
+  }
+});
+
+for (const { label, candidate, existingRelativePath } of [
+  {
+    label: 'slash-separated',
+    candidate: 'nested/../project-map.json',
+    existingRelativePath: 'allowed/project-map.json',
+  },
+  {
+    label: 'backslash-separated',
+    candidate: 'nested\\..\\project-map.json',
+    existingRelativePath: 'allowed/nested\\..\\project-map.json',
+  },
+]) {
+  test(`rejects a raw ${label} parent segment before normalization`, async () => {
+    const sandbox = await createSandbox();
+    try {
+      const allowedRoot = await sandbox.directory('allowed');
+      const target = await sandbox.file(existingRelativePath, 'previous\n');
+      const temp = sandbox.trackFile(temporarySibling(target));
+
+      await assert.rejects(
+        atomicWriteValidated({
+          root: allowedRoot,
+          target: candidate,
+          content: 'replacement\n',
+          validate: acceptsContent('replacement\n'),
+        }),
+        { code: 'PATH_ESCAPE' },
+      );
+
+      assert.equal(await readFile(target, 'utf8'), 'previous\n');
+      await assertAbsent(temp);
+    } finally {
+      await sandbox.cleanup();
+    }
+  });
+}
+
+for (const { label, candidate } of [
+  { label: 'Windows drive with backslashes', candidate: 'C:\\governance\\project-map.json' },
+  { label: 'Windows drive with slashes', candidate: 'C:/governance/project-map.json' },
+  { label: 'Windows UNC', candidate: '\\\\server\\share\\project-map.json' },
+  { label: 'Windows rooted backslash', candidate: '\\governance\\project-map.json' },
+]) {
+  test(`rejects a raw ${label} target on POSIX`, { skip: process.platform === 'win32' }, async () => {
+    const sandbox = await createSandbox();
+    try {
+      const allowedRoot = await sandbox.directory('allowed');
+      const possibleTarget = sandbox.trackFile(join(allowedRoot, candidate));
+      const possibleTemp = sandbox.trackFile(temporarySibling(possibleTarget));
+
+      await assert.rejects(
+        atomicWriteValidated({
+          root: allowedRoot,
+          target: candidate,
+          content: 'replacement\n',
+          validate: acceptsContent('replacement\n'),
+        }),
+        { code: 'PATH_ESCAPE' },
+      );
+
+      await assertAbsent(possibleTarget);
+      await assertAbsent(possibleTemp);
+    } finally {
+      await sandbox.cleanup();
+    }
+  });
+}
+
 test('rejects a symlinked parent that escapes the allowed root', async () => {
   const sandbox = await createSandbox();
   try {
@@ -227,6 +323,32 @@ test('rejects an existing target symlink that escapes the allowed root', async (
   }
 });
 
+test('rejects a dangling final symlink as a symlink escape', async () => {
+  const sandbox = await createSandbox();
+  try {
+    const allowedRoot = await sandbox.directory('allowed');
+    const missingTarget = join(sandbox.root, 'missing-target.json');
+    const link = await sandbox.link(missingTarget, 'allowed/project-map.json');
+    const temp = sandbox.trackFile(temporarySibling(link));
+
+    await assert.rejects(
+      atomicWriteValidated({
+        root: allowedRoot,
+        target: 'project-map.json',
+        content: 'replacement\n',
+        validate: acceptsContent('replacement\n'),
+      }),
+      { code: 'PATH_SYMLINK_ESCAPE' },
+    );
+
+    assert.equal((await lstat(link)).isSymbolicLink(), true);
+    await assertAbsent(missingTarget);
+    await assertAbsent(temp);
+  } finally {
+    await sandbox.cleanup();
+  }
+});
+
 test('rejects invalid temporary content and preserves the previous valid file', async () => {
   const sandbox = await createSandbox();
   try {
@@ -250,6 +372,122 @@ test('rejects invalid temporary content and preserves the previous valid file', 
 
     assert.equal(await readFile(target, 'utf8'), 'previous valid\n');
     await assertAbsent(temp);
+  } finally {
+    await sandbox.cleanup();
+  }
+});
+
+test('rejects a malformed truthy validator result', async () => {
+  const sandbox = await createSandbox();
+  try {
+    const allowedRoot = await sandbox.directory('allowed');
+    const target = await sandbox.file('allowed/project-map.json', 'previous valid\n');
+    const temp = sandbox.trackFile(temporarySibling(target));
+
+    await assert.rejects(
+      atomicWriteValidated({
+        root: allowedRoot,
+        target: 'project-map.json',
+        content: 'replacement\n',
+        validate: async () => ({ ok: 'yes', errors: [] }),
+      }),
+      { code: 'VALIDATION_FAILED' },
+    );
+
+    assert.equal(await readFile(target, 'utf8'), 'previous valid\n');
+    await assertAbsent(temp);
+  } finally {
+    await sandbox.cleanup();
+  }
+});
+
+test('cleans the temporary sibling when the validator throws', async () => {
+  const sandbox = await createSandbox();
+  try {
+    const allowedRoot = await sandbox.directory('allowed');
+    const target = await sandbox.file('allowed/project-map.json', 'previous valid\n');
+    const temp = sandbox.trackFile(temporarySibling(target));
+    const validatorError = new Error('validator crashed');
+
+    await assert.rejects(
+      atomicWriteValidated({
+        root: allowedRoot,
+        target: 'project-map.json',
+        content: 'replacement\n',
+        validate: async () => {
+          throw validatorError;
+        },
+      }),
+      (error) => error === validatorError,
+    );
+
+    assert.equal(await readFile(target, 'utf8'), 'previous valid\n');
+    await assertAbsent(temp);
+  } finally {
+    await sandbox.cleanup();
+  }
+});
+
+test('preserves a validation error when temporary cleanup also fails', async () => {
+  const sandbox = await createSandbox();
+  try {
+    const allowedRoot = await sandbox.directory('allowed');
+    const target = await sandbox.file('allowed/project-map.json', 'previous valid\n');
+    const temp = sandbox.trackDirectory(temporarySibling(target));
+
+    await assert.rejects(
+      atomicWriteValidated({
+        root: allowedRoot,
+        target: 'project-map.json',
+        content: 'invalid replacement\n',
+        validate: async () => {
+          await unlink(temp);
+          await mkdir(temp);
+          return { ok: false, errors: ['invalid project map'] };
+        },
+      }),
+      (error) => {
+        assert.equal(error.code, 'VALIDATION_FAILED');
+        assert.deepEqual(error.errors, ['invalid project map']);
+        assert.equal(error.cleanupError?.syscall, 'unlink');
+        return true;
+      },
+    );
+
+    assert.equal(await readFile(target, 'utf8'), 'previous valid\n');
+    assert.equal((await lstat(temp)).isDirectory(), true);
+  } finally {
+    await sandbox.cleanup();
+  }
+});
+
+test('preserves a rename error when temporary cleanup also fails', async () => {
+  const sandbox = await createSandbox();
+  try {
+    const allowedRoot = await sandbox.directory('allowed');
+    const target = await sandbox.file('allowed/project-map.json', 'previous valid\n');
+    const temp = sandbox.trackDirectory(temporarySibling(target));
+
+    await assert.rejects(
+      atomicWriteValidated({
+        root: allowedRoot,
+        target: 'project-map.json',
+        content: 'replacement\n',
+        validate: async () => {
+          await unlink(temp);
+          await mkdir(temp);
+          return { ok: true, errors: [] };
+        },
+      }),
+      (error) => {
+        assert.equal(error.syscall, 'rename');
+        assert.equal(error.cleanupError?.syscall, 'unlink');
+        return true;
+      },
+    );
+
+    assert.equal(await readFile(target, 'utf8'), 'previous valid\n');
+    assert.equal((await lstat(temp)).isDirectory(), true);
   } finally {
     await sandbox.cleanup();
   }

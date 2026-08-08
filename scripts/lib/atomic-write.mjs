@@ -10,6 +10,22 @@ function validationError(errors) {
   return error;
 }
 
+function attachCleanupError(primaryError, cleanupError) {
+  Object.defineProperty(primaryError, 'cleanupError', {
+    configurable: true,
+    enumerable: true,
+    value: cleanupError,
+  });
+}
+
+/**
+ * Atomically replaces a target after validating the fsynced temporary content.
+ *
+ * Trust precondition: Project Lifecycle is the sole writer beneath `root`
+ * during this operation. A later governance lease will serialize writers.
+ * This v1 helper does not claim to resist an untrusted process concurrently
+ * replacing entries in the same directory tree.
+ */
 export async function atomicWriteValidated({ root, target, content, validate }) {
   const targetPath = await resolveInside(root, target);
   const temporaryPath = join(
@@ -29,7 +45,7 @@ export async function atomicWriteValidated({ root, target, content, validate }) 
 
     const temporaryContent = await readFile(temporaryPath, 'utf8');
     const result = await validate(temporaryContent);
-    if (!result?.ok) {
+    if (result?.ok !== true) {
       throw validationError(result?.errors);
     }
 
@@ -41,9 +57,13 @@ export async function atomicWriteValidated({ root, target, content, validate }) 
       await temporaryHandle.close().catch(() => {});
     }
     if (ownsTemporaryPath) {
-      await unlink(temporaryPath).catch((cleanupError) => {
-        if (cleanupError.code !== 'ENOENT') throw cleanupError;
-      });
+      try {
+        await unlink(temporaryPath);
+      } catch (cleanupError) {
+        if (cleanupError.code !== 'ENOENT') {
+          attachCleanupError(error, cleanupError);
+        }
+      }
     }
     throw error;
   }

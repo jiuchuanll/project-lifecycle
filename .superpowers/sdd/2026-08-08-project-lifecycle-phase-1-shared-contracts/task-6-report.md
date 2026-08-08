@@ -97,3 +97,53 @@ Complete. The task commit includes this report and uses the required subject `fe
 
 - No blocking concerns.
 - As scoped by the brief's real-parent resolution design, the allowed directory tree is assumed not to be concurrently replaced by an untrusted writer between resolution and rename. Node's path-based filesystem APIs do not provide a portable directory-file-descriptor transaction across this sequence.
+
+## Fix Round 1
+
+### Accepted v1 trust boundary
+
+- The user accepted the reviewer-identified precondition: Project Lifecycle is the sole writer beneath the explicit allowed governance root while a v1 path resolution or atomic write is running.
+- A later governance lease will serialize Project Lifecycle writers.
+- V1 does not claim to defend against an untrusted process concurrently replacing entries in the same directory tree.
+- This precondition is now stated directly on both exported APIs. No filesystem injection layer or fake portable TOCTOU guarantee was added.
+
+### RED evidence
+
+- Added twelve focused cases before changing production code: raw absolute inside-root, slash and backslash raw `..` segments, four POSIX interpretations of Windows absolute forms, dangling final symlink, malformed truthy validator result, validator throw cleanup, and validation/rename primary-error preservation when cleanup also fails.
+- Command: `node --test tests/io/atomic-write.test.mjs`.
+- Result: failed with exit code 1; 9 passed and 11 failed.
+- Expected failures:
+  - Raw inside-root absolute, both raw parent segments, three backslash Windows forms, dangling final symlink, and truthy `ok` were accepted, producing `Missing expected rejection`.
+  - Windows drive-with-slashes produced `ENOENT` instead of `PATH_ESCAPE`.
+  - Cleanup `EPERM` replaced `VALIDATION_FAILED`.
+  - Cleanup `unlink` replaced the primary `rename` error.
+- The validator-throw cleanup case passed immediately as a characterization of existing cleanup behavior; it still protects that required branch going forward.
+
+### GREEN implementation and evidence
+
+- `resolveInside` now rejects every raw absolute candidate categorically, rejects any raw `..` segment before normalization using both separators, and recognizes Windows drive, UNC, and rooted-backslash absolute forms on POSIX.
+- A dangling final symlink now deterministically returns `PATH_SYMLINK_ESCAPE` rather than being treated as an absent target.
+- `atomicWriteValidated` now accepts only `result.ok === true`.
+- If exact temporary cleanup fails, the primary validation or native rename error remains the thrown error; the cleanup error is exposed as `error.cleanupError`.
+- Cleanup-failure tests safely replace only the exact sandbox temporary file with an empty directory, causing deterministic `unlink` failure without mocks, injected filesystem operations, permissions changes, or paths outside the one-test `mkdtemp` sandbox.
+- Command: `node --test tests/io/atomic-write.test.mjs`.
+- Result: passed 20/20 with exit code 0.
+- Command: `npm test`.
+- Result: passed 134/134 with exit code 0.
+- `node --check` passed for both production modules and the focused test file.
+- `git diff --check` passed before staging; the staged diff is checked again immediately before the fix commit.
+
+### Fix Round 1 files
+
+- `scripts/lib/safe-path.mjs`
+- `scripts/lib/atomic-write.mjs`
+- `tests/io/atomic-write.test.mjs`
+- `.superpowers/sdd/2026-08-08-project-lifecycle-phase-1-shared-contracts/task-6-report.md`
+
+### Fix Round 1 self-review and concerns
+
+- Confirmed every rejected candidate fails before a temporary sibling can be opened.
+- Confirmed all new filesystem tests remain under their exact `mkdtemp` sandbox and cleanup still uses only tracked `unlink` plus bottom-up `rmdir`, never recursive deletion.
+- Confirmed Windows-form tests are skipped on `win32`; their purpose is specifically to lock POSIX handling without constructing a possible Windows path outside the sandbox.
+- Confirmed cleanup failure is secondary diagnostic evidence and cannot replace the primary validation or rename error covered by the tests.
+- No blocking concerns remain under the accepted sole-writer trust precondition.
