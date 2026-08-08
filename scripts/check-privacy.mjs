@@ -1,0 +1,79 @@
+import { execFile } from 'node:child_process';
+import { lstat, readFile } from 'node:fs/promises';
+import { isAbsolute, relative, resolve } from 'node:path';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
+
+const rules = [
+  {
+    code: 'PRIVACY_ABSOLUTE_PATH',
+    pattern: /(?:^|[^A-Za-z0-9_])(?:\/Users\/[^/\s"'`]+|\/home\/[^/\s"'`]+|[A-Za-z]:\\Users\\[^\\\s"'`]+)/,
+  },
+  {
+    code: 'PRIVACY_SECRET_PATTERN',
+    pattern: /(?:^|[^A-Za-z0-9_])(?:token|api[_-]?key|password|secret)\s*[:=]\s*[^\s"'`,;]+/i,
+  },
+  {
+    code: 'PRIVACY_PRIVATE_LOCATOR',
+    pattern: /(?:https?:\/\/|git@)?github\.com[/:](?!sponsors(?:\/|$))[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/i,
+  },
+];
+
+const excluded = (path) => path.split('/').some((segment) => (
+  segment === '.git' || segment === 'node_modules' || segment === '.privacy-test-tmp'
+));
+
+const insideRoot = (root, candidate) => {
+  const path = relative(root, candidate);
+  return path === '' || (!path.startsWith('..') && !isAbsolute(path));
+};
+
+const trackedFiles = async (root) => {
+  const { stdout } = await execFileAsync('git', ['-C', root, 'ls-files', '-z'], {
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  return stdout.split('\0').filter(Boolean).sort();
+};
+
+export const checkPrivacy = async (rootValue) => {
+  const root = resolve(rootValue);
+  const findings = [];
+  let scannedFiles = 0;
+
+  for (const path of await trackedFiles(root)) {
+    if (excluded(path)) continue;
+    const absolute = resolve(root, path);
+    if (!insideRoot(root, absolute)) continue;
+    const stats = await lstat(absolute);
+    if (!stats.isFile()) continue;
+    const content = await readFile(absolute);
+    if (content.includes(0)) continue;
+    scannedFiles += 1;
+    for (const [index, line] of content.toString('utf8').split(/\r?\n/).entries()) {
+      for (const { code, pattern } of rules) {
+        if (pattern.test(line)) findings.push({ code, path, line: index + 1 });
+      }
+    }
+  }
+
+  findings.sort((left, right) => left.path.localeCompare(right.path)
+    || left.line - right.line
+    || left.code.localeCompare(right.code));
+  return { ok: findings.length === 0, scanned_files: scannedFiles, findings };
+};
+
+try {
+  const summary = await checkPrivacy(process.argv[2] ?? process.cwd());
+  console.log(JSON.stringify(summary));
+  if (!summary.ok) process.exitCode = 1;
+} catch {
+  console.log(JSON.stringify({
+    ok: false,
+    scanned_files: 0,
+    findings: [],
+    errors: [{ code: 'PRIVACY_SCAN_ERROR' }],
+  }));
+  process.exitCode = 2;
+}

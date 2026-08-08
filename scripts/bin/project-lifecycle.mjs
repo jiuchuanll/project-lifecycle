@@ -7,6 +7,7 @@ import { ERROR_CODES, createError } from '../lib/errors.mjs';
 import { validateBilingualPair } from '../lib/bilingual-pair.mjs';
 import { fail } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
+import { validateFixtures } from '../validate-fixtures.mjs';
 
 const version = '0.1.0';
 const command = process.argv[2] ?? 'help';
@@ -79,6 +80,16 @@ Commands:
       console.error(`CLI_VALIDATE_JSON_ERROR: ${error.message}`);
       process.exitCode = 2;
     }
+  }
+} else if (command === 'validate-fixtures') {
+  const [root] = process.argv.slice(3);
+  if (!root) {
+    console.error('CLI_VALIDATE_FIXTURES_USAGE: validate-fixtures <fixture-root>');
+    process.exitCode = 2;
+  } else {
+    const result = await validateFixtures(root);
+    console.log(JSON.stringify(result));
+    if (!result.ok) process.exitCode = 1;
   }
 } else {
   console.error(`CLI_UNKNOWN_COMMAND: ${command}`);
