@@ -1,6 +1,6 @@
 ---
 name: maintain-project-knowledge
-description: "Bootstrap and maintain a Project Lifecycle knowledge base. Use when entering a project without an accepted project map, calibrating or repairing domain coverage, materializing verified capability knowledge, changing knowledge topology or constraints, selecting a bounded knowledge baseline for PRD Lifecycle, or absorbing an accepted Knowledge Diff."
+description: "Bootstrap and maintain a Project Lifecycle knowledge base. Use when entering a project without an accepted project map, calibrating or repairing domain coverage, materializing verified capability knowledge, changing knowledge topology or constraints, selecting a bounded knowledge baseline for PRD Lifecycle, absorbing an accepted Knowledge Diff, or performing receipt-gated archive retrieval for an audit, regression, incident, explicit-ID request, or historical comparison."
 ---
 
 # Maintain Project Knowledge

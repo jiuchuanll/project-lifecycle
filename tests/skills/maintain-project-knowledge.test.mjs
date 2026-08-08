@@ -46,6 +46,15 @@ test('declares the canonical bootstrap and maintenance Skill identity', async ()
   assert.match(frontmatter.description, /maintain|maintenance/i);
 });
 
+test('advertises receipt-gated archive retrieval for bounded historical investigations', async () => {
+  const { frontmatter } = await loadSkill();
+
+  assert.match(frontmatter.description, /receipt-gated archive retrieval/i);
+  for (const trigger of ['audit', 'regression', 'incident', 'historical comparison']) {
+    assert.match(frontmatter.description, new RegExp(`\\b${trigger}\\b`, 'i'));
+  }
+});
+
 test('links exactly six focused references one level below the Skill', async () => {
   const { body } = await loadSkill();
   const references = [...body.matchAll(/\]\(references\/([^)]+\.md)\)/g)]
@@ -55,6 +64,22 @@ test('links exactly six focused references one level below the Skill', async () 
   for (const reference of references) {
     assert.doesNotMatch(reference, /\//);
     await access(new URL(`../../skills/maintain-project-knowledge/references/${reference}`, import.meta.url));
+  }
+});
+
+test('references never instruct loading the whole reference set recursively', async () => {
+  const prohibitedInstructions = [
+    /\bload\s+(?:all(?:\s+six)?(?:\s+other)?|(?:the\s+)?six|every\s+other)\s+references?\b/i,
+    /\bload\s+(?:the\s+)?(?:full|entire|whole)\s+reference\s+set\b/i,
+    /\b(?:recursively\s+load|load\s+recursively)\s+(?:the\s+)?(?:(?:full|entire|whole|all)\s+)?(?:references|reference\s+set)\b/i,
+  ];
+
+  for (const reference of expectedReferences) {
+    const source = await readFile(
+      new URL(`../../skills/maintain-project-knowledge/references/${reference}`, import.meta.url),
+      'utf8',
+    );
+    for (const instruction of prohibitedInstructions) assert.doesNotMatch(source, instruction);
   }
 });
 
