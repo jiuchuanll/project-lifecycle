@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "project-extensions",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_id", "registry_revision", "secondary_obligation_kinds"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "project_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "registry_revision": { "type": "integer", "minimum": 1 },
+    "secondary_obligation_kinds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string" }
+    }
+  }
+}

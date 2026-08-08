@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "project-map",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_id", "identity_lineage", "repositories", "constraints", "domains"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "project_id": { "$ref": "#/$defs/id" },
+    "identity_lineage": { "type": "array", "items": { "type": "object" } },
+    "repositories": { "type": "array", "items": { "$ref": "#/$defs/namedReference" } },
+    "constraints": { "type": "array", "items": { "$ref": "#/$defs/constraint" } },
+    "domains": { "type": "array", "items": { "$ref": "#/$defs/domain" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "localizedText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "zh-CN"],
+      "properties": {
+        "en": { "type": "string", "minLength": 1 },
+        "zh-CN": { "type": "string", "minLength": 1 }
+      }
+    },
+    "namedReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": { "id": { "$ref": "#/$defs/id" } }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["includes", "excludes"],
+      "properties": {
+        "includes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "excludes": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "target_id"],
+      "properties": {
+        "kind": { "enum": ["coordinates_with", "depends_on", "governed_by"] },
+        "target_id": { "$ref": "#/$defs/id" }
+      }
+    },
+    "pairedAssets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "zh-CN"],
+      "properties": {
+        "en": { "type": "string", "minLength": 1 },
+        "zh-CN": { "type": "string", "minLength": 1 }
+      }
+    },
+    "domain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "label", "purpose", "domain_state", "scope", "parent_id", "relationships", "evidence_refs", "known_gaps"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["capability", "domain", "project_module"] },
+        "label": { "$ref": "#/$defs/localizedText" },
+        "purpose": { "$ref": "#/$defs/localizedText" },
+        "domain_state": { "enum": ["confirmed", "materialized", "merged", "retired"] },
+        "scope": { "$ref": "#/$defs/scope" },
+        "parent_id": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/id" }] },
+        "relationships": { "type": "array", "items": { "$ref": "#/$defs/relationship" } },
+        "evidence_refs": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "known_gaps": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "paired_assets": { "$ref": "#/$defs/pairedAssets" },
+        "baseline": { "type": "string", "minLength": 1 },
+        "retirement_reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "constraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "scope"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "scope": { "enum": ["descendants", "selected_descendants", "self"] },
+        "owner_id": { "$ref": "#/$defs/id" },
+        "selected_descendants": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+      },
+      "allOf": [{
+        "if": { "properties": { "scope": { "const": "selected_descendants" } }, "required": ["scope"] },
+        "then": {
+          "properties": {
+            "owner_id": { "$ref": "#/$defs/id" },
+            "selected_descendants": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+          },
+          "required": ["owner_id", "selected_descendants"]
+        }
+      }]
+    }
+  }
+}
