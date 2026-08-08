@@ -449,6 +449,7 @@ test('bootstrap creates only the calibrated fixed-root skeleton and paired index
   assert.equal(validateJson('project-map', map).ok, true);
   assert.equal(validateJson('pending-changes', pending).ok, true);
   assert.equal(map.project_id, input.project_id);
+  assert.equal(map.knowledge_baseline, input.calibration_ref);
   assert.deepEqual(map.project_identity, {
     label: input.label,
     purpose: input.purpose,

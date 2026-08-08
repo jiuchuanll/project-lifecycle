@@ -1,12 +1,14 @@
 import { lstat, open, readFile, realpath } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 
 import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
-import { parseRestrictedYaml } from '../lib/markdown.mjs';
+import { maskFencedMarkdown, parseRestrictedYaml } from '../lib/markdown.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
+import { isSafeTask5Reference } from './generate-indexes.mjs';
 
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -107,21 +109,77 @@ const readFrontmatterPrefix = async (path, maxBytes = 65_536) => {
   }
 };
 
-const readBoundedDocument = async (path, maxBytes = 262_144) => {
+const constraintReadFailure = (message) => Object.assign(new Error(message), {
+  code: 'CONTEXT_CONSTRAINT_INVALID',
+});
+
+const inspectConstraintPrefix = (source, constraintId, revision, eof = false) => {
+  const normalized = source.replaceAll('\r\n', '\n');
+  const masked = maskFencedMarkdown(normalized);
+  const completeLines = masked.endsWith('\n') || eof
+    ? masked.split('\n')
+    : masked.split('\n').slice(0, -1);
+  const anchor = `<a id="constraint-${constraintId}"></a>`;
+  const marker = `<!-- project-lifecycle:constraint id=${constraintId} revision=${revision} -->`;
+  const markerPrefix = `<!-- project-lifecycle:constraint id=${constraintId} revision=`;
+  const close = '<!-- /project-lifecycle:constraint -->';
+  const anchorIndexes = [];
+  const markerIndexes = [];
+  for (const [index, line] of completeLines.entries()) {
+    if (line === anchor) anchorIndexes.push(index);
+    if (line.startsWith(markerPrefix) && line.endsWith(' -->')) markerIndexes.push(index);
+  }
+  if (anchorIndexes.length > 1 || markerIndexes.length > 1) {
+    throw constraintReadFailure('Constraint section identity is duplicated.');
+  }
+  if (markerIndexes.length === 1 && (anchorIndexes.length === 0 || markerIndexes[0] < anchorIndexes[0])) {
+    throw constraintReadFailure('Constraint marker appears before its exact anchor.');
+  }
+  if (anchorIndexes.length === 0) return { complete: false };
+  const anchorIndex = anchorIndexes[0];
+  if (completeLines.length <= anchorIndex + 1) return { complete: false };
+  if (completeLines[anchorIndex + 1] !== marker) {
+    throw constraintReadFailure('Constraint semantic revision marker is missing or stale.');
+  }
+  for (let index = anchorIndex + 2; index < completeLines.length; index += 1) {
+    const line = completeLines[index];
+    if (line === close) return { complete: true };
+    if (line.startsWith('<a id="constraint-')
+      || line.startsWith('<!-- project-lifecycle:constraint id=')) {
+      throw constraintReadFailure('Constraint section contains a duplicate or nested opening.');
+    }
+  }
+  return { complete: false };
+};
+
+const readBoundedConstraintSection = async (
+  path,
+  constraintId,
+  revision,
+  { maxBytes = 65_536, chunkBytes = 256 } = {},
+) => {
   const handle = await open(path, 'r');
   try {
-    const { size } = await handle.stat();
-    if (size > maxBytes) {
-      throw Object.assign(new Error('Constraint owner asset exceeds the bounded read limit.'), { code: 'CONTEXT_CONSTRAINT_INVALID' });
+    const decoder = new StringDecoder('utf8');
+    let source = '';
+    let bytesReadTotal = 0;
+    while (bytesReadTotal < maxBytes) {
+      const remaining = maxBytes - bytesReadTotal;
+      const buffer = Buffer.alloc(Math.min(chunkBytes, remaining));
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, bytesReadTotal);
+      if (bytesRead === 0) {
+        source += decoder.end();
+        const inspected = inspectConstraintPrefix(source, constraintId, revision, true);
+        if (inspected.complete) return { bytesRead: bytesReadTotal };
+        throw constraintReadFailure('Constraint section is missing its exact anchor or closing marker.');
+      }
+      bytesReadTotal += bytesRead;
+      source += decoder.write(buffer.subarray(0, bytesRead));
+      if (inspectConstraintPrefix(source, constraintId, revision).complete) {
+        return { bytesRead: bytesReadTotal };
+      }
     }
-    const bytes = Buffer.alloc(size);
-    let offset = 0;
-    while (offset < size) {
-      const { bytesRead } = await handle.read(bytes, offset, size - offset, offset);
-      if (bytesRead === 0) break;
-      offset += bytesRead;
-    }
-    return bytes.subarray(0, offset).toString('utf8');
+    throw constraintReadFailure('Constraint section exceeds the bounded read limit before completion.');
   } finally {
     await handle.close();
   }
@@ -177,6 +235,9 @@ export async function selectContext(inputValue, operations = {}) {
   const normalized = normalizeInput(inputValue);
   if (!normalized.ok) return normalized;
   const input = normalized.value;
+  if (!isSafeTask5Reference(input.knowledge_baseline)) {
+    return failure('CONTEXT_REFERENCE_INVALID', '/knowledge_baseline', 'Context references must be portable single-line tokens.');
+  }
   const onRead = operations.onRead ?? (() => {});
 
   let lifecycleRoot;
@@ -191,6 +252,10 @@ export async function selectContext(inputValue, operations = {}) {
   }
   const mapValidation = validateJson('project-map', map);
   if (!mapValidation.ok) return mapValidation;
+  const globalBaseline = map.knowledge_baseline ?? map.project_identity?.calibration_ref;
+  if (globalBaseline !== undefined && !isSafeTask5Reference(globalBaseline)) {
+    return failure('CONTEXT_REFERENCE_INVALID', '/knowledge_baseline', 'The canonical global baseline is not a safe portable reference.');
+  }
   const byId = new Map(map.domains.map((domain) => [domain.id, domain]));
   const candidates = uniqueSorted(input.candidate_domain_ids);
   if (candidates.length !== input.candidate_domain_ids.length
@@ -263,12 +328,8 @@ export async function selectContext(inputValue, operations = {}) {
     exclusionIds.add(exclusion.id);
   }
 
-  const acceptedBaselines = new Set([
-    ...(map.project_identity ? [map.project_identity.calibration_ref] : []),
-    ...map.domains.filter(({ domain_state }) => domain_state === 'materialized').map(({ baseline }) => baseline),
-  ].filter(Boolean));
   const evidenceGaps = [...input.evidence_gaps];
-  if (!acceptedBaselines.has(input.knowledge_baseline)) evidenceGaps.push(`baseline:${input.knowledge_baseline}`);
+  if (input.knowledge_baseline !== globalBaseline) evidenceGaps.push(`baseline:${input.knowledge_baseline}`);
   const derivedConflicts = [...input.conflicts];
   const selected = [];
   const verticalConstraints = map.constraints.filter((constraint) => domainOrder.some((domainId) => applicableConstraint(
@@ -286,7 +347,6 @@ export async function selectContext(inputValue, operations = {}) {
   const constraints = [...new Map(
     [...verticalConstraints, ...governingConstraints].map((constraint) => [constraint.id, constraint]),
   ).values()].sort((left, right) => compareCodePoints(left.id, right.id));
-  const constraintSources = new Map();
   for (const constraint of constraints) {
     const owner = byId.get(constraint.owner_id);
     const expectedAnchor = `constraint-${constraint.id}`;
@@ -295,21 +355,14 @@ export async function selectContext(inputValue, operations = {}) {
       || constraint.knowledge_refs['zh-CN'] !== `${owner.paired_assets['zh-CN']}#${expectedAnchor}`) {
       return failure('CONTEXT_CONSTRAINT_INVALID', `/constraints/${constraint.id}`, 'Constraint knowledge reference must resolve to its exact current owner asset and anchor.');
     }
-    let source = constraintSources.get(owner.paired_assets.en);
-    if (source === undefined) {
-      try {
-        const path = await resolveReadable(lifecycleRoot, owner.paired_assets.en);
-        source = await readBoundedDocument(path);
-        constraintSources.set(owner.paired_assets.en, source);
-        onRead({ level: 'L1', locator: owner.paired_assets.en, section: 'constraint-anchor' });
-      } catch (error) {
-        return failure(error?.code ?? 'CONTEXT_CONSTRAINT_INVALID', `/constraints/${constraint.id}`, 'Constraint owner asset could not be read safely.');
-      }
-    }
-    const anchor = `<a id="${expectedAnchor}"></a>`;
-    const marker = `<!-- project-lifecycle:constraint id=${constraint.id} revision=${constraint.semantic_revision} -->`;
-    if (!source.includes(anchor) || !source.includes(marker) || !source.includes('<!-- /project-lifecycle:constraint -->')) {
-      return failure('CONTEXT_CONSTRAINT_INVALID', `/constraints/${constraint.id}`, 'Constraint anchor or semantic revision is missing from its current owner asset.');
+    try {
+      const path = await resolveReadable(lifecycleRoot, owner.paired_assets.en);
+      const section = await readBoundedConstraintSection(path, constraint.id, constraint.semantic_revision);
+      onRead({
+        level: 'L1', locator: owner.paired_assets.en, section: 'constraint-anchor', bytes_read: section.bytesRead,
+      });
+    } catch (error) {
+      return failure(error?.code ?? 'CONTEXT_CONSTRAINT_INVALID', `/constraints/${constraint.id}`, 'Constraint owner section could not be read safely.');
     }
     selected.push({
       kind: 'constraint', id: constraint.id,
@@ -338,6 +391,9 @@ export async function selectContext(inputValue, operations = {}) {
     if (frontmatter.id !== domainId || frontmatter.last_verified_baseline !== domain.baseline
       || frontmatter.paired_asset !== domain.paired_assets['zh-CN'].split('/').at(-1)) {
       return failure('CONTEXT_VERSION_INVALID', `/domains/${domainId}`, 'Capability version and ownership must match the current map.');
+    }
+    if (!isSafeTask5Reference(frontmatter.last_verified_baseline)) {
+      return failure('CONTEXT_REFERENCE_INVALID', `/domains/${domainId}/baseline`, 'Capability baseline is not a safe portable reference.');
     }
     if (frontmatter.knowledge_state !== 'current') evidenceGaps.push(`domain:${domainId}`);
     selected.push({
@@ -373,6 +429,9 @@ export async function selectContext(inputValue, operations = {}) {
       || (frontmatter.retention_tier === 'active' && frontmatter.current_project_id !== map.project_id)) {
       return failure('CONTEXT_DELIVERY_INVALID', `/task_delivery_refs/${index}`, 'Task-linked delivery must match its ID and selected domains.');
     }
+    if (!isSafeTask5Reference(frontmatter.knowledge_baseline)) {
+      return failure('CONTEXT_REFERENCE_INVALID', `/task_delivery_refs/${index}/knowledge_baseline`, 'Delivery baseline is not a safe portable reference.');
+    }
     if (frontmatter.retention_tier === 'archive') {
       if (!exclusionIds.has(reference.artifact_id)) {
         exclusions.push({
@@ -397,7 +456,7 @@ export async function selectContext(inputValue, operations = {}) {
     }
     if (frontmatter.retention_tier !== 'active') continue;
     if (frontmatter.knowledge_baseline !== input.knowledge_baseline
-      || !acceptedBaselines.has(frontmatter.knowledge_baseline)) {
+      || frontmatter.knowledge_baseline !== globalBaseline) {
       if (!exclusionIds.has(reference.artifact_id)) {
         exclusions.push({
           id: reference.artifact_id,

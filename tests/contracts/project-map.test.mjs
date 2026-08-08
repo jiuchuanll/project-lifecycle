@@ -44,12 +44,16 @@ test('accepts the minimal valid project map', async () => {
 
 test('accepts a strict optional canonical project identity and rejects partial or extra identity fields', async () => {
   const value = await fixture('valid.json');
+  value.knowledge_baseline = 'baseline:accepted-project';
   value.project_identity = {
     label: { en: 'Sample app', 'zh-CN': '示例应用' },
     purpose: { en: 'Owns sample behavior.', 'zh-CN': '负责示例行为。' },
     calibration_ref: 'calibration:accepted',
   };
   assert.equal(validateJson('project-map', value).ok, true);
+  value.knowledge_baseline = '';
+  assert.ok(validateJson('project-map', value).errors.some(({ path }) => path === '/knowledge_baseline'));
+  value.knowledge_baseline = 'baseline:accepted-project';
   delete value.project_identity.purpose;
   assert.ok(validateJson('project-map', value).errors.some(({ path }) => path === '/project_identity/purpose'));
   value.project_identity.purpose = { en: 'Owns sample behavior.', 'zh-CN': '负责示例行为。' };

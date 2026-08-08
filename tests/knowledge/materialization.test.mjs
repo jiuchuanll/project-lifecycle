@@ -193,6 +193,8 @@ test('materializes exactly one bilingual pair, map update, and regenerated paire
   const node = map.domains.find(({ id }) => id === 'wiki-workspace');
   assert.equal(map.project_id, originalMap.project_id);
   assert.deepEqual(map.project_identity, originalMap.project_identity);
+  assert.equal(originalMap.knowledge_baseline, 'calibration:initial-user-approval');
+  assert.equal(map.knowledge_baseline, 'baseline-2026-08-09');
   assert.equal(node.domain_state, 'materialized');
   assert.equal(node.baseline, 'baseline-2026-08-09');
   assert.deepEqual(node.paired_assets, {
@@ -239,6 +241,20 @@ test('keeps a valid proposed pair proposed without requiring approval', async (c
     assert.equal(frontmatter.ok, true);
     assert.equal(frontmatter.value.data.knowledge_state, 'proposed');
   }
+});
+
+test('keeps the advanced global baseline byte-identical on an identical materialization retry', async (context) => {
+  const { root, lifecycleRoot } = await createProject(context);
+  const input = await validInput(root);
+  assert.equal((await materializeCapability(input)).ok, true);
+  const before = await treeSnapshot(lifecycleRoot);
+
+  const retry = await materializeCapability(input);
+
+  assert.equal(retry.ok, false);
+  assert.equal(retry.errors[0].code, 'MATERIALIZATION_NODE_NOT_CONFIRMED');
+  assert.equal((await readJson(join(lifecycleRoot, 'project-map.json'))).knowledge_baseline, input.baseline);
+  assert.deepEqual(await treeSnapshot(lifecycleRoot), before);
 });
 
 for (const entry of [

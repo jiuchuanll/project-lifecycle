@@ -7,6 +7,7 @@
   "properties": {
     "schema_version": { "const": 1 },
     "project_id": { "$ref": "#/$defs/id" },
+    "knowledge_baseline": { "type": "string", "minLength": 1 },
     "project_identity": { "$ref": "#/$defs/projectIdentity" },
     "identity_lineage": { "type": "array", "maxItems": 0 },
     "repositories": { "type": "array", "maxItems": 0 },

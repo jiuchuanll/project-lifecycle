@@ -200,7 +200,7 @@ const validateOperationDiff = ({
 
 const validateBoundedCandidate = ({ currentMap, candidateMap, changeClass, operation, targetId, changedFields, childDispositions }) => {
   if (!operation) return ok(null);
-  for (const field of ['schema_version', 'project_id', 'project_identity', 'identity_lineage', 'repositories']) {
+  for (const field of ['schema_version', 'project_id', 'knowledge_baseline', 'project_identity', 'identity_lineage', 'repositories']) {
     if (!same(currentMap[field], candidateMap[field])) {
       return impactFailure('CHANGE_NOT_BOUNDED', `/candidate_map/${field}`, 'One proposal cannot bundle an unrelated governance mutation.');
     }

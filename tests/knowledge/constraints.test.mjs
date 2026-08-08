@@ -131,6 +131,26 @@ test('rejects project identity changes bundled into a domain or constraint propo
   assert.equal(result.errors[0].path, '/candidate_map/project_identity');
 });
 
+test('rejects a global knowledge baseline advance hidden inside a Task 4 proposal', async () => {
+  const map = await readJson(new URL('../fixtures/knowledge/topology/base/docs/project-lifecycle/project-map.json', import.meta.url));
+  const candidate = clone(map);
+  candidate.constraints[0].semantic_revision = 2;
+  candidate.knowledge_baseline = 'baseline-unreviewed';
+
+  const result = analyzeImpact({
+    current_map: map,
+    candidate_map: candidate,
+    change_class: 'SEMANTIC',
+    changed_fields: ['constraint_meaning'],
+    target_id: 'desktop-privacy',
+    operation: 'UPDATE_CONSTRAINT',
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'CHANGE_NOT_BOUNDED');
+  assert.equal(result.errors[0].path, '/candidate_map/knowledge_baseline');
+});
+
 test('approved SEMANTIC application atomically updates map, pair, indexes, traceability, and revalidation markers', async (context) => {
   const root = await setup(context);
   const map = await readJson(join(lifecycle(root), 'project-map.json'));

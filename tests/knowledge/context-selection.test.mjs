@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -15,10 +15,11 @@ const constraintBlocks = (id) => id === 'desktop-experience'
 
 const capability = (id, pairedAsset, baseline = 'baseline-7') => `---\nid: ${id}\nknowledge_state: current\npaired_asset: ${pairedAsset}\nlast_verified_baseline: ${baseline}\nimplementation_refs:\n  - repo:src/${id}\nverification_refs:\n  - repo:test/${id}\n---\n\n# SECRET BODY ${id}\n${constraintBlocks(id)}`;
 
-const delivery = ({ id, tier = 'active', domainIds = ['wiki-workspace'], kind = 'prd', baseline = 'baseline-7', projectId = 'sample-project' }) => `---\nschema_version: 1\nartifact_id: ${id}\nartifact_kind: ${kind}\nprimary_route: PRD_DELIVERY\nproject_id_at_creation: ${projectId}\n${tier === 'active' ? `current_project_id: ${projectId}\n` : ''}domain_ids:\n${domainIds.map((domainId) => `  - ${domainId}`).join('\n')}\nknowledge_baseline: ${baseline}\nrelationships:\n  feedback_ids: []\n  prd_ids: []\n  legacy_artifact_refs: []\nretention_tier: ${tier}\nreclassified_from_refs: []\nobligations: []\n---\n\n# SECRET DELIVERY BODY ${id}\n`;
+const delivery = ({ id, tier = 'active', domainIds = ['wiki-workspace'], kind = 'prd', baseline = 'global-baseline-7', projectId = 'sample-project' }) => `---\nschema_version: 1\nartifact_id: ${id}\nartifact_kind: ${kind}\nprimary_route: PRD_DELIVERY\nproject_id_at_creation: ${projectId}\n${tier === 'active' ? `current_project_id: ${projectId}\n` : ''}domain_ids:\n${domainIds.map((domainId) => `  - ${domainId}`).join('\n')}\nknowledge_baseline: ${baseline}\nrelationships:\n  feedback_ids: []\n  prd_ids: []\n  legacy_artifact_refs: []\nretention_tier: ${tier}\nreclassified_from_refs: []\nobligations: []\n---\n\n# SECRET DELIVERY BODY ${id}\n`;
 
 const projectMap = {
   schema_version: 1, project_id: 'sample-project',
+  knowledge_baseline: 'global-baseline-7',
   project_identity: {
     label: { en: 'Sample project', 'zh-CN': '示例项目' },
     purpose: { en: 'Routes sample work.', 'zh-CN': '路由示例工作。' },
@@ -109,7 +110,7 @@ const setup = async (context) => {
 
 const baseInput = (root) => ({
   root,
-  knowledge_baseline: 'baseline-7',
+  knowledge_baseline: 'global-baseline-7',
   primary_domain_id: 'wiki-workspace',
   candidate_domain_ids: ['source-workspace', 'wiki-workspace'],
   applicable_relationships: [
@@ -147,12 +148,14 @@ test('selects exact vertical constraints, explicit cyclic dependencies, and acti
   assert.deepEqual(reads.map(({ level, locator, section }) => [level, locator, section]), [
     ['L0', 'project-map.json', 'document'],
     ['L1', 'knowledge/desktop-experience-en.md', 'constraint-anchor'],
+    ['L1', 'knowledge/desktop-experience-en.md', 'constraint-anchor'],
     ['L2', 'knowledge/wiki-workspace-en.md', 'frontmatter'],
     ['L3', 'knowledge/source-workspace-en.md', 'frontmatter'],
     ['L4', 'delivery/prd-wiki-refresh-en.md', 'frontmatter'],
     ['L5', 'delivery/prd-wiki-history-en.md', 'frontmatter'],
     ['L4', 'delivery/prd-wiki-closed-en.md', 'frontmatter'],
   ]);
+  assert.equal(reads.filter(({ level }) => level === 'L1').every(({ bytes_read: bytesRead }) => Number.isInteger(bytesRead) && bytesRead > 0), true);
   assert.equal(reads.some(({ locator, section }) => locator.includes('unrelated') && section === 'body'), false);
   assert.equal(reads.some(({ locator, section }) => locator.includes('history') && section === 'body'), false);
   assert.equal(validateJson('context-receipt', {
@@ -239,6 +242,14 @@ test('validates caller routing, dependency grounding, delivery linkage, versions
 
 test('pins accepted baselines, delivery identity/retention, and selected ID uniqueness', async (context) => {
   const root = await setup(context);
+  const exact = await selectContext({ ...baseInput(root), task_delivery_refs: [] });
+  assert.equal(exact.ok, true, JSON.stringify(exact));
+  assert.equal(exact.value.stop.code, 'SUFFICIENT');
+
+  const domainOnly = await selectContext({ ...baseInput(root), knowledge_baseline: 'baseline-7', task_delivery_refs: [] });
+  assert.equal(domainOnly.ok, true, JSON.stringify(domainOnly));
+  assert.equal(domainOnly.value.stop.code, 'NEEDS_EVIDENCE');
+
   const invented = await selectContext({ ...baseInput(root), knowledge_baseline: 'invented-baseline', task_delivery_refs: [] });
   assert.equal(invented.ok, true);
   assert.equal(invented.value.stop.code, 'NEEDS_EVIDENCE');
@@ -263,6 +274,47 @@ test('pins accepted baselines, delivery identity/retention, and selected ID uniq
   assert.equal(collision.errors[0].code, 'CONTEXT_SELECTION_CONFLICT');
 });
 
+test('uses calibration only as the legacy global-baseline fallback', async (context) => {
+  const root = await setup(context);
+  const mapPath = join(root, 'docs/project-lifecycle/project-map.json');
+  const legacy = JSON.parse(await readFile(mapPath, 'utf8'));
+  delete legacy.knowledge_baseline;
+  await writeFile(mapPath, `${JSON.stringify(legacy, null, 2)}\n`);
+
+  const calibration = await selectContext({
+    ...baseInput(root), knowledge_baseline: 'calibration:sample-project', task_delivery_refs: [],
+  });
+  const domainOnly = await selectContext({
+    ...baseInput(root), knowledge_baseline: 'baseline-7', task_delivery_refs: [],
+  });
+
+  assert.equal(calibration.ok, true, JSON.stringify(calibration));
+  assert.equal(calibration.value.stop.code, 'SUFFICIENT');
+  assert.equal(domainOnly.ok, true, JSON.stringify(domainOnly));
+  assert.equal(domainOnly.value.stop.code, 'NEEDS_EVIDENCE');
+});
+
+test('rejects unsafe context reference values with a stable diagnostic', async (context) => {
+  const root = await setup(context);
+  const unsafeCaller = await selectContext({
+    ...baseInput(root), knowledge_baseline: 'global`baseline', task_delivery_refs: [],
+  });
+  assert.equal(unsafeCaller.ok, false);
+  assert.equal(unsafeCaller.errors[0].code, 'CONTEXT_REFERENCE_INVALID');
+
+  const mapPath = join(root, 'docs/project-lifecycle/project-map.json');
+  const unsafe = JSON.parse(await readFile(mapPath, 'utf8'));
+  unsafe.knowledge_baseline = 'global`baseline';
+  await writeFile(mapPath, `${JSON.stringify(unsafe, null, 2)}\n`);
+
+  const unsafeMap = await selectContext({
+    ...baseInput(root), task_delivery_refs: [],
+  });
+
+  assert.equal(unsafeMap.ok, false);
+  assert.equal(unsafeMap.errors[0].code, 'CONTEXT_REFERENCE_INVALID');
+});
+
 test('rejects a missing or stale constraint anchor before capability selection', async (context) => {
   const root = await setup(context);
   const path = join(root, 'docs/project-lifecycle/knowledge/desktop-experience-en.md');
@@ -277,6 +329,56 @@ test('rejects a missing or stale constraint anchor before capability selection',
   assert.equal(result.ok, false);
   assert.equal(result.errors[0].code, 'CONTEXT_CONSTRAINT_INVALID');
   assert.equal(reads.some(({ level }) => level === 'L2' || level === 'L3'), false);
+});
+
+test('rejects malformed or fenced-only L1 constraint sections before L2 reads', async (context) => {
+  const corruptions = [
+    (source) => source.replace('revision=3', 'revision=4'),
+    (source) => source.replace(
+      '<a id="constraint-desktop-privacy"></a>\n<!-- project-lifecycle:constraint id=desktop-privacy revision=3 -->',
+      '<!-- project-lifecycle:constraint id=desktop-privacy revision=3 -->\n<a id="constraint-desktop-privacy"></a>',
+    ),
+    (source) => source.replace(
+      'privacy\n<!-- /project-lifecycle:constraint -->',
+      'privacy\n<!-- project-lifecycle:constraint id=desktop-privacy revision=3 -->\n<!-- /project-lifecycle:constraint -->',
+    ),
+    (source) => source.replace('<!-- /project-lifecycle:constraint -->', '<!-- missing-close -->'),
+    (source) => source.replace(
+      constraintBlocks('desktop-experience'),
+      `\n\`\`\`md${constraintBlocks('desktop-experience')}\`\`\`\n`,
+    ),
+  ];
+  for (const corrupt of corruptions) {
+    const root = await setup(context);
+    const path = join(root, 'docs/project-lifecycle/knowledge/desktop-experience-en.md');
+    await writeFile(path, corrupt(capability('desktop-experience', 'desktop-experience.md')));
+    const reads = [];
+    const result = await selectContext({ ...baseInput(root), task_delivery_refs: [] }, { onRead: (entry) => reads.push(entry) });
+    assert.equal(result.ok, false);
+    assert.equal(result.errors[0].code, 'CONTEXT_CONSTRAINT_INVALID');
+    assert.equal(reads.some(({ level }) => level === 'L2' || level === 'L3'), false);
+  }
+});
+
+test('stops bounded L1 reads after an early exact section and rejects cap overflow before completion', async (context) => {
+  const earlyRoot = await setup(context);
+  const earlyPath = join(earlyRoot, 'docs/project-lifecycle/knowledge/desktop-experience-en.md');
+  const earlySource = `${capability('desktop-experience', 'desktop-experience.md')}\n${'TAIL_MUST_NOT_BE_READ\n'.repeat(25_000)}`;
+  await writeFile(earlyPath, earlySource);
+  const earlyReads = [];
+  const early = await selectContext({ ...baseInput(earlyRoot), task_delivery_refs: [] }, { onRead: (entry) => earlyReads.push(entry) });
+  assert.equal(early.ok, true, JSON.stringify(early));
+  assert.equal(earlyReads.filter(({ level }) => level === 'L1').every(({ bytes_read: bytesRead }) => bytesRead < Buffer.byteLength(earlySource)), true);
+
+  const overflowRoot = await setup(context);
+  const overflowPath = join(overflowRoot, 'docs/project-lifecycle/knowledge/desktop-experience-en.md');
+  const withoutConstraints = capability('desktop-experience', 'desktop-experience.md').replace(constraintBlocks('desktop-experience'), '');
+  await writeFile(overflowPath, `${withoutConstraints}\n${'PREFIX\n'.repeat(12_000)}${constraintBlocks('desktop-experience')}`);
+  const overflowReads = [];
+  const overflow = await selectContext({ ...baseInput(overflowRoot), task_delivery_refs: [] }, { onRead: (entry) => overflowReads.push(entry) });
+  assert.equal(overflow.ok, false);
+  assert.equal(overflow.errors[0].code, 'CONTEXT_CONSTRAINT_INVALID');
+  assert.equal(overflowReads.some(({ level }) => level === 'L2' || level === 'L3'), false);
 });
 
 test('accepts CRLF and reordered Frontmatter keys without reading the body', async (context) => {

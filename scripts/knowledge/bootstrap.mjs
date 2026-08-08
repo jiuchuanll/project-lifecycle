@@ -210,6 +210,7 @@ export async function bootstrap({
     map = {
       ...mapBase,
       project_id: projectId,
+      knowledge_baseline: calibrationRef,
       project_identity: { label: clone(label), purpose: clone(purpose), calibration_ref: calibrationRef },
       domains: canonicalizeDomains(domains, calibrationRef),
     };
