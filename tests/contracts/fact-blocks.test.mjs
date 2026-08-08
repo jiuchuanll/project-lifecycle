@@ -48,6 +48,14 @@ test('rejects malformed fact YAML at a stable fact path', async () => {
   assert.equal(hasError(result, 'FACT_BLOCK_MALFORMED', '/facts/0'), true);
 });
 
+test('rejects a fact metadata terminator with trailing content', async () => {
+  const source = (await validSource()).replace('\n-->\n', '\n--> trailing\n');
+  const result = parseFactBlocks(source);
+
+  assert.equal(result.ok, false);
+  assert.equal(hasError(result, 'FACT_BLOCK_MALFORMED', '/facts/0'), true);
+});
+
 test('rejects nested fact blocks', async () => {
   const source = (await validSource()).replace(
     'Wiki workspace currently uses a three-column layout.',

@@ -77,7 +77,12 @@ export const parseFactBlocks = (source) => {
       errors.push(malformed(path, 'Fact metadata delimiter is unmatched.'));
       break;
     }
-    const closeIndex = normalized.indexOf(CLOSE, metadataEnd + 4);
+    const metadataTerminatorEnd = metadataEnd + 4;
+    if (normalized[metadataTerminatorEnd] !== '\n') {
+      errors.push(malformed(path, 'Fact metadata terminator must use the exact canonical form.'));
+      break;
+    }
+    const closeIndex = normalized.indexOf(CLOSE, metadataTerminatorEnd + 1);
     if (closeIndex === -1) {
       errors.push(malformed(path, 'Fact closing delimiter is missing.'));
       break;
@@ -89,7 +94,7 @@ export const parseFactBlocks = (source) => {
       errors.push(malformed(path, 'Fact closing delimiter must use the exact canonical form.'));
       break;
     }
-    const nestedIndex = normalized.indexOf(OPEN, metadataEnd + 4);
+    const nestedIndex = normalized.indexOf(OPEN, metadataTerminatorEnd + 1);
     if (nestedIndex !== -1 && nestedIndex < closeIndex) {
       errors.push(malformed(path, 'Fact blocks cannot nest.'));
       break;
@@ -103,7 +108,7 @@ export const parseFactBlocks = (source) => {
       continue;
     }
     const machineErrors = validateMachineFields(parsed.value, index);
-    const human = parseHumanContent(normalized.slice(metadataEnd + 4, closeIndex), index);
+    const human = parseHumanContent(normalized.slice(metadataTerminatorEnd + 1, closeIndex), index);
     errors.push(...machineErrors, ...human.errors);
     if (seen.has(parsed.value.fact_id)) {
       errors.push(createError('FACT_ID_DUPLICATE', `${path}/fact_id`, `Duplicate fact_id: ${parsed.value.fact_id}`));

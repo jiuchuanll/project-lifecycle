@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 import { ERROR_CODES, createError } from '../lib/errors.mjs';
-import { validateBilingualPair } from '../lib/bilingual-pair.mjs';
+import { validateBilingualPairFromMapFile } from '../lib/bilingual-pair.mjs';
 import { fail } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 
@@ -40,8 +40,7 @@ Commands:
     process.exitCode = 2;
   } else {
     try {
-      const map = JSON.parse(await readFile(mapPath, 'utf8'));
-      const result = await validateBilingualPair(enPath, zhPath, map);
+      const result = await validateBilingualPairFromMapFile(enPath, zhPath, mapPath);
       console.log(JSON.stringify(result));
       if (!result.ok) process.exitCode = 1;
     } catch (error) {
