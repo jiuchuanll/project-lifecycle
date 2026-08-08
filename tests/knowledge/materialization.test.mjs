@@ -173,6 +173,7 @@ test('materializes exactly one bilingual pair, map update, and regenerated paire
       domain_id: 'wiki-workspace',
       knowledge_state: 'current',
       status: 'materialized',
+      cleanup_state: 'complete',
     },
     errors: [],
   });
@@ -264,6 +265,11 @@ for (const entry of [
     name: 'rejects an unknown canonical owner',
     code: 'REFERENCE_MISSING',
     mutate: async ({ input }) => { input.owner_id = 'missing-owner'; },
+  },
+  {
+    name: 'rejects a known cross-domain canonical owner',
+    code: 'MATERIALIZATION_OWNER_MISMATCH',
+    mutate: async ({ input }) => { input.owner_id = 'app-shell'; },
   },
   {
     name: 'rejects an omitted declared dependency',
@@ -370,6 +376,58 @@ test('rejects a symlinked target and leaves the root byte-identical', async (con
   assert.equal(await readFile(join(outside, 'outside.md'), 'utf8'), 'outside bytes\n');
 });
 
+test('rejects an outside-pointing docs symlink with project and external trees unchanged', async (context) => {
+  const project = await createProject(context);
+  const outside = await mkdtemp(join(tmpdir(), 'project-lifecycle-docs-outside-'));
+  context.after(() => rm(outside, { recursive: true, force: true }));
+  await rename(join(project.root, 'docs'), join(outside, 'docs'));
+  await symlink(join(outside, 'docs'), join(project.root, 'docs'));
+  const projectBefore = await treeSnapshot(project.root);
+  const outsideBefore = await treeSnapshot(outside);
+
+  const result = await materializeCapability(await validInput(project.root));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'PATH_SYMLINK_ESCAPE');
+  assert.deepEqual(await treeSnapshot(project.root), projectBefore);
+  assert.deepEqual(await treeSnapshot(outside), outsideBefore);
+});
+
+test('restores the original when the first publisher moves the root and then rejects', async (context) => {
+  const project = await createProject(context);
+  const before = await treeSnapshot(join(project.root, 'docs'));
+  let renameCount = 0;
+
+  const result = await materializeCapability(await validInput(project.root), {
+    rename: async (...args) => {
+      renameCount += 1;
+      await rename(...args);
+      if (renameCount === 1) throw new Error('reject after first move');
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'MATERIALIZATION_WRITE_FAILED');
+  assert.equal(renameCount, 1);
+  assert.deepEqual(await treeSnapshot(join(project.root, 'docs')), before);
+});
+
+test('restores the original when trusted transition inspection rejects after the backup move', async (context) => {
+  const project = await createProject(context);
+  const before = await treeSnapshot(join(project.root, 'docs'));
+
+  const result = await materializeCapability(await validInput(project.root), {
+    inspectTransition: async ({ phase }) => {
+      assert.equal(phase, 'backup-moved');
+      throw new Error('controlled transition inspection failure');
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'MATERIALIZATION_WRITE_FAILED');
+  assert.deepEqual(await treeSnapshot(join(project.root, 'docs')), before);
+});
+
 test('restores the byte-identical original root after a controlled late verification failure', async (context) => {
   const project = await createProject(context);
   const before = await treeSnapshot(project.lifecycleRoot);
@@ -409,6 +467,83 @@ test('restores the byte-identical original root when candidate publication fails
   assert.equal(result.errors[0].code, 'MATERIALIZATION_WRITE_FAILED');
   assert.equal(renameCount, 2);
   assert.deepEqual(await treeSnapshot(project.lifecycleRoot), before);
+});
+
+test('restores the original when the second publisher moves the stage and then rejects', async (context) => {
+  const project = await createProject(context);
+  const before = await treeSnapshot(join(project.root, 'docs'));
+  let renameCount = 0;
+
+  const result = await materializeCapability(await validInput(project.root), {
+    rename: async (...args) => {
+      renameCount += 1;
+      await rename(...args);
+      if (renameCount === 2) throw new Error('reject after candidate move');
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'MATERIALIZATION_WRITE_FAILED');
+  assert.equal(renameCount, 2);
+  assert.deepEqual(await treeSnapshot(join(project.root, 'docs')), before);
+});
+
+test('preserves a verified live candidate when backup cleanup partially removes then rejects', async (context) => {
+  const project = await createProject(context);
+
+  const result = await materializeCapability(await validInput(project.root), {
+    removeBackup: async (backupRoot) => {
+      await rm(join(backupRoot, 'INDEX.md'));
+      throw new Error('controlled partial backup cleanup');
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.status, 'materialized');
+  assert.equal(result.value.cleanup_state, 'pending');
+  assert.deepEqual(result.value.recovery_artifacts, ['backup']);
+  const docsEntries = await readdir(join(project.root, 'docs'));
+  assert.equal(docsEntries.includes('project-lifecycle'), true);
+  assert.equal(docsEntries.some((name) => name.startsWith('.project-lifecycle-materialize-backup-')), true);
+  assert.equal(docsEntries.some((name) => name.startsWith('.project-lifecycle-materialize-stage-')), false);
+  const map = await readJson(join(project.lifecycleRoot, 'project-map.json'));
+  assert.equal(map.domains.find(({ id }) => id === 'wiki-workspace').domain_state, 'materialized');
+});
+
+test('trusts completed backup cleanup postcondition when remover deletes then rejects', async (context) => {
+  const project = await createProject(context);
+
+  const result = await materializeCapability(await validInput(project.root), {
+    removeBackup: async (backupRoot) => {
+      await rm(backupRoot, { recursive: true, force: true });
+      throw new Error('reject after complete cleanup');
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.status, 'materialized');
+  assert.equal(result.value.cleanup_state, 'complete');
+  assert.equal(Object.hasOwn(result.value, 'recovery_artifacts'), false);
+  const docsEntries = await readdir(join(project.root, 'docs'));
+  assert.deepEqual(docsEntries, ['project-lifecycle']);
+});
+
+test('preserves backup and candidate recovery artifacts when restore rename fails', async (context) => {
+  const project = await createProject(context);
+
+  const result = await materializeCapability(await validInput(project.root), {
+    afterPublish: async () => { throw new Error('trigger rollback'); },
+    restoreRename: async () => { throw new Error('controlled restore failure'); },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'MATERIALIZATION_RESTORE_FAILED');
+  assert.equal(result.errors[0].message.includes(project.root), false);
+  assert.match(result.errors[0].message, /backup, stage/u);
+  const docsEntries = await readdir(join(project.root, 'docs'));
+  assert.equal(docsEntries.includes('project-lifecycle'), false);
+  assert.equal(docsEntries.some((name) => name.startsWith('.project-lifecycle-materialize-backup-')), true);
+  assert.equal(docsEntries.some((name) => name.startsWith('.project-lifecycle-materialize-stage-')), true);
 });
 
 test('rejects a no-op publication override without changing or hiding the original root', async (context) => {
