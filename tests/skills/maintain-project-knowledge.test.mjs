@@ -30,6 +30,26 @@ const requiredGateStatements = [
   'Do not read archive bodies without an Archive Access Receipt.',
   'Do not apply a Knowledge Diff whose baseline or ownership is unresolved.',
 ];
+const referenceReadAction = String.raw`(?:preload(?:ing)?|load(?:ing)?|read(?:ing)?|open(?:ing)?)`;
+const wholeReferenceSet = [
+  String.raw`(?:all|every|each)(?:\s+(?:other|sibling))?\s+references?`,
+  String.raw`(?:the\s+)?(?:whole|entire)\s+(?:reference\s+set|set\s+of\s+references)`,
+  String.raw`(?:other|sibling)\s+references`,
+].join('|');
+const wholeReferenceSetInstruction = new RegExp(
+  String.raw`\b${referenceReadAction}\s+(?:${wholeReferenceSet})\b`,
+  'gi',
+);
+const explicitLoadingNegation = /(?:\b(?:do\s+not|never|must\s+not|cannot|can't)\b(?:\s+\w+){0,3}\s*|\bwithout(?:\s+\w+){0,3}\s*)$/i;
+
+const instructsWholeReferenceSet = (source) => source.split(/\r?\n/).some((line) => {
+  wholeReferenceSetInstruction.lastIndex = 0;
+  for (const instruction of line.matchAll(wholeReferenceSetInstruction)) {
+    const prefix = line.slice(0, instruction.index);
+    if (!explicitLoadingNegation.test(prefix)) return true;
+  }
+  return false;
+});
 
 const loadSkill = async () => {
   const source = await readFile(skillUrl, 'utf8');
@@ -67,19 +87,30 @@ test('links exactly six focused references one level below the Skill', async () 
   }
 });
 
-test('references never instruct loading the whole reference set recursively', async () => {
-  const prohibitedInstructions = [
-    /\bload\s+(?:all(?:\s+six)?(?:\s+other)?|(?:the\s+)?six|every\s+other)\s+references?\b/i,
-    /\bload\s+(?:the\s+)?(?:full|entire|whole)\s+reference\s+set\b/i,
-    /\b(?:recursively\s+load|load\s+recursively)\s+(?:the\s+)?(?:(?:full|entire|whole|all)\s+)?(?:references|reference\s+set)\b/i,
-  ];
+for (const [source, expected] of [
+  ['Do not load all references.', false],
+  ['Never read every sibling reference.', false],
+  ['Agents must not open each other reference.', false],
+  ['Continue without loading all references.', false],
+  ['The Skill cannot preload the whole reference set.', false],
+  ['Load every reference.', true],
+  ['Read all references.', true],
+  ['Preload the whole reference set.', true],
+  ['Open each sibling reference.', true],
+  ['Load all other references.', true],
+]) {
+  test(`classifies whole-reference instruction: ${source}`, () => {
+    assert.equal(instructsWholeReferenceSet(source), expected);
+  });
+}
 
+test('references never instruct loading the whole reference set recursively', async () => {
   for (const reference of expectedReferences) {
     const source = await readFile(
       new URL(`../../skills/maintain-project-knowledge/references/${reference}`, import.meta.url),
       'utf8',
     );
-    for (const instruction of prohibitedInstructions) assert.doesNotMatch(source, instruction);
+    assert.equal(instructsWholeReferenceSet(source), false, reference);
   }
 });
 
