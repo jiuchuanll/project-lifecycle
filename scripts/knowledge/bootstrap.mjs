@@ -128,7 +128,7 @@ const existingConflict = (path = '/') => bootstrapFailure(
   'A different project lifecycle root already exists.',
 );
 
-const existingBootstrap = async ({
+const inspectCompleteBootstrap = async ({
   lifecycleRoot,
   expectedMap,
   expectedEnglishIndex,
@@ -136,11 +136,13 @@ const existingBootstrap = async ({
 }) => {
   try {
     const rootStat = await fileState(lifecycleRoot);
-    if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) return existingConflict();
+    if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) return { ok: false, path: '/' };
 
     for (const directory of ['knowledge', 'delivery']) {
       const stat = await fileState(join(lifecycleRoot, directory));
-      if (!stat?.isDirectory() || stat.isSymbolicLink()) return existingConflict(`/${directory}`);
+      if (!stat?.isDirectory() || stat.isSymbolicLink()) {
+        return { ok: false, path: `/${directory}` };
+      }
     }
 
     const requiredFiles = ['project-map.json', 'pending-changes.json', 'INDEX-en.md', 'INDEX.md'];
@@ -149,7 +151,7 @@ const existingBootstrap = async ({
       stat: await fileState(join(lifecycleRoot, name)),
     })));
     for (const { name, stat } of fileStats) {
-      if (!stat?.isFile() || stat.isSymbolicLink()) return existingConflict(`/${name}`);
+      if (!stat?.isFile() || stat.isSymbolicLink()) return { ok: false, path: `/${name}` };
     }
 
     const [mapSource, pendingSource, englishIndex, chineseIndex] = await Promise.all([
@@ -165,12 +167,25 @@ const existingBootstrap = async ({
       || JSON.stringify(existingMap) !== JSON.stringify(expectedMap)
       || englishIndex !== expectedEnglishIndex
       || chineseIndex !== expectedChineseIndex) {
-      return existingConflict();
+      return { ok: false, path: '/' };
     }
-    return ok({ status: 'existing' });
+    return { ok: true };
   } catch {
-    return existingConflict();
+    return { ok: false, path: '/' };
   }
+};
+
+const existingBootstrap = async (expected) => {
+  const inspection = await inspectCompleteBootstrap(expected);
+  return inspection.ok ? ok({ status: 'existing' }) : existingConflict(inspection.path);
+};
+
+const requireCompleteBootstrap = async (expected) => {
+  const inspection = await inspectCompleteBootstrap(expected);
+  if (inspection.ok) return;
+  const error = new Error('Bootstrap postcondition validation failed.');
+  error.code = 'BOOTSTRAP_WRITE_FAILED';
+  throw error;
 };
 
 // The sole-writer boundary makes the final directory rename the visibility point. Earlier failures
@@ -319,6 +334,15 @@ export async function bootstrap({
       content: chineseIndex,
       validate: async (source) => validateIndex(source, map.domains),
     });
+    const expectedPostcondition = {
+      expectedMap: map,
+      expectedEnglishIndex: englishIndex,
+      expectedChineseIndex: chineseIndex,
+    };
+    await requireCompleteBootstrap({
+      lifecycleRoot: stagingRoot,
+      ...expectedPostcondition,
+    });
 
     if (!docsStat) {
       await mkdir(docsPath);
@@ -326,6 +350,11 @@ export async function bootstrap({
     }
     lifecycleRoot = join(docsPath, 'project-lifecycle');
     await publish(stagingRoot, lifecycleRoot);
+    await requireCompleteBootstrap({
+      lifecycleRoot,
+      ...expectedPostcondition,
+    });
+    await rm(stagingRoot, { recursive: true, force: true });
     stagingRoot = null;
     return ok({ status: 'created' });
   } catch (error) {

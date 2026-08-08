@@ -653,3 +653,29 @@ test('bootstrap publishes no partial lifecycle root when the final rename fails'
   await absent(join(root, 'docs', 'project-lifecycle'));
   assert.deepEqual(await readdir(root), []);
 });
+
+test('bootstrap rejects a no-op injected writer and cleans its owned staging root', async (context) => {
+  const root = await createTemporaryRoot(context);
+
+  const result = await bootstrap(validBootstrapInput(root), {
+    atomicWriteValidated: async () => {},
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'BOOTSTRAP_WRITE_FAILED');
+  await absent(join(root, 'docs', 'project-lifecycle'));
+  assert.deepEqual(await readdir(root), []);
+});
+
+test('bootstrap rejects a no-op injected rename and cleans its owned staging root', async (context) => {
+  const root = await createTemporaryRoot(context);
+
+  const result = await bootstrap(validBootstrapInput(root), {
+    rename: async () => {},
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'BOOTSTRAP_WRITE_FAILED');
+  await absent(join(root, 'docs', 'project-lifecycle'));
+  assert.deepEqual(await readdir(root), []);
+});
