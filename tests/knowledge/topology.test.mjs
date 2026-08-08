@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -127,6 +127,77 @@ test('treats a label-only parent wording edit as non-propagating', async () => {
   assert.deepEqual(result.value.affected_domain_ids, ['desktop-experience']);
 });
 
+test('does not let WORDING bypass the declared operation validator', async () => {
+  const map = await readJson(new URL('../fixtures/knowledge/topology/base/docs/project-lifecycle/project-map.json', import.meta.url));
+  const labelCandidate = clone(map);
+  labelCandidate.domains[0].label.en = 'Desktop UX';
+  for (const operation of ['ADD_DOMAIN', 'ADD_RELATIONSHIP', 'MERGE_DOMAIN']) {
+    const result = analyzeImpact({ current_map: map, candidate_map: labelCandidate, change_class: 'WORDING', changed_fields: ['label'], target_id: 'desktop-experience', operation });
+    assert.equal(result.ok, false, operation);
+    assert.equal(result.errors[0].code, 'CHANGE_NOT_BOUNDED');
+  }
+  for (const operation of ['ADD_CONSTRAINT', 'ADD_EXCEPTION', 'REPLACE_CONSTRAINT']) {
+    const result = analyzeImpact({ current_map: map, candidate_map: map, change_class: 'WORDING', changed_fields: ['label'], target_id: 'desktop-privacy', operation });
+    assert.equal(result.ok, false, operation);
+    assert.equal(result.errors[0].code, 'CHANGE_NOT_BOUNDED');
+  }
+  assert.equal(analyzeImpact({ current_map: map, candidate_map: labelCandidate, change_class: 'WORDING', changed_fields: ['label'], target_id: 'desktop-experience', operation: 'UPDATE_DOMAIN' }).ok, true);
+  assert.equal(analyzeImpact({ current_map: map, candidate_map: map, change_class: 'WORDING', changed_fields: ['label'], target_id: 'desktop-privacy', operation: 'UPDATE_CONSTRAINT' }).ok, true);
+});
+
+test('rejects a WORDING ADD_DOMAIN bypass before writing pending state', async (context) => {
+  const root = await setup(context);
+  const map = await mapAt(root);
+  const candidate = clone(map);
+  candidate.domains[0].label.en = 'Desktop UX';
+  const proposal = semanticProposal(candidate, {
+    change_id: 'change-desktop-wording',
+    kind: 'topology',
+    semantic_target_key: 'domain:desktop-experience',
+    change_class: 'WORDING',
+    affected_refs: ['desktop-experience'],
+    proposed_patch: { operation: 'ADD_DOMAIN', target_type: 'domain', target_id: 'desktop-experience', changed_fields: ['label'], new_ids: [], successor_ids: [] },
+    child_dispositions: [],
+  });
+  const before = await treeFingerprint(root);
+  const result = await proposeChange({ root, change: proposal });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'CHANGE_NOT_BOUNDED');
+  assert.equal(await treeFingerprint(root), before);
+});
+
+test('rejects a persisted WORDING operation bypass before approved apply', async (context) => {
+  const root = await setup(context);
+  const map = await mapAt(root);
+  const candidate = clone(map);
+  candidate.domains[0].label.en = 'Desktop UX';
+  const proposal = semanticProposal(candidate, {
+    change_id: 'change-desktop-wording',
+    kind: 'topology',
+    semantic_target_key: 'domain:desktop-experience',
+    change_class: 'WORDING',
+    affected_refs: ['desktop-experience'],
+    proposed_patch: { operation: 'UPDATE_DOMAIN', target_type: 'domain', target_id: 'desktop-experience', changed_fields: ['label'], new_ids: [], successor_ids: [] },
+    child_dispositions: [],
+  });
+  assert.equal((await proposeChange({ root, change: proposal })).ok, true);
+  const pending = await pendingAt(root);
+  pending.changes[0].proposed_patch.operation = 'ADD_DOMAIN';
+  await writeFile(join(lifecycle(root), 'pending-changes.json'), `${JSON.stringify(pending, null, 2)}\n`);
+  const before = await treeFingerprint(root);
+  const result = await applyApprovedChange({
+    root,
+    change_id: proposal.change_id,
+    approval_ref: 'approval:wording',
+    traceability: { knowledge_diff_ref: 'diff:wording', history_ref: 'git:wording' },
+    candidate_map: candidate,
+    knowledge_updates: [],
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'CHANGE_NOT_BOUNDED');
+  assert.equal(await treeFingerprint(root), before);
+});
+
 test('requires evidence before proposing a new narrower child', async () => {
   const map = await readJson(new URL('../fixtures/knowledge/topology/base/docs/project-lifecycle/project-map.json', import.meta.url));
   const candidate = clone(map);
@@ -242,9 +313,23 @@ test('requires confirmed approval metadata for a constraint exception', async ()
 test('updates exactly one reviewed constraint exception without routing metadata changes', async () => {
   const current = await readJson(new URL('../fixtures/knowledge/topology/base/docs/project-lifecycle/project-map.json', import.meta.url));
   current.constraints[0].exceptions.push({ domain_id: 'wiki-workspace', reason_ref: 'decision:old-exception', approval_ref: 'approval:old-exception' });
-  const candidate = clone(current);
-  candidate.constraints[0].exceptions[0] = { domain_id: 'wiki-workspace', reason_ref: 'decision:new-exception', approval_ref: 'approval:new-exception' };
-  const result = analyzeImpact({
+  const unchangedRevision = clone(current);
+  unchangedRevision.constraints[0].exceptions[0] = { domain_id: 'wiki-workspace', reason_ref: 'decision:new-exception', approval_ref: 'approval:new-exception' };
+  const stale = analyzeImpact({
+    current_map: current,
+    candidate_map: unchangedRevision,
+    change_class: 'SEMANTIC',
+    changed_fields: ['exception'],
+    target_id: 'desktop-privacy',
+    operation: 'ADD_EXCEPTION',
+    child_dispositions: [{ domain_id: 'wiki-workspace', disposition: 'EXCEPTION', exception_ref: 'decision:new-exception', evidence_refs: ['decision:new-exception'], unresolved_fact_ids: [] }],
+  });
+  assert.equal(stale.ok, false);
+  assert.equal(stale.errors[0].code, 'CONSTRAINT_REVISION_INVALID');
+
+  const candidate = clone(unchangedRevision);
+  candidate.constraints[0].semantic_revision = 2;
+  const accepted = analyzeImpact({
     current_map: current,
     candidate_map: candidate,
     change_class: 'SEMANTIC',
@@ -253,8 +338,8 @@ test('updates exactly one reviewed constraint exception without routing metadata
     operation: 'ADD_EXCEPTION',
     child_dispositions: [{ domain_id: 'wiki-workspace', disposition: 'EXCEPTION', exception_ref: 'decision:new-exception', evidence_refs: ['decision:new-exception'], unresolved_fact_ids: [] }],
   });
-  assert.equal(result.ok, true);
-  assert.deepEqual(result.value.affected_domain_ids, ['desktop-experience', 'wiki-workspace']);
+  assert.equal(accepted.ok, true);
+  assert.deepEqual(accepted.value.affected_domain_ids, ['desktop-experience', 'wiki-workspace']);
 });
 
 test('rejects malformed, duplicate-ID, and cyclic candidate maps without touching current root', async (context) => {

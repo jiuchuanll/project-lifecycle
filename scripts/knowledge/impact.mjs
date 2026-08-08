@@ -105,18 +105,9 @@ const validateOperationDiff = ({
   const currentConstraint = constraintById(currentMap, targetId);
   const candidateConstraint = constraintById(candidateMap, targetId);
 
-  if (changeClass === 'WORDING') {
-    const exactWording = currentConstraint || candidateConstraint
-      ? domainChanges.length === 0 && constraintChanges.length === 0
-      : exactSet(domainChanges, [targetId]) && constraintChanges.length === 0
-        && exactSet(changedKeys(currentDomain, candidateDomain), ['label']);
-    return exactWording && exactSet(changedFields, ['label'])
-      ? ok(null)
-      : impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map', 'WORDING may change only the reviewed label or paired wording content.');
-  }
-
   if (operation === 'ADD_RELATIONSHIP') {
-    if (!exactSet(domainChanges, [targetId]) || constraintChanges.length > 0
+    if (!currentDomain || !candidateDomain
+      || !exactSet(domainChanges, [targetId]) || constraintChanges.length > 0
       || !exactSet(changedKeys(currentDomain, candidateDomain), ['relationships'])
       || !exactSet(changedFields, ['relationship'])) {
       return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map', 'ADD_RELATIONSHIP may add only one declared horizontal edge.');
@@ -136,14 +127,16 @@ const validateOperationDiff = ({
     }
   } else if (operation === 'UPDATE_DOMAIN') {
     const actualFields = changedKeys(currentDomain, candidateDomain).map(domainFieldForKey);
-    if (!exactSet(domainChanges, [targetId]) || constraintChanges.length > 0
+    if (!currentDomain || !candidateDomain
+      || !exactSet(domainChanges, [targetId]) || constraintChanges.length > 0
       || actualFields.includes(undefined) || !exactSet(actualFields, changedFields)) {
       return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/domains', 'UPDATE_DOMAIN must match its declared semantic fields.');
     }
   } else if (operation === 'MERGE_DOMAIN') {
     const allowed = [targetId, ...childDispositions.map(({ domain_id: id }) => id)];
     const parentKeys = changedKeys(currentDomain, candidateDomain);
-    if (domainChanges.some((id) => !allowed.includes(id)) || constraintChanges.length > 0
+    if (!currentDomain || !candidateDomain
+      || domainChanges.some((id) => !allowed.includes(id)) || constraintChanges.length > 0
       || !exactSet(parentKeys, ['domain_state', 'successor_id'])
       || !exactSet(changedFields, operationFields.MERGE_DOMAIN)) {
       return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/domains', 'MERGE_DOMAIN may change only the parent and reviewed children.');
@@ -155,8 +148,9 @@ const validateOperationDiff = ({
       return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/constraints', 'ADD_CONSTRAINT may add exactly one new identity.');
     }
   } else if (operation === 'ADD_EXCEPTION') {
-    if (domainChanges.length > 0 || !exactSet(constraintChanges, [targetId])
-      || !exactSet(changedKeys(currentConstraint, candidateConstraint), ['exceptions'])
+    if (!currentConstraint || !candidateConstraint
+      || domainChanges.length > 0 || !exactSet(constraintChanges, [targetId])
+      || !exactSet(changedKeys(currentConstraint, candidateConstraint), ['exceptions', 'semantic_revision'])
       || !exactSet(changedFields, operationFields.ADD_EXCEPTION)) {
       return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/constraints', 'ADD_EXCEPTION may change only the exact reviewed exception set.');
     }
@@ -171,6 +165,15 @@ const validateOperationDiff = ({
       return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/constraints', 'ADD_EXCEPTION requires exactly one added or updated reviewed exception.');
     }
   } else if (operation === 'UPDATE_CONSTRAINT') {
+    if (!currentConstraint || !candidateConstraint) {
+      return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/constraints', 'UPDATE_CONSTRAINT requires one existing reviewed constraint target.');
+    }
+    if (changeClass === 'WORDING') {
+      return domainChanges.length === 0 && constraintChanges.length === 0
+        && exactSet(changedFields, ['label'])
+        ? ok(null)
+        : impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/constraints', 'Constraint WORDING may change only paired wording content.');
+    }
     const constraintKeys = changedKeys(currentConstraint, candidateConstraint);
     const actualFields = constraintKeys
       .filter((key) => key !== 'semantic_revision')
@@ -185,7 +188,8 @@ const validateOperationDiff = ({
   } else if (operation === 'REPLACE_CONSTRAINT') {
     const allowed = [targetId, ...(candidateConstraint?.successor_ids ?? [])];
     const retiredKeys = changedKeys(currentConstraint, candidateConstraint);
-    if (domainChanges.length > 0 || !exactSet(constraintChanges, allowed)
+    if (!currentConstraint || !candidateConstraint
+      || domainChanges.length > 0 || !exactSet(constraintChanges, allowed)
       || !exactSet(retiredKeys, ['lifecycle_state', 'retirement_reason_ref', 'successor_ids'])
       || !exactSet(changedFields, operationFields.REPLACE_CONSTRAINT)) {
       return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/constraints', 'REPLACE_CONSTRAINT may change only the retired identity and reviewed successors.');
@@ -387,6 +391,14 @@ export const analyzeImpact = ({
   const candidateValidation = validateJson('project-map', candidateMap);
   if (!candidateValidation.ok) return candidateValidation;
 
+  if (operation === 'ADD_EXCEPTION' && changeClass === 'SEMANTIC') {
+    const revision = validateSemanticRevision(
+      constraintById(currentMap, targetId),
+      constraintById(candidateMap, targetId),
+    );
+    if (!revision.ok) return revision;
+  }
+
   if (operation === 'ADD_CONSTRAINT'
     && constraintById(currentMap, targetId)?.lifecycle_state === 'retired') {
     return impactFailure('CONSTRAINT_ID_REUSE', '/candidate_map/constraints', 'A retired constraint ID cannot be reused.');
@@ -466,7 +478,7 @@ export const analyzeImpact = ({
           'A new constraint ID must be unused and start at semantic revision one.',
         );
       }
-    } else if (changeClass === 'SEMANTIC' && operation !== 'ADD_EXCEPTION') {
+    } else if (changeClass === 'SEMANTIC') {
       const revision = validateSemanticRevision(currentConstraint, candidateConstraint);
       if (!revision.ok) return revision;
     } else if (changeClass === 'REPLACEMENT') {

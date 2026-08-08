@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile, realpath } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { atomicWriteValidated } from '../lib/atomic-write.mjs';
+import { validateBilingualPair } from '../lib/bilingual-pair.mjs';
 import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
 import { parseFactBlocks } from '../lib/fact-blocks.mjs';
@@ -146,7 +148,7 @@ const validateProposalMetadata = (change, currentMap, candidateMap, impact) => {
 
   const candidateConstraint = candidateMap.constraints.find(({ id }) => id === patch.target_id);
   if (change.change_class === 'SEMANTIC'
-    && patch.operation === 'UPDATE_CONSTRAINT'
+    && ['ADD_EXCEPTION', 'UPDATE_CONSTRAINT'].includes(patch.operation)
     && patch.expected_semantic_revision !== candidateConstraint?.semantic_revision) {
     return proposalFailure(
       'CHANGE_PROPOSAL_MISMATCH',
@@ -205,6 +207,48 @@ const validateProposalMetadata = (change, currentMap, candidateMap, impact) => {
 };
 
 const contentHash = (source) => `sha256:${createHash('sha256').update(source).digest('hex')}`;
+
+const validateKnowledgeCandidatePairs = async (candidates, candidateMap) => {
+  if (candidates.length === 0) return ok(null);
+  let stageRoot;
+  let result = ok(null);
+  try {
+    stageRoot = await mkdtemp(join(tmpdir(), 'project-lifecycle-proposal-'));
+    for (const [index, candidate] of candidates.entries()) {
+      const domain = candidateMap.domains.find(({ id }) => id === candidate?.domain_id);
+      if (!domain?.paired_assets) {
+        result = proposalFailure('CHANGE_KNOWLEDGE_COMMITMENT_INVALID', `/knowledge_candidates/${index}`, 'Knowledge candidate must target one materialized canonical domain.');
+        break;
+      }
+      const pairRoot = join(stageRoot, String(index));
+      const paths = {};
+      for (const language of ['en', 'zh-CN']) {
+        const localized = candidate[language];
+        const locator = domain.paired_assets[language];
+        const target = resolve(pairRoot, locator);
+        if (!isRecord(localized) || localized.locator !== locator
+          || !isNonEmptyString(localized.content) || !inside(pairRoot, target)) {
+          result = proposalFailure('CHANGE_KNOWLEDGE_COMMITMENT_INVALID', `/knowledge_candidates/${index}/${language}`, 'Both exact canonical localized candidates are required.');
+          break;
+        }
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(target, localized.content);
+        paths[language] = target;
+      }
+      if (!result.ok) break;
+      result = await validateBilingualPair(paths.en, paths['zh-CN'], candidateMap);
+      if (!result.ok) break;
+    }
+  } catch {
+    result = proposalFailure('CHANGE_KNOWLEDGE_COMMITMENT_INVALID', '/knowledge_candidates', 'Reviewed bilingual knowledge candidates could not be validated.');
+  }
+  try {
+    if (stageRoot) await rm(stageRoot, { recursive: true, force: true });
+  } catch {
+    return proposalFailure('CHANGE_KNOWLEDGE_COMMITMENT_INVALID', '/knowledge_candidates', 'Owned proposal validation artifacts could not be cleaned.');
+  }
+  return result;
+};
 
 const deriveKnowledgeCommitments = async (change, currentMap, candidateMap, impact, lifecycleRoot) => {
   const commitments = [];
@@ -413,6 +457,12 @@ export async function proposeChange({ root, change }, operations = {}) {
 
   const markers = validateReviewedMarkers(effectiveChange, map, effectiveChange.candidate_map);
   if (!markers.ok) return markers;
+
+  const candidatePairs = await validateKnowledgeCandidatePairs(
+    effectiveChange.knowledge_candidates ?? [],
+    effectiveChange.candidate_map,
+  );
+  if (!candidatePairs.ok) return candidatePairs;
 
   const commitments = await deriveKnowledgeCommitments(
     effectiveChange,

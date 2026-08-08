@@ -373,6 +373,49 @@ test('rejects a reviewed fact rewrite without an exact revision increment', asyn
   assert.equal(await fingerprint(root), before);
 });
 
+test('rejects a structurally mismatched bilingual proposal before pending write', async (context) => {
+  const root = await setup(context);
+  const map = await readJson(join(lifecycle(root), 'project-map.json'));
+  const candidate = clone(map);
+  candidate.constraints[0].semantic_revision = 2;
+  const updates = await updateConstraintSections(root, 'desktop-privacy', 'desktop-privacy', 2);
+  updates[0].en.content = updates[0].en.content.replace(
+    '## Purpose and current boundary',
+    '### Purpose and current boundary',
+  );
+  const before = await fingerprint(root);
+  const result = await proposeChange({ root, change: proposalFor(candidate, { knowledge_candidates: updates }) });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'PAIR_SECTION_MISMATCH');
+  assert.equal(await fingerprint(root), before);
+});
+
+test('applies an approved semantic exception with revision and revalidation impact', async (context) => {
+  const root = await setup(context);
+  const map = await readJson(join(lifecycle(root), 'project-map.json'));
+  const candidate = clone(map);
+  candidate.constraints[0].exceptions.push({ domain_id: 'wiki-workspace', reason_ref: 'decision:wiki-exception', approval_ref: 'approval:wiki-exception' });
+  candidate.constraints[0].semantic_revision = 2;
+  candidate.revalidation_required = [{ domain_id: 'wiki-workspace', fact_id: 'wiki-storage-boundary', reason_ref: 'change-wiki-exception', constraint_id: 'desktop-privacy', from_revision: 1, to_revision: 2 }];
+  const updates = await updateConstraintSections(root, 'desktop-privacy', 'desktop-privacy', 2);
+  const proposal = proposalFor(candidate, {
+    change_id: 'change-wiki-exception',
+    semantic_target_key: 'exception:desktop-privacy',
+    affected_refs: ['desktop-experience', 'desktop-privacy', 'wiki-workspace'],
+    proposed_patch: { operation: 'ADD_EXCEPTION', target_type: 'exception', target_id: 'desktop-privacy', changed_fields: ['exception'], expected_semantic_revision: 2, new_ids: [], successor_ids: [] },
+    child_dispositions: [{ domain_id: 'wiki-workspace', disposition: 'EXCEPTION', exception_ref: 'decision:wiki-exception', evidence_refs: ['decision:wiki-exception'], unresolved_fact_ids: ['wiki-storage-boundary'] }],
+    knowledge_candidates: updates,
+  });
+  assert.equal((await proposeChange({ root, change: proposal })).ok, true);
+  const before = await fingerprint(root);
+  const denied = await applyApprovedChange({ root, change_id: proposal.change_id, approval_ref: '', traceability: { knowledge_diff_ref: 'diff:exception', history_ref: 'git:exception' }, candidate_map: candidate, knowledge_updates: updates });
+  assert.equal(denied.ok, false);
+  assert.equal(await fingerprint(root), before);
+  const applied = await applyApprovedChange({ root, change_id: proposal.change_id, approval_ref: 'approval:exception-v2', traceability: { knowledge_diff_ref: 'diff:exception', history_ref: 'git:exception' }, candidate_map: candidate, knowledge_updates: updates });
+  assert.equal(applied.ok, true);
+  assert.equal((await readJson(join(lifecycle(root), 'project-map.json'))).constraints[0].semantic_revision, 2);
+});
+
 test('rejects unrelated or extra revalidation markers before pending write', async (context) => {
   const root = await setup(context);
   const map = await readJson(join(lifecycle(root), 'project-map.json'));
