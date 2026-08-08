@@ -77,6 +77,11 @@ async function assertAbsent(path) {
   await assert.rejects(lstat(path), { code: 'ENOENT' });
 }
 
+async function replaceFileWithDirectory(path) {
+  await unlink(path);
+  await mkdir(path);
+}
+
 const acceptsContent = (expected) => async (content) => ({
   ok: content === expected,
   errors: content === expected ? [] : ['unexpected content'],
@@ -428,6 +433,110 @@ test('cleans the temporary sibling when the validator throws', async () => {
   }
 });
 
+test('preserves an extensible validator error when temporary cleanup also fails', async () => {
+  const sandbox = await createSandbox();
+  try {
+    const allowedRoot = await sandbox.directory('allowed');
+    const target = await sandbox.file('allowed/project-map.json', 'previous valid\n');
+    const temp = sandbox.trackDirectory(temporarySibling(target));
+    const validatorError = new Error('validator crashed');
+
+    await assert.rejects(
+      atomicWriteValidated({
+        root: allowedRoot,
+        target: 'project-map.json',
+        content: 'replacement\n',
+        validate: async () => {
+          await replaceFileWithDirectory(temp);
+          throw validatorError;
+        },
+      }),
+      (error) => {
+        assert.equal(error, validatorError);
+        assert.equal(error.cleanupError?.syscall, 'unlink');
+        return true;
+      },
+    );
+
+    assert.equal(await readFile(target, 'utf8'), 'previous valid\n');
+    assert.equal((await lstat(temp)).isDirectory(), true);
+  } finally {
+    await sandbox.cleanup();
+  }
+});
+
+test('wraps a frozen validator error without losing either failure', async () => {
+  const sandbox = await createSandbox();
+  try {
+    const allowedRoot = await sandbox.directory('allowed');
+    const target = await sandbox.file('allowed/project-map.json', 'previous valid\n');
+    const temp = sandbox.trackDirectory(temporarySibling(target));
+    const validatorError = Object.freeze(new Error('frozen validator crash'));
+
+    await assert.rejects(
+      atomicWriteValidated({
+        root: allowedRoot,
+        target: 'project-map.json',
+        content: 'replacement\n',
+        validate: async () => {
+          await replaceFileWithDirectory(temp);
+          throw validatorError;
+        },
+      }),
+      (error) => {
+        assert.equal(error instanceof AggregateError, true);
+        assert.equal(error.cause, validatorError);
+        assert.equal(error.primaryError, validatorError);
+        assert.equal(error.cleanupError?.syscall, 'unlink');
+        assert.equal(error.errors[0], validatorError);
+        assert.equal(error.errors[1], error.cleanupError);
+        return true;
+      },
+    );
+
+    assert.equal(await readFile(target, 'utf8'), 'previous valid\n');
+    assert.equal((await lstat(temp)).isDirectory(), true);
+  } finally {
+    await sandbox.cleanup();
+  }
+});
+
+test('wraps a primitive validator throw without losing either failure', async () => {
+  const sandbox = await createSandbox();
+  try {
+    const allowedRoot = await sandbox.directory('allowed');
+    const target = await sandbox.file('allowed/project-map.json', 'previous valid\n');
+    const temp = sandbox.trackDirectory(temporarySibling(target));
+    const validatorError = 'primitive validator crash';
+
+    await assert.rejects(
+      atomicWriteValidated({
+        root: allowedRoot,
+        target: 'project-map.json',
+        content: 'replacement\n',
+        validate: async () => {
+          await replaceFileWithDirectory(temp);
+          throw validatorError;
+        },
+      }),
+      (error) => {
+        assert.equal(error instanceof AggregateError, true);
+        assert.equal(error.cause, validatorError);
+        assert.equal(error.primaryError, validatorError);
+        assert.equal(error.cleanupError?.syscall, 'unlink');
+        assert.equal(error.errors[0], validatorError);
+        assert.equal(error.errors[1], error.cleanupError);
+        return true;
+      },
+    );
+
+    assert.equal(await readFile(target, 'utf8'), 'previous valid\n');
+    assert.equal((await lstat(temp)).isDirectory(), true);
+  } finally {
+    await sandbox.cleanup();
+  }
+});
+
 test('preserves a validation error when temporary cleanup also fails', async () => {
   const sandbox = await createSandbox();
   try {
@@ -441,8 +550,7 @@ test('preserves a validation error when temporary cleanup also fails', async () 
         target: 'project-map.json',
         content: 'invalid replacement\n',
         validate: async () => {
-          await unlink(temp);
-          await mkdir(temp);
+          await replaceFileWithDirectory(temp);
           return { ok: false, errors: ['invalid project map'] };
         },
       }),
@@ -474,8 +582,7 @@ test('preserves a rename error when temporary cleanup also fails', async () => {
         target: 'project-map.json',
         content: 'replacement\n',
         validate: async () => {
-          await unlink(temp);
-          await mkdir(temp);
+          await replaceFileWithDirectory(temp);
           return { ok: true, errors: [] };
         },
       }),

@@ -147,3 +147,38 @@ Complete. The task commit includes this report and uses the required subject `fe
 - Confirmed Windows-form tests are skipped on `win32`; their purpose is specifically to lock POSIX handling without constructing a possible Windows path outside the sandbox.
 - Confirmed cleanup failure is secondary diagnostic evidence and cannot replace the primary validation or rename error covered by the tests.
 - No blocking concerns remain under the accepted sole-writer trust precondition.
+
+## Fix Round 2
+
+### Scope and trust boundary
+
+- Fixed the remaining cleanup-diagnostic edge case only in `scripts/lib/atomic-write.mjs` and its focused tests.
+- The accepted v1 boundary is unchanged: Project Lifecycle is the sole writer beneath the governance root during an operation; a later governance lease will serialize writers; v1 does not claim defense against an untrusted process concurrently replacing the directory tree.
+
+### RED evidence
+
+- Added three real-filesystem cases where a validator replaces only the exact sandbox temporary file with an empty directory and then throws: an extensible Error, a frozen Error, and a primitive.
+- Command: `node --test tests/io/atomic-write.test.mjs`.
+- Result: failed with exit code 1; 21 passed and 2 failed.
+- The extensible Error characterization passed and proved existing identity preservation.
+- The frozen Error and primitive cases failed because the unconditional `Object.defineProperty` produced a TypeError instead of preserving both the primary and cleanup failures.
+
+### GREEN implementation and evidence
+
+- `attachCleanupError` now returns the original primary object after attaching `cleanupError` when the object is extensible.
+- If attachment is impossible, it returns the smallest built-in wrapper: an `AggregateError` whose `cause` and `primaryError` retain the original thrown value, whose `cleanupError` retains the unlink failure, and whose ordered `errors` array contains both.
+- The atomic-write catch path throws exactly the helper's returned value, so neither failure is swallowed.
+- No new class, filesystem injection point, or broader production abstraction was added.
+- Command: `node --test tests/io/atomic-write.test.mjs`.
+- Result: passed 23/23 with exit code 0.
+- Command: `npm test`.
+- Result: passed 137/137 with exit code 0.
+- `node --check` passed for the changed production module and focused test file.
+- `git diff --check` passed before staging; the staged diff is checked again immediately before commit.
+
+### Fix Round 2 files and concerns
+
+- `scripts/lib/atomic-write.mjs`
+- `tests/io/atomic-write.test.mjs`
+- `.superpowers/sdd/2026-08-08-project-lifecycle-phase-1-shared-contracts/task-6-report.md`
+- No blocking concerns under the accepted sole-writer trust precondition.

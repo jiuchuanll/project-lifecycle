@@ -11,11 +11,23 @@ function validationError(errors) {
 }
 
 function attachCleanupError(primaryError, cleanupError) {
-  Object.defineProperty(primaryError, 'cleanupError', {
-    configurable: true,
-    enumerable: true,
-    value: cleanupError,
-  });
+  try {
+    Object.defineProperty(primaryError, 'cleanupError', {
+      configurable: true,
+      enumerable: true,
+      value: cleanupError,
+    });
+    return primaryError;
+  } catch {
+    const combinedError = new AggregateError(
+      [primaryError, cleanupError],
+      'Atomic write failed and temporary cleanup also failed',
+      { cause: primaryError },
+    );
+    combinedError.primaryError = primaryError;
+    combinedError.cleanupError = cleanupError;
+    return combinedError;
+  }
 }
 
 /**
@@ -61,7 +73,7 @@ export async function atomicWriteValidated({ root, target, content, validate }) 
         await unlink(temporaryPath);
       } catch (cleanupError) {
         if (cleanupError.code !== 'ENOENT') {
-          attachCleanupError(error, cleanupError);
+          error = attachCleanupError(error, cleanupError);
         }
       }
     }
