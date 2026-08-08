@@ -110,42 +110,71 @@ const readAsset = async (url, kind) => {
   return value;
 };
 
+const stableBootstrapErrorCodes = new Set([
+  'BOOTSTRAP_ASSET_INVALID',
+  'BOOTSTRAP_WRITE_FAILED',
+  'PATH_SYMLINK_ESCAPE',
+]);
+
 const asFailure = (error) => bootstrapFailure(
-  typeof error?.code === 'string' ? error.code : 'BOOTSTRAP_WRITE_FAILED',
+  stableBootstrapErrorCodes.has(error?.code) ? error.code : 'BOOTSTRAP_WRITE_FAILED',
   '/',
   'Bootstrap could not be completed.',
 );
 
-const existingBootstrap = async (lifecycleRoot, expectedMap) => {
-  const mapPath = join(lifecycleRoot, 'project-map.json');
-  const mapStat = await fileState(mapPath);
-  if (!mapStat?.isFile() || mapStat.isSymbolicLink()) {
-    return bootstrapFailure(
-      'BOOTSTRAP_EXISTING_PROJECT',
-      '/project-map.json',
-      'A different project lifecycle root already exists.',
-    );
-  }
-  let existingMap;
+const existingConflict = (path = '/') => bootstrapFailure(
+  'BOOTSTRAP_EXISTING_PROJECT',
+  path,
+  'A different project lifecycle root already exists.',
+);
+
+const existingBootstrap = async ({
+  lifecycleRoot,
+  expectedMap,
+  expectedEnglishIndex,
+  expectedChineseIndex,
+}) => {
   try {
-    existingMap = JSON.parse(await readFile(mapPath, 'utf8'));
+    const rootStat = await fileState(lifecycleRoot);
+    if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) return existingConflict();
+
+    for (const directory of ['knowledge', 'delivery']) {
+      const stat = await fileState(join(lifecycleRoot, directory));
+      if (!stat?.isDirectory() || stat.isSymbolicLink()) return existingConflict(`/${directory}`);
+    }
+
+    const requiredFiles = ['project-map.json', 'pending-changes.json', 'INDEX-en.md', 'INDEX.md'];
+    const fileStats = await Promise.all(requiredFiles.map(async (name) => ({
+      name,
+      stat: await fileState(join(lifecycleRoot, name)),
+    })));
+    for (const { name, stat } of fileStats) {
+      if (!stat?.isFile() || stat.isSymbolicLink()) return existingConflict(`/${name}`);
+    }
+
+    const [mapSource, pendingSource, englishIndex, chineseIndex] = await Promise.all([
+      readFile(join(lifecycleRoot, 'project-map.json'), 'utf8'),
+      readFile(join(lifecycleRoot, 'pending-changes.json'), 'utf8'),
+      readFile(join(lifecycleRoot, 'INDEX-en.md'), 'utf8'),
+      readFile(join(lifecycleRoot, 'INDEX.md'), 'utf8'),
+    ]);
+    const existingMap = JSON.parse(mapSource);
+    const existingPending = JSON.parse(pendingSource);
+    if (!validateJson('project-map', existingMap).ok
+      || !validateJson('pending-changes', existingPending).ok
+      || JSON.stringify(existingMap) !== JSON.stringify(expectedMap)
+      || englishIndex !== expectedEnglishIndex
+      || chineseIndex !== expectedChineseIndex) {
+      return existingConflict();
+    }
+    return ok({ status: 'existing' });
   } catch {
-    return bootstrapFailure(
-      'BOOTSTRAP_EXISTING_PROJECT',
-      '/project-map.json',
-      'A different project lifecycle root already exists.',
-    );
+    return existingConflict();
   }
-  if (JSON.stringify(existingMap) !== JSON.stringify(expectedMap)) {
-    return bootstrapFailure(
-      'BOOTSTRAP_EXISTING_PROJECT',
-      '/project-map.json',
-      'A different project lifecycle root already exists.',
-    );
-  }
-  return ok({ status: 'existing' });
 };
 
+// The sole-writer boundary makes the final directory rename the visibility point. Earlier failures
+// receive best-effort cleanup; this is not a transaction against hostile filesystem failures.
 export async function bootstrap({
   root,
   project_id: projectId,
@@ -154,7 +183,9 @@ export async function bootstrap({
   calibration_ref: calibrationRef,
   calibration_approved: calibrationApproved,
   domains,
-}) {
+}, operations = {}) {
+  const writeArtifact = operations.atomicWriteValidated ?? atomicWriteValidated;
+  const publish = operations.rename ?? rename;
   if (typeof calibrationRef !== 'string' || calibrationRef.trim().length === 0
     || calibrationApproved !== true) {
     return bootstrapFailure(
@@ -237,22 +268,22 @@ export async function bootstrap({
       return bootstrapFailure('BOOTSTRAP_WRITE_FAILED', '/docs', 'Bootstrap could not be completed.');
     }
     if (docsStat) {
-      lifecycleRoot = await resolveInside(root, 'docs/project-lifecycle');
+      lifecycleRoot = join(docsPath, 'project-lifecycle');
       const lifecycleStat = await fileState(lifecycleRoot);
       if (lifecycleStat) {
-        if (lifecycleStat.isSymbolicLink()) {
-          const error = new Error('Lifecycle root must not be a symlink.');
-          error.code = 'PATH_SYMLINK_ESCAPE';
-          throw error;
-        }
-        return await existingBootstrap(lifecycleRoot, map);
+        return await existingBootstrap({
+          lifecycleRoot,
+          expectedMap: map,
+          expectedEnglishIndex: englishIndex,
+          expectedChineseIndex: chineseIndex,
+        });
       }
     }
 
     stagingRoot = await mkdtemp(join(root, '.project-lifecycle-bootstrap-'));
     await mkdir(join(stagingRoot, 'knowledge'));
     await mkdir(join(stagingRoot, 'delivery'));
-    await atomicWriteValidated({
+    await writeArtifact({
       root: stagingRoot,
       target: 'project-map.json',
       content: jsonContent(map),
@@ -264,7 +295,7 @@ export async function bootstrap({
         }
       },
     });
-    await atomicWriteValidated({
+    await writeArtifact({
       root: stagingRoot,
       target: 'pending-changes.json',
       content: jsonContent(pending),
@@ -276,13 +307,13 @@ export async function bootstrap({
         }
       },
     });
-    await atomicWriteValidated({
+    await writeArtifact({
       root: stagingRoot,
       target: 'INDEX-en.md',
       content: englishIndex,
       validate: async (source) => validateIndex(source, map.domains),
     });
-    await atomicWriteValidated({
+    await writeArtifact({
       root: stagingRoot,
       target: 'INDEX.md',
       content: chineseIndex,
@@ -293,8 +324,8 @@ export async function bootstrap({
       await mkdir(docsPath);
       createdDocs = true;
     }
-    lifecycleRoot = await resolveInside(root, 'docs/project-lifecycle');
-    await rename(stagingRoot, lifecycleRoot);
+    lifecycleRoot = join(docsPath, 'project-lifecycle');
+    await publish(stagingRoot, lifecycleRoot);
     stagingRoot = null;
     return ok({ status: 'created' });
   } catch (error) {

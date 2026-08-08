@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat, open, readdir, realpath } from 'node:fs/promises';
+import { lstat, open, opendir, realpath } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 
 import { compareCodePoints } from '../lib/deterministic-order.mjs';
@@ -186,30 +186,46 @@ const isRecognizedTopologyFile = (relativePath, name) => {
   return /^(?:app|application|main)\.(?:go|js|jsx|kt|kts|mjs|py|rs|swift|ts|tsx)$/iu.test(name);
 };
 
-const approvedDirectoryEntries = async (root, relativePath) => {
+const approvedDirectoryEntries = async (root, relativePath, scan) => {
   const stat = await safeStat(root, relativePath);
   if (!stat?.isDirectory()) return [];
-  const entries = await readdir(join(root, ...relativePath.split('/')), { withFileTypes: true });
-  return entries
-    .filter((entry) => !entry.isSymbolicLink()
+  const entries = [];
+  let directoryInspected = 0;
+  const remainingGlobal = scan.limit - scan.inspected;
+  const bufferSize = Math.max(1, Math.min(scan.limit, remainingGlobal) + 1);
+  const directory = await opendir(join(root, ...relativePath.split('/')), { bufferSize });
+  for await (const entry of directory) {
+    directoryInspected += 1;
+    scan.inspected += 1;
+    if (directoryInspected > scan.limit || scan.inspected > scan.limit) {
+      throw evidenceError(
+        'EVIDENCE_SCAN_LIMIT_EXCEEDED',
+        'Topology metadata scan limit exceeded.',
+      );
+    }
+    if (!entry.isSymbolicLink()
       && !entry.name.startsWith('.')
-      && !ignoredSegments.has(entry.name))
-    .sort((left, right) => compareCodePoints(left.name, right.name));
+      && !ignoredSegments.has(entry.name)) {
+      entries.push(entry);
+    }
+  }
+  return entries.sort((left, right) => compareCodePoints(left.name, right.name));
 };
 
 const collectTopology = async (root, maxTopologyEntries) => {
   const candidates = [];
+  const scan = { inspected: 0, limit: maxTopologyEntries };
   for (const topologyRoot of topologyRoots) {
     const stat = await safeStat(root, topologyRoot);
     if (!stat?.isDirectory()) continue;
     candidates.push(makeEntry('topology', portableLocator(topologyRoot), { entry_type: 'directory' }));
-    const children = await approvedDirectoryEntries(root, topologyRoot);
+    const children = await approvedDirectoryEntries(root, topologyRoot, scan);
     for (const child of children) {
       const childPath = `${topologyRoot}/${child.name}`;
       if (child.isDirectory()) {
         candidates.push(makeEntry('topology', portableLocator(childPath), { entry_type: 'directory' }));
         if (topologyContainers.has(child.name)) {
-          const modules = await approvedDirectoryEntries(root, childPath);
+          const modules = await approvedDirectoryEntries(root, childPath, scan);
           for (const module of modules.filter((entry) => entry.isDirectory())) {
             candidates.push(makeEntry(
               'topology',

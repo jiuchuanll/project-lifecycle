@@ -149,41 +149,58 @@ if (command === 'help') {
     emit(cliFailure('CLI_PATH_INVALID', '/arguments', 'Root and output paths must be absolute.'), 2);
   } else {
     try {
-      const root = await realpath(options['--root']);
-      const outputParent = await realpath(dirname(options['--output']));
-      const outputName = basename(options['--output']);
-      const output = resolve(outputParent, outputName);
-      const lifecycleRoot = resolve(root, 'docs/project-lifecycle');
-      const lifecycleRoots = [lifecycleRoot];
-      try {
-        lifecycleRoots.push(await realpath(lifecycleRoot));
-      } catch (error) {
-        if (error.code !== 'ENOENT') throw error;
-      }
-      if (lifecycleRoots.some((candidate) => isInside(candidate, output))) {
+      const lexicalLifecycleRoot = resolve(options['--root'], 'docs/project-lifecycle');
+      const lexicalOutput = resolve(options['--output']);
+      if (isInside(lexicalLifecycleRoot, lexicalOutput)) {
         emit(cliFailure(
           'CLI_OUTPUT_FORBIDDEN',
           '/output',
           'Evidence output must remain outside docs/project-lifecycle.',
         ), 2);
       } else {
-        const pack = await collectEvidence({ root });
-        const content = `${JSON.stringify(pack, null, 2)}\n`;
-        await atomicWriteValidated({
-          root: outputParent,
-          target: outputName,
-          content,
-          validate: async (candidate) => candidate === content
-            ? ok(candidate)
-            : cliFailure('CLI_WRITE_ERROR', '/output', 'Evidence output validation failed.'),
-        });
-        emit(ok({
-          entry_count: pack.entries.length,
-          content_hash: `sha256:${createHash('sha256').update(content).digest('hex')}`,
-        }));
+        const root = await realpath(options['--root']);
+        const outputParent = await realpath(dirname(options['--output']));
+        const outputName = basename(options['--output']);
+        const output = resolve(outputParent, outputName);
+        const lifecycleRoot = resolve(root, 'docs/project-lifecycle');
+        const physicalLifecycleRoots = [lifecycleRoot];
+        try {
+          physicalLifecycleRoots.push(await realpath(lifecycleRoot));
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+        }
+        if (physicalLifecycleRoots.some((candidate) => isInside(candidate, output))) {
+          emit(cliFailure(
+            'CLI_OUTPUT_FORBIDDEN',
+            '/output',
+            'Evidence output must remain outside docs/project-lifecycle.',
+          ), 2);
+        } else {
+          const pack = await collectEvidence({ root });
+          const content = `${JSON.stringify(pack, null, 2)}\n`;
+          await atomicWriteValidated({
+            root: outputParent,
+            target: outputName,
+            content,
+            validate: async (candidate) => candidate === content
+              ? ok(candidate)
+              : cliFailure('CLI_WRITE_ERROR', '/output', 'Evidence output validation failed.'),
+          });
+          emit(ok({
+            entry_count: pack.entries.length,
+            content_hash: `sha256:${createHash('sha256').update(content).digest('hex')}`,
+          }));
+        }
       }
-    } catch {
-      emit(cliFailure('CLI_COLLECTION_ERROR', '/', 'Evidence collection could not be completed.'), 2);
+    } catch (error) {
+      const scanOverflow = error?.code === 'EVIDENCE_SCAN_LIMIT_EXCEEDED';
+      emit(cliFailure(
+        scanOverflow ? error.code : 'CLI_COLLECTION_ERROR',
+        '/',
+        scanOverflow
+          ? 'Evidence scan limit exceeded.'
+          : 'Evidence collection could not be completed.',
+      ), 2);
     }
   }
 } else if (command === 'validate-pair') {

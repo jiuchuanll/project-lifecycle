@@ -17,7 +17,6 @@
     "declared_entry_point:repo:package.json#scripts/start",
     "declared_entry_point:repo:package.json#scripts/test",
     "topology:repo:src",
-    "topology:repo:src/irrelevant",
     "topology:repo:src/main.mjs",
     "topology:repo:src/modules",
     "topology:repo:src/modules/accounts",

@@ -19,6 +19,7 @@ import test from 'node:test';
 
 import { bootstrap } from '../../scripts/knowledge/bootstrap.mjs';
 import { collectEvidence } from '../../scripts/knowledge/collect-evidence.mjs';
+import { atomicWriteValidated } from '../../scripts/lib/atomic-write.mjs';
 import { validateJson } from '../../scripts/lib/validate-json.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -75,6 +76,22 @@ const copyFixture = async (context) => {
   const parent = await createTemporaryRoot(context);
   const root = join(parent, 'sample-app');
   await cp(fixtureRoot, root, { recursive: true });
+  return root;
+};
+
+const copyFixtureWithStressFiles = async (context) => {
+  const root = await copyFixture(context);
+  const sourceRoot = join(root, 'src');
+  for (let index = 1; index <= 200; index += 1) {
+    const suffix = String(index).padStart(3, '0');
+    await writeFile(
+      join(sourceRoot, `stress-${suffix}.mjs`),
+      `IRRELEVANT_SOURCE_BODY_${suffix}\n`,
+    );
+  }
+  const stressFiles = (await readdir(sourceRoot))
+    .filter((name) => /^stress-[0-9]{3}\.mjs$/u.test(name));
+  assert.equal(stressFiles.length, 200);
   return root;
 };
 
@@ -155,9 +172,15 @@ test('returns deterministic ordering and hashes from observed evidence only', as
   );
 });
 
-test('caps recent evolution and topology entries with explicit caller limits', async () => {
+test('caps recent evolution and topology entries with explicit caller limits', async (context) => {
+  const root = await copyFixture(context);
+  await rm(join(root, 'src'), { recursive: true });
+  await rm(join(root, 'test'), { recursive: true });
+  for (const directory of ['apps', 'core', 'modules', 'packages']) {
+    await mkdir(join(root, directory));
+  }
   const pack = await collectEvidence({
-    root: fixtureRoot,
+    root,
     limits: {
       maxFileBytes: 48,
       maxTopologyEntries: 3,
@@ -173,6 +196,39 @@ test('caps recent evolution and topology entries with explicit caller limits', a
   for (const entry of pack.entries.filter(({ observed }) => 'content' in observed)) {
     assert.equal(Buffer.byteLength(entry.observed.content) <= 48, true);
   }
+});
+
+test('fails deterministically when direct topology metadata exceeds the scan budget', async (context) => {
+  const root = await copyFixtureWithStressFiles(context);
+
+  await assert.rejects(
+    collectEvidence({
+      root,
+      limits: {
+        maxFileBytes: 4096,
+        maxTopologyEntries: 20,
+        maxRecentEvolutionEntries: 2,
+      },
+    }),
+    (error) => {
+      assert.equal(error.code, 'EVIDENCE_SCAN_LIMIT_EXCEEDED');
+      assert.equal(error.message, 'Topology metadata scan limit exceeded.');
+      assert.equal(error.message.includes(root), false);
+      return true;
+    },
+  );
+});
+
+test('fails when topology metadata exceeds the global budget across bounded directories', async (context) => {
+  const root = await createTemporaryRoot(context);
+  for (const relativePath of ['apps/alpha', 'apps/beta', 'core/gamma', 'core/delta']) {
+    await mkdir(join(root, relativePath), { recursive: true });
+  }
+
+  await assert.rejects(
+    collectEvidence({ root, limits: { maxTopologyEntries: 3 } }),
+    { code: 'EVIDENCE_SCAN_LIMIT_EXCEEDED' },
+  );
 });
 
 test('skips file and directory symlinks instead of reading outside the repository', async (context) => {
@@ -273,6 +329,60 @@ test('collect-evidence CLI rejects output through a symlinked lifecycle root', a
   await absent(join(outside, 'evidence.json'));
 });
 
+test('collect-evidence CLI rejects a lexical lifecycle output through an inner symlink', async (context) => {
+  const root = await copyFixture(context);
+  const outside = await createTemporaryRoot(context, 'project-lifecycle-outside-');
+  const lifecycleRoot = join(root, 'docs', 'project-lifecycle');
+  const link = join(lifecycleRoot, 'link');
+  await symlink(outside, link);
+  const output = join(link, 'private-output-marker.json');
+
+  const result = await runCli(['collect-evidence', '--root', root, '--output', output]);
+  const envelope = assertSingleEnvelope(result);
+
+  assert.equal(result.status, 2);
+  assert.equal(envelope.errors[0].code, 'CLI_OUTPUT_FORBIDDEN');
+  assert.equal(result.stdout.includes(root), false);
+  assert.equal(result.stdout.includes(outside), false);
+  assert.equal(result.stdout.includes('private-output-marker'), false);
+  await absent(join(outside, 'private-output-marker.json'));
+});
+
+test('collect-evidence CLI independently rejects a physical output inside the lifecycle root', async (context) => {
+  const root = await copyFixture(context);
+  const outside = await createTemporaryRoot(context, 'project-lifecycle-outside-');
+  const lifecycleRoot = join(root, 'docs', 'project-lifecycle');
+  const alias = join(outside, 'lifecycle-alias');
+  await symlink(lifecycleRoot, alias);
+  const output = join(alias, 'physical-output-marker.json');
+
+  const result = await runCli(['collect-evidence', '--root', root, '--output', output]);
+  const envelope = assertSingleEnvelope(result);
+
+  assert.equal(result.status, 2);
+  assert.equal(envelope.errors[0].code, 'CLI_OUTPUT_FORBIDDEN');
+  assert.equal(result.stdout.includes(root), false);
+  assert.equal(result.stdout.includes(outside), false);
+  assert.equal(result.stdout.includes('physical-output-marker'), false);
+  await absent(join(lifecycleRoot, 'physical-output-marker.json'));
+});
+
+test('collect-evidence CLI reports scan overflow without leaking paths or writing output', async (context) => {
+  const root = await copyFixtureWithStressFiles(context);
+  const outputDirectory = await createTemporaryRoot(context);
+  const output = join(outputDirectory, 'overflow-output-marker.json');
+
+  const result = await runCli(['collect-evidence', '--root', root, '--output', output]);
+  const envelope = assertSingleEnvelope(result);
+
+  assert.equal(result.status, 2);
+  assert.equal(envelope.errors[0].code, 'EVIDENCE_SCAN_LIMIT_EXCEEDED');
+  assert.equal(result.stdout.includes(root), false);
+  assert.equal(result.stdout.includes(output), false);
+  assert.equal(result.stdout.includes('IRRELEVANT_SOURCE_BODY_'), false);
+  await absent(output);
+});
+
 test('bootstrap assets are valid inert Phase 1 bases', async () => {
   const map = await readJson(projectMapAssetPath);
   const pending = await readJson(pendingChangesAssetPath);
@@ -362,6 +472,8 @@ test('bootstrap is idempotent for an identical map and rejects a conflicting map
     readFile(join(lifecycleRoot, 'INDEX-en.md'), 'utf8'),
     readFile(join(lifecycleRoot, 'INDEX.md'), 'utf8'),
   ]);
+  await writeFile(join(lifecycleRoot, 'knowledge', 'later-knowledge.md'), 'later knowledge\n');
+  await writeFile(join(lifecycleRoot, 'delivery', 'later-delivery.md'), 'later delivery\n');
 
   const second = await bootstrap(input);
   assert.equal(first.ok, true);
@@ -378,6 +490,104 @@ test('bootstrap is idempotent for an identical map and rejects a conflicting map
   assert.equal(conflicting.ok, false);
   assert.equal(conflicting.errors[0].code, 'BOOTSTRAP_EXISTING_PROJECT');
   assert.deepEqual(await readJson(join(lifecycleRoot, 'project-map.json')), JSON.parse(before[0]));
+});
+
+test('bootstrap treats changed identity prose or calibration as an existing-project conflict', async (context) => {
+  const overrides = [
+    { label: { en: 'Changed label', 'zh-CN': '变更标签' } },
+    {
+      purpose: {
+        en: 'Changed purpose.',
+        'zh-CN': '变更用途。',
+      },
+    },
+    { calibration_ref: 'calibration:different-approval' },
+  ];
+
+  for (const override of overrides) {
+    const root = await createTemporaryRoot(context);
+    const input = validBootstrapInput(root);
+    assert.equal((await bootstrap(input)).ok, true);
+
+    const result = await bootstrap({ ...input, ...override });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.errors[0].code, 'BOOTSTRAP_EXISTING_PROJECT');
+  }
+});
+
+test('bootstrap requires every existing bootstrap artifact to remain complete and valid', async (context) => {
+  const cases = [
+    {
+      name: 'missing knowledge directory',
+      mutate: async (root) => rm(join(root, 'knowledge'), { recursive: true }),
+    },
+    {
+      name: 'symlinked delivery directory',
+      mutate: async (root, outside) => {
+        await rm(join(root, 'delivery'), { recursive: true });
+        await symlink(outside, join(root, 'delivery'));
+      },
+    },
+    {
+      name: 'missing project map',
+      mutate: async (root) => rm(join(root, 'project-map.json')),
+    },
+    {
+      name: 'corrupt pending ledger',
+      mutate: async (root) => writeFile(join(root, 'pending-changes.json'), '{}\n'),
+    },
+    {
+      name: 'missing English index',
+      mutate: async (root) => rm(join(root, 'INDEX-en.md')),
+    },
+    {
+      name: 'symlinked Chinese index',
+      mutate: async (root, outside) => {
+        await rm(join(root, 'INDEX.md'));
+        await symlink(join(outside, 'INDEX.md'), join(root, 'INDEX.md'));
+      },
+    },
+  ];
+
+  for (const entry of cases) {
+    const projectRoot = await createTemporaryRoot(context);
+    const outside = await createTemporaryRoot(context, 'project-lifecycle-outside-');
+    await writeFile(join(outside, 'INDEX.md'), 'outside index\n');
+    const input = validBootstrapInput(projectRoot);
+    assert.equal((await bootstrap(input)).ok, true);
+    const lifecycleRoot = join(projectRoot, 'docs', 'project-lifecycle');
+    await entry.mutate(lifecycleRoot, outside);
+
+    const result = await bootstrap(input);
+
+    assert.equal(result.ok, false, entry.name);
+    assert.equal(result.errors[0].code, 'BOOTSTRAP_EXISTING_PROJECT', entry.name);
+  }
+});
+
+test('bootstrap rejects an existing non-directory lifecycle path with a stable conflict', async (context) => {
+  const root = await createTemporaryRoot(context);
+  await mkdir(join(root, 'docs'));
+  await writeFile(join(root, 'docs', 'project-lifecycle'), 'not a directory\n');
+
+  const result = await bootstrap(validBootstrapInput(root));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'BOOTSTRAP_EXISTING_PROJECT');
+});
+
+test('bootstrap rejects a symlinked lifecycle root with a stable conflict', async (context) => {
+  const root = await createTemporaryRoot(context);
+  const outside = await createTemporaryRoot(context, 'project-lifecycle-outside-');
+  await mkdir(join(root, 'docs'));
+  await symlink(outside, join(root, 'docs', 'project-lifecycle'));
+
+  const result = await bootstrap(validBootstrapInput(root));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'BOOTSTRAP_EXISTING_PROJECT');
+  assert.deepEqual(await readdir(outside), []);
 });
 
 test('bootstrap validates every artifact before exposing the lifecycle root', async (context) => {
@@ -403,4 +613,43 @@ test('bootstrap rejects a symlinked docs parent without writing outside the repo
   assert.equal(result.ok, false);
   assert.equal(result.errors[0].code, 'PATH_SYMLINK_ESCAPE');
   assert.deepEqual(await readdir(outside), []);
+});
+
+test('bootstrap leaves no visible lifecycle root after a controlled late artifact-write failure', async (context) => {
+  const root = await createTemporaryRoot(context);
+  let writeCount = 0;
+
+  const result = await bootstrap(validBootstrapInput(root), {
+    atomicWriteValidated: async (options) => {
+      writeCount += 1;
+      if (writeCount === 4) {
+        const error = new Error('controlled late write failure');
+        error.code = 'EACCES';
+        throw error;
+      }
+      return atomicWriteValidated(options);
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'BOOTSTRAP_WRITE_FAILED');
+  assert.equal(writeCount, 4);
+  await absent(join(root, 'docs', 'project-lifecycle'));
+  assert.deepEqual(await readdir(root), []);
+});
+
+test('bootstrap publishes no partial lifecycle root when the final rename fails', async (context) => {
+  const root = await createTemporaryRoot(context);
+  const result = await bootstrap(validBootstrapInput(root), {
+    rename: async () => {
+      const error = new Error('controlled final rename failure');
+      error.code = 'EXDEV';
+      throw error;
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'BOOTSTRAP_WRITE_FAILED');
+  await absent(join(root, 'docs', 'project-lifecycle'));
+  assert.deepEqual(await readdir(root), []);
 });
