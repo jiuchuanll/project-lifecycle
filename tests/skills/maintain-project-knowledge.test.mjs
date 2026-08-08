@@ -32,8 +32,9 @@ const requiredGateStatements = [
 ];
 const referenceReadAction = String.raw`(?:preload(?:ing)?|load(?:ing)?|read(?:ing)?|open(?:ing)?)`;
 const wholeReferenceSet = [
-  String.raw`(?:all|every|each)(?:\s+(?:other|sibling))?\s+references?`,
-  String.raw`(?:the\s+)?(?:whole|entire)\s+(?:reference\s+set|set\s+of\s+references)`,
+  String.raw`(?:all(?:\s+of\s+the)?|every|each)(?:\s+(?:other|sibling))?\s+references?`,
+  String.raw`(?:(?:all|the)\s+)?six\s+references?`,
+  String.raw`(?:the\s+)?(?:whole|entire|full)\s+(?:reference\s+set|set\s+of\s+references)`,
   String.raw`(?:other|sibling)\s+references`,
 ].join('|');
 const wholeReferenceSetInstruction = new RegExp(
@@ -98,6 +99,10 @@ for (const [source, expected] of [
   ['Preload the whole reference set.', true],
   ['Open each sibling reference.', true],
   ['Load all other references.', true],
+  ['Load all six references.', true],
+  ['Load the six references.', true],
+  ['Preload the full reference set.', true],
+  ['Read all of the references.', true],
 ]) {
   test(`classifies whole-reference instruction: ${source}`, () => {
     assert.equal(instructsWholeReferenceSet(source), expected);
