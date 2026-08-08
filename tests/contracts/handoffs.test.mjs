@@ -252,3 +252,135 @@ test('rejects unsorted Pending Change identifiers and relationship references', 
     code === 'SCHEMA_INVALID' && path === '/changes/0/trigger_refs/1'
   )));
 });
+
+test('accepts one bounded governed Task 4 proposal while preserving legacy pending entries', () => {
+  const legacy = {
+    change_id: 'change-legacy',
+    kind: 'topology',
+    trigger_refs: ['feedback:legacy'],
+    affected_refs: ['desktop-experience'],
+    proposed_disposition: 'Review topology',
+    risks: [],
+    evidence_gaps: [],
+    review_state: 'open',
+    created_at: '2026-08-08T10:00:00Z',
+  };
+  const governed = {
+    change_id: 'change-wiki-privacy',
+    kind: 'constraint_semantics',
+    trigger_refs: ['feedback:privacy'],
+    source_refs: ['repo:privacy-policy'],
+    affected_refs: ['desktop-privacy', 'wiki-workspace'],
+    proposed_disposition: 'Narrow privacy propagation.',
+    risks: ['Wiki storage facts may require revalidation.'],
+    evidence_gaps: ['Runtime verification remains open.'],
+    review_state: 'open',
+    created_at: '2026-08-08T11:00:00Z',
+    proposal_version: 1,
+    semantic_target_key: 'constraint:desktop-privacy',
+    baseline: {
+      map_hash: `sha256:${'a'.repeat(64)}`,
+    },
+    change_class: 'SEMANTIC',
+    proposed_patch: {
+      operation: 'UPDATE_CONSTRAINT',
+      target_type: 'constraint',
+      target_id: 'desktop-privacy',
+      changed_fields: ['constraint_scope'],
+      candidate_map_hash: `sha256:${'b'.repeat(64)}`,
+      expected_semantic_revision: 2,
+      new_ids: [],
+      successor_ids: [],
+    },
+    child_dispositions: [{
+      domain_id: 'wiki-workspace',
+      disposition: 'REVALIDATE',
+      evidence_refs: ['repo:privacy-policy'],
+      unresolved_fact_ids: ['wiki-storage-boundary'],
+    }],
+  };
+
+  assert.equal(validateJson('pending-changes', {
+    schema_version: 1,
+    changes: [legacy, governed],
+  }).ok, true);
+});
+
+test('rejects incomplete and unsorted governed Task 4 proposals', () => {
+  const governed = {
+    change_id: 'change-wiki-privacy',
+    kind: 'constraint_semantics',
+    trigger_refs: ['feedback:privacy'],
+    source_refs: ['repo:zeta', 'repo:alpha'],
+    affected_refs: ['wiki-workspace'],
+    proposed_disposition: 'Narrow privacy propagation.',
+    risks: [],
+    evidence_gaps: [],
+    review_state: 'open',
+    created_at: '2026-08-08T11:00:00Z',
+    proposal_version: 1,
+    semantic_target_key: 'constraint:desktop-privacy',
+    baseline: { map_hash: `sha256:${'a'.repeat(64)}` },
+    change_class: 'SEMANTIC',
+    proposed_patch: {
+      operation: 'UPDATE_CONSTRAINT',
+      target_type: 'constraint',
+      target_id: 'desktop-privacy',
+      changed_fields: ['constraint_scope'],
+      candidate_map_hash: `sha256:${'b'.repeat(64)}`,
+      expected_semantic_revision: 2,
+      new_ids: [],
+      successor_ids: [],
+    },
+  };
+
+  const result = validateJson('pending-changes', {
+    schema_version: 1,
+    changes: [governed],
+  });
+
+  assert.ok(result.errors.some(({ path }) => path === '/changes/0/child_dispositions'));
+  governed.child_dispositions = [];
+  const orderedResult = validateJson('pending-changes', {
+    schema_version: 1,
+    changes: [governed],
+  });
+  assert.ok(orderedResult.errors.some(({ path }) => path === '/changes/0/source_refs/1'));
+});
+
+test('rejects duplicate child disposition IDs even when their outcomes differ', () => {
+  const change = {
+    change_id: 'change-wiki-privacy',
+    kind: 'constraint_semantics',
+    trigger_refs: ['feedback:privacy'],
+    source_refs: ['repo:privacy'],
+    affected_refs: ['wiki-workspace'],
+    proposed_disposition: 'Review Wiki impact.',
+    risks: [],
+    evidence_gaps: [],
+    review_state: 'open',
+    created_at: '2026-08-08T11:00:00Z',
+    proposal_version: 1,
+    semantic_target_key: 'constraint:desktop-privacy',
+    baseline: { map_hash: `sha256:${'a'.repeat(64)}` },
+    change_class: 'SEMANTIC',
+    proposed_patch: {
+      operation: 'UPDATE_CONSTRAINT',
+      target_type: 'constraint',
+      target_id: 'desktop-privacy',
+      changed_fields: ['constraint_meaning'],
+      candidate_map_hash: `sha256:${'b'.repeat(64)}`,
+      expected_semantic_revision: 2,
+      new_ids: [],
+      successor_ids: [],
+    },
+    child_dispositions: [
+      { domain_id: 'wiki-workspace', disposition: 'NO_CHANGE', evidence_refs: ['repo:privacy'], unresolved_fact_ids: [] },
+      { domain_id: 'wiki-workspace', disposition: 'REVALIDATE', evidence_refs: ['repo:privacy'], unresolved_fact_ids: ['wiki-storage'] },
+    ],
+  };
+
+  const result = validateJson('pending-changes', { schema_version: 1, changes: [change] });
+
+  assert.ok(result.errors.some(({ code, path }) => code === 'ID_DUPLICATE' && path === '/changes/0/child_dispositions/1/domain_id'));
+});

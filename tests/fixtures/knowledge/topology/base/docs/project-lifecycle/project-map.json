@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "project_id": "sample-app",
+  "identity_lineage": [],
+  "repositories": [],
+  "constraints": [
+    {
+      "id": "desktop-privacy",
+      "scope": "descendants",
+      "owner_id": "desktop-experience",
+      "semantic_revision": 1,
+      "lifecycle_state": "current",
+      "knowledge_refs": {
+        "en": "knowledge/desktop-experience-en.md#constraint-desktop-privacy",
+        "zh-CN": "knowledge/desktop-experience.md#constraint-desktop-privacy"
+      },
+      "exceptions": []
+    },
+    {
+      "id": "desktop-shell",
+      "scope": "self",
+      "owner_id": "desktop-experience",
+      "semantic_revision": 1,
+      "lifecycle_state": "current",
+      "knowledge_refs": {
+        "en": "knowledge/desktop-experience-en.md#constraint-desktop-shell",
+        "zh-CN": "knowledge/desktop-experience.md#constraint-desktop-shell"
+      },
+      "exceptions": []
+    }
+  ],
+  "domains": [
+    {
+      "id": "desktop-experience",
+      "kind": "domain",
+      "label": { "en": "Desktop experience", "zh-CN": "桌面体验" },
+      "purpose": { "en": "Owns desktop interaction", "zh-CN": "负责桌面交互" },
+      "domain_state": "materialized",
+      "scope": { "includes": ["desktop", "inbox", "source", "wiki"], "excludes": [] },
+      "parent_id": null,
+      "relationships": [],
+      "evidence_refs": ["repo:README.md"],
+      "known_gaps": [],
+      "paired_assets": {
+        "en": "knowledge/desktop-experience-en.md",
+        "zh-CN": "knowledge/desktop-experience.md"
+      },
+      "baseline": "baseline-1"
+    },
+    {
+      "id": "inbox-workspace",
+      "kind": "capability",
+      "label": { "en": "Inbox workspace", "zh-CN": "Inbox 工作区" },
+      "purpose": { "en": "Owns inbox interaction", "zh-CN": "负责 Inbox 交互" },
+      "domain_state": "confirmed",
+      "scope": { "includes": ["inbox"], "excludes": [] },
+      "parent_id": "desktop-experience",
+      "relationships": [],
+      "evidence_refs": ["repo:src/inbox"],
+      "known_gaps": []
+    },
+    {
+      "id": "source-workspace",
+      "kind": "capability",
+      "label": { "en": "Source workspace", "zh-CN": "Source 工作区" },
+      "purpose": { "en": "Owns source interaction", "zh-CN": "负责 Source 交互" },
+      "domain_state": "confirmed",
+      "scope": { "includes": ["source"], "excludes": [] },
+      "parent_id": "desktop-experience",
+      "relationships": [],
+      "evidence_refs": ["repo:src/source"],
+      "known_gaps": []
+    },
+    {
+      "id": "wiki-workspace",
+      "kind": "capability",
+      "label": { "en": "Wiki workspace", "zh-CN": "Wiki 工作区" },
+      "purpose": { "en": "Owns wiki interaction", "zh-CN": "负责 Wiki 交互" },
+      "domain_state": "confirmed",
+      "scope": { "includes": ["wiki"], "excludes": [] },
+      "parent_id": "desktop-experience",
+      "relationships": [{ "kind": "depends_on", "target_id": "source-workspace" }],
+      "evidence_refs": ["repo:src/wiki"],
+      "known_gaps": []
+    }
+  ]
+}

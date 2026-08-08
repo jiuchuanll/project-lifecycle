@@ -59,8 +59,105 @@
         "risks": { "$ref": "#/$defs/notes" },
         "evidence_gaps": { "$ref": "#/$defs/notes" },
         "review_state": { "const": "open" },
-        "created_at": { "type": "string", "format": "date-time" }
+        "created_at": { "type": "string", "format": "date-time" },
+        "proposal_version": { "const": 1 },
+        "semantic_target_key": { "type": "string", "pattern": "^(constraint|domain|relationship|exception):[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)?$" },
+        "source_refs": { "$ref": "#/$defs/refs" },
+        "baseline": { "$ref": "#/$defs/baseline" },
+        "change_class": { "enum": ["REPLACEMENT", "SEMANTIC", "WORDING"] },
+        "proposed_patch": { "$ref": "#/$defs/proposedPatch" },
+        "child_dispositions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/childDisposition" }
+        }
+      },
+      "dependentRequired": {
+        "proposal_version": [
+          "semantic_target_key",
+          "source_refs",
+          "baseline",
+          "change_class",
+          "proposed_patch",
+          "child_dispositions"
+        ]
       }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["map_hash"],
+      "properties": {
+        "map_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      }
+    },
+    "proposedPatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "target_type",
+        "target_id",
+        "changed_fields",
+        "candidate_map_hash",
+        "new_ids",
+        "successor_ids"
+      ],
+      "properties": {
+        "operation": {
+          "enum": [
+            "ADD_CONSTRAINT",
+            "ADD_DOMAIN",
+            "ADD_EXCEPTION",
+            "ADD_RELATIONSHIP",
+            "MERGE_DOMAIN",
+            "REPLACE_CONSTRAINT",
+            "UPDATE_CONSTRAINT",
+            "UPDATE_DOMAIN"
+          ]
+        },
+        "target_type": { "enum": ["constraint", "domain", "exception", "relationship"] },
+        "target_id": { "$ref": "#/$defs/id" },
+        "changed_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "boundary",
+              "constraint_meaning",
+              "constraint_owner",
+              "constraint_scope",
+              "exception",
+              "kind",
+              "label",
+              "lifecycle",
+              "parentage",
+              "relationship"
+            ]
+          }
+        },
+        "candidate_map_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "expected_semantic_revision": { "type": "integer", "minimum": 1 },
+        "new_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+        "successor_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "childDisposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain_id", "disposition", "evidence_refs", "unresolved_fact_ids"],
+      "properties": {
+        "domain_id": { "$ref": "#/$defs/id" },
+        "disposition": { "enum": ["EXCEPTION", "MERGE", "NO_CHANGE", "REPARENT", "REVALIDATE", "RETIRE", "SPLIT"] },
+        "target_id": { "$ref": "#/$defs/id" },
+        "exception_ref": { "type": "string", "minLength": 1 },
+        "evidence_refs": { "$ref": "#/$defs/refs" },
+        "unresolved_fact_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
     }
   }
 }

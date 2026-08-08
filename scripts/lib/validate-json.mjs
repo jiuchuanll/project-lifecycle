@@ -7,7 +7,7 @@ const pointerToken = (token) => String(token).replaceAll('~', '~0').replaceAll('
 const propertyPath = (instancePath, property) => `${instancePath}/${pointerToken(property)}`;
 
 const schemaErrors = (kind, errors) => errors.map((error) => {
-  const path = error.keyword === 'required'
+  const path = error.keyword === 'required' || error.keyword === 'dependentRequired'
     ? propertyPath(error.instancePath, error.params.missingProperty)
     : error.keyword === 'additionalProperties'
       ? propertyPath(error.instancePath, error.params.additionalProperty)
@@ -41,6 +41,7 @@ const validateProjectMap = (value) => {
   const entries = namedEntries(value);
   const entriesById = new Map();
   const domainById = new Map();
+  const constraintById = new Map();
 
   for (const entry of entries) {
     if (entriesById.has(entry.id)) {
@@ -71,6 +72,10 @@ const validateProjectMap = (value) => {
     if (domain.domain_state !== 'merged' && domain.successor_id) {
       errors.push(createError(ERROR_CODES.SCHEMA_INVALID, `${path}/successor_id`, 'Only merged domains may declare a successor redirect.'));
     }
+  }
+
+  for (const constraint of value.constraints) {
+    if (!constraintById.has(constraint.id)) constraintById.set(constraint.id, constraint);
   }
 
   for (const [index, domain] of value.domains.entries()) {
@@ -113,19 +118,66 @@ const validateProjectMap = (value) => {
   }
 
   for (const [index, constraint] of value.constraints.entries()) {
-    if (constraint.scope !== 'selected_descendants') continue;
     const path = `/constraints/${index}`;
-    const owner = domainById.get(constraint.owner_id);
-    if (!owner) {
+    const owner = constraint.owner_id ? domainById.get(constraint.owner_id) : null;
+    if (constraint.owner_id && !owner) {
       errors.push(createError(ERROR_CODES.REFERENCE_MISSING, `${path}/owner_id`, `Unknown constraint owner ID: ${constraint.owner_id}`));
-      continue;
     }
-    for (const [selectedIndex, selectedId] of constraint.selected_descendants.entries()) {
-      if (!domainById.has(selectedId)) {
-        errors.push(createError(ERROR_CODES.REFERENCE_MISSING, `${path}/selected_descendants/${selectedIndex}`, `Unknown selected descendant ID: ${selectedId}`));
-      } else if (!isDescendant(domainById, constraint.owner_id, selectedId)) {
-        errors.push(createError(ERROR_CODES.SCHEMA_INVALID, `${path}/selected_descendants/${selectedIndex}`, 'Selected descendant must be below its constraint owner.'));
+    if (constraint.scope === 'selected_descendants') {
+      for (const [selectedIndex, selectedId] of constraint.selected_descendants.entries()) {
+        if (!domainById.has(selectedId)) {
+          errors.push(createError(ERROR_CODES.REFERENCE_MISSING, `${path}/selected_descendants/${selectedIndex}`, `Unknown selected descendant ID: ${selectedId}`));
+        } else if (!isDescendant(domainById, constraint.owner_id, selectedId)) {
+          errors.push(createError(ERROR_CODES.SCHEMA_INVALID, `${path}/selected_descendants/${selectedIndex}`, 'Selected descendant must be below its constraint owner.'));
+        }
       }
+    }
+    if (constraint.lifecycle_state === 'current' && constraint.successor_ids) {
+      errors.push(createError(ERROR_CODES.SCHEMA_INVALID, `${path}/successor_ids`, 'Current constraints cannot declare historical successors.'));
+    }
+    if (constraint.lifecycle_state === 'retired' && !constraint.successor_ids) {
+      errors.push(createError(ERROR_CODES.STATE_REQUIREMENT_MISSING, `${path}/successor_ids`, 'Retired constraints require historical successors.'));
+    }
+    if (constraint.lifecycle_state === 'retired' && !constraint.retirement_reason_ref) {
+      errors.push(createError(ERROR_CODES.STATE_REQUIREMENT_MISSING, `${path}/retirement_reason_ref`, 'Retired constraints require a reason reference.'));
+    }
+    for (const [successorIndex, successorId] of (constraint.successor_ids ?? []).entries()) {
+      const successor = constraintById.get(successorId);
+      if (!successor) {
+        errors.push(createError(ERROR_CODES.REFERENCE_MISSING, `${path}/successor_ids/${successorIndex}`, `Unknown constraint successor ID: ${successorId}`));
+      } else if (successor.lifecycle_state === 'retired') {
+        errors.push(createError(ERROR_CODES.SCHEMA_INVALID, `${path}/successor_ids/${successorIndex}`, 'Constraint successor must remain current.'));
+      }
+    }
+    const exceptionDomains = new Set();
+    for (const [exceptionIndex, exception] of (constraint.exceptions ?? []).entries()) {
+      if (exceptionDomains.has(exception.domain_id)) {
+        errors.push(createError(ERROR_CODES.ID_DUPLICATE, `${path}/exceptions/${exceptionIndex}/domain_id`, `Duplicate exception domain ID: ${exception.domain_id}`));
+      }
+      exceptionDomains.add(exception.domain_id);
+      if (!domainById.has(exception.domain_id)) {
+        errors.push(createError(ERROR_CODES.REFERENCE_MISSING, `${path}/exceptions/${exceptionIndex}/domain_id`, `Unknown exception domain ID: ${exception.domain_id}`));
+      }
+    }
+    if (constraint.knowledge_refs) {
+      for (const language of ['en', 'zh-CN']) {
+        if (!constraint.knowledge_refs[language].endsWith(`#constraint-${constraint.id}`)) {
+          errors.push(createError(ERROR_CODES.SCHEMA_INVALID, `${path}/knowledge_refs/${language}`, 'Constraint knowledge anchor must match its immutable ID.'));
+        }
+      }
+    }
+  }
+
+  for (const [index, marker] of (value.revalidation_required ?? []).entries()) {
+    const path = `/revalidation_required/${index}`;
+    if (!domainById.has(marker.domain_id)) {
+      errors.push(createError(ERROR_CODES.REFERENCE_MISSING, `${path}/domain_id`, `Unknown revalidation domain ID: ${marker.domain_id}`));
+    }
+    if (!constraintById.has(marker.constraint_id)) {
+      errors.push(createError(ERROR_CODES.REFERENCE_MISSING, `${path}/constraint_id`, `Unknown revalidation constraint ID: ${marker.constraint_id}`));
+    }
+    if (marker.to_revision <= marker.from_revision) {
+      errors.push(createError(ERROR_CODES.SCHEMA_INVALID, `${path}/to_revision`, 'Revalidation must advance to a later semantic revision.'));
     }
   }
 
@@ -162,6 +214,34 @@ const validateContextReceipt = (value) => {
   return errors;
 };
 
+const validatePendingChanges = (value) => {
+  const errors = [];
+  const semanticTargets = new Set();
+  for (const [index, change] of value.changes.entries()) {
+    if (!change.semantic_target_key) continue;
+    if (semanticTargets.has(change.semantic_target_key)) {
+      errors.push(createError(
+        ERROR_CODES.ID_DUPLICATE,
+        `/changes/${index}/semantic_target_key`,
+        `Duplicate open semantic target: ${change.semantic_target_key}`,
+      ));
+    }
+    semanticTargets.add(change.semantic_target_key);
+    const dispositionIds = new Set();
+    for (const [dispositionIndex, disposition] of (change.child_dispositions ?? []).entries()) {
+      if (dispositionIds.has(disposition.domain_id)) {
+        errors.push(createError(
+          ERROR_CODES.ID_DUPLICATE,
+          `/changes/${index}/child_dispositions/${dispositionIndex}/domain_id`,
+          `Duplicate child disposition ID: ${disposition.domain_id}`,
+        ));
+      }
+      dispositionIds.add(disposition.domain_id);
+    }
+  }
+  return errors;
+};
+
 const appendOrderErrors = (errors, items, basePath, field) => {
   errors.push(...codePointOrderErrors(items, {
     valueAt: field ? (item) => item[field] : (item) => item,
@@ -179,6 +259,15 @@ const validateDeterministicOrder = (kind, value) => {
       if (constraint.selected_descendants) {
         appendOrderErrors(errors, constraint.selected_descendants, `/constraints/${index}/selected_descendants`);
       }
+      if (constraint.successor_ids) {
+        appendOrderErrors(errors, constraint.successor_ids, `/constraints/${index}/successor_ids`);
+      }
+      if (constraint.exceptions) {
+        appendOrderErrors(errors, constraint.exceptions, `/constraints/${index}/exceptions`, 'domain_id');
+      }
+    }
+    if (value.revalidation_required) {
+      appendOrderErrors(errors, value.revalidation_required, '/revalidation_required', 'fact_id');
     }
     for (const [index, domain] of value.domains.entries()) {
       appendOrderErrors(errors, domain.relationships, `/domains/${index}/relationships`, 'target_id');
@@ -229,6 +318,19 @@ const validateDeterministicOrder = (kind, value) => {
     for (const [index, change] of value.changes.entries()) {
       appendOrderErrors(errors, change.trigger_refs, `/changes/${index}/trigger_refs`);
       appendOrderErrors(errors, change.affected_refs, `/changes/${index}/affected_refs`);
+      if (change.source_refs) appendOrderErrors(errors, change.source_refs, `/changes/${index}/source_refs`);
+      if (change.proposed_patch) {
+        appendOrderErrors(errors, change.proposed_patch.changed_fields, `/changes/${index}/proposed_patch/changed_fields`);
+        appendOrderErrors(errors, change.proposed_patch.new_ids, `/changes/${index}/proposed_patch/new_ids`);
+        appendOrderErrors(errors, change.proposed_patch.successor_ids, `/changes/${index}/proposed_patch/successor_ids`);
+      }
+      if (change.child_dispositions) {
+        appendOrderErrors(errors, change.child_dispositions, `/changes/${index}/child_dispositions`, 'domain_id');
+        for (const [dispositionIndex, disposition] of change.child_dispositions.entries()) {
+          appendOrderErrors(errors, disposition.evidence_refs, `/changes/${index}/child_dispositions/${dispositionIndex}/evidence_refs`);
+          appendOrderErrors(errors, disposition.unresolved_fact_ids, `/changes/${index}/child_dispositions/${dispositionIndex}/unresolved_fact_ids`);
+        }
+      }
     }
   } else if (kind === 'capability-frontmatter') {
     appendOrderErrors(errors, value.implementation_refs, '/implementation_refs');
@@ -293,7 +395,9 @@ export const validateJson = (kind, value, options = {}) => {
     : kind === 'project-extensions'
       ? validateProjectExtensions(value)
       : kind === 'context-receipt'
-        ? validateContextReceipt(value)
+      ? validateContextReceipt(value)
+      : kind === 'pending-changes'
+        ? validatePendingChanges(value)
         : kind === 'delivery-frontmatter'
           ? validateDeliveryFrontmatter(value)
           : kind === 'project-pointer'

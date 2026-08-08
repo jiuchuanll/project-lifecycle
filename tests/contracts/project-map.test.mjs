@@ -387,6 +387,116 @@ test('rejects unknown fields in specified constraint objects', async () => {
   )));
 });
 
+test('accepts governed constraint identity, history, exceptions, and scoped revalidation markers', async () => {
+  const value = await fixture('valid.json');
+  value.domains[0].scope.includes = ['desktop interaction', 'wiki interaction'];
+  value.domains.push({
+    ...value.domains[0],
+    id: 'wiki-workspace',
+    kind: 'capability',
+    label: { en: 'Wiki workspace', 'zh-CN': 'Wiki 工作区' },
+    purpose: { en: 'Owns wiki interaction', 'zh-CN': '负责 Wiki 交互' },
+    scope: { includes: ['wiki interaction'], excludes: [] },
+    parent_id: 'desktop-experience',
+  });
+  value.constraints = [{
+    id: 'desktop-privacy',
+    scope: 'descendants',
+    owner_id: 'desktop-experience',
+    semantic_revision: 2,
+    lifecycle_state: 'current',
+    knowledge_refs: {
+      en: 'knowledge/desktop-experience-en.md#constraint-desktop-privacy',
+      'zh-CN': 'knowledge/desktop-experience.md#constraint-desktop-privacy',
+    },
+    exceptions: [{
+      domain_id: 'wiki-workspace',
+      reason_ref: 'decision:wiki-privacy-exception',
+      approval_ref: 'approval:wiki-privacy-exception',
+    }],
+  }, {
+    id: 'legacy-privacy',
+    scope: 'self',
+    owner_id: 'desktop-experience',
+    semantic_revision: 1,
+    lifecycle_state: 'retired',
+    knowledge_refs: {
+      en: 'knowledge/desktop-experience-en.md#constraint-legacy-privacy',
+      'zh-CN': 'knowledge/desktop-experience.md#constraint-legacy-privacy',
+    },
+    successor_ids: ['desktop-privacy'],
+    retirement_reason_ref: 'decision:replace-legacy-privacy',
+  }].toSorted((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+  value.revalidation_required = [{
+    domain_id: 'wiki-workspace',
+    fact_id: 'wiki-storage-boundary',
+    constraint_id: 'desktop-privacy',
+    from_revision: 1,
+    to_revision: 2,
+  }];
+
+  assert.equal(validateJson('project-map', value).ok, true);
+});
+
+test('rejects broken governed constraint history and revalidation references', async () => {
+  const value = await fixture('valid.json');
+  value.constraints = [{
+    id: 'legacy-privacy',
+    scope: 'self',
+    owner_id: 'missing-owner',
+    semantic_revision: 1,
+    lifecycle_state: 'retired',
+    knowledge_refs: {
+      en: 'knowledge/desktop-experience-en.md#constraint-legacy-privacy',
+      'zh-CN': 'knowledge/desktop-experience.md#constraint-legacy-privacy',
+    },
+    successor_ids: ['missing-successor'],
+    retirement_reason_ref: 'decision:replace-legacy-privacy',
+  }];
+  value.revalidation_required = [{
+    domain_id: 'missing-domain',
+    fact_id: 'wiki-storage-boundary',
+    constraint_id: 'missing-constraint',
+    from_revision: 2,
+    to_revision: 2,
+  }];
+
+  const result = validateJson('project-map', value);
+
+  for (const path of [
+    '/constraints/0/owner_id',
+    '/constraints/0/successor_ids/0',
+    '/revalidation_required/0/domain_id',
+    '/revalidation_required/0/constraint_id',
+    '/revalidation_required/0/to_revision',
+  ]) {
+    assert.ok(result.errors.some((error) => error.path === path), `missing error at ${path}`);
+  }
+});
+
+test('rejects duplicate constraint exceptions for one domain', async () => {
+  const value = await fixture('valid.json');
+  value.constraints = [{
+    id: 'desktop-privacy',
+    scope: 'self',
+    owner_id: 'desktop-experience',
+    semantic_revision: 1,
+    lifecycle_state: 'current',
+    knowledge_refs: {
+      en: 'knowledge/desktop-experience-en.md#constraint-desktop-privacy',
+      'zh-CN': 'knowledge/desktop-experience.md#constraint-desktop-privacy',
+    },
+    exceptions: [
+      { domain_id: 'desktop-experience', reason_ref: 'decision:first', approval_ref: 'approval:first' },
+      { domain_id: 'desktop-experience', reason_ref: 'decision:second', approval_ref: 'approval:second' },
+    ],
+  }];
+
+  const result = validateJson('project-map', value);
+
+  assert.ok(result.errors.some(({ code, path }) => code === 'ID_DUPLICATE' && path === '/constraints/0/exceptions/1/domain_id'));
+});
+
 test('terminates and rejects cyclic parent graphs during selected-descendant validation', async () => {
   const cyclicFixture = new URL('../fixtures/contracts/project-map/cyclic-parents.json', import.meta.url);
   const script = [
