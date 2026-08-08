@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "diff_id": "diff-add-desktop-theme",
+  "owner_delivery_id": "prd-desktop-theme",
+  "knowledge_baseline": "baseline-1",
+  "operations": [
+    {
+      "kind": "ADD",
+      "fact_id": "desktop-theme-fact",
+      "owner_domain_id": "desktop-experience",
+      "evidence_refs": ["repo:src/desktop", "test:desktop"]
+    }
+  ],
+  "domain_changes": [],
+  "entry_points": ["repo:src/desktop"],
+  "evidence_refs": ["repo:src/desktop", "test:desktop"],
+  "remaining_limits": ["Theme variants remain outside this accepted change."],
+  "outcome": "CHANGE"
+}
