@@ -11,7 +11,6 @@ import { validateJson } from '../lib/validate-json.mjs';
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const uniqueSorted = (values) => [...new Set(values)].sort(compareCodePoints);
-const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const ID = /^[a-z][a-z0-9-]*$/u;
 
 const inside = (root, candidate) => {
@@ -72,7 +71,7 @@ const resolveLifecycleRoot = async (rootValue) => {
 const resolveReadable = async (lifecycleRoot, locator) => {
   if (typeof locator !== 'string' || locator.length === 0 || isAbsolute(locator)
     || /^[A-Za-z]:[\\/]/u.test(locator) || locator.includes('\\') || locator.includes('://')
-    || /[\s<>]/u.test(locator) || locator.split('/').includes('..')) {
+    || /[\s<>#()]/u.test(locator) || locator.split('/').includes('..')) {
     throw Object.assign(new Error('Bounded locator required.'), { code: 'CONTEXT_TARGET_INVALID' });
   }
   const lexical = await resolveInside(lifecycleRoot, locator);
@@ -90,16 +89,39 @@ const readFrontmatterPrefix = async (path, maxBytes = 65_536) => {
   const handle = await open(path, 'r');
   try {
     const prefix = Buffer.alloc(maxBytes);
-    const delimiter = Buffer.from('\n---\n');
+    const delimiters = [Buffer.from('\n---\n'), Buffer.from('\r\n---\r\n')];
     for (let position = 0; position < maxBytes; position += 1) {
       const { bytesRead } = await handle.read(prefix, position, 1, position);
       if (bytesRead === 0) break;
       const length = position + 1;
-      if (length > 4 && prefix.subarray(length - delimiter.length, length).equals(delimiter)) {
+      if (delimiters.some((delimiter) => (
+        length >= delimiter.length
+        && prefix.subarray(length - delimiter.length, length).equals(delimiter)
+      ))) {
         return prefix.subarray(0, length).toString('utf8');
       }
     }
     throw Object.assign(new Error('Frontmatter boundary is missing or too large.'), { code: 'CONTEXT_FRONTMATTER_INVALID' });
+  } finally {
+    await handle.close();
+  }
+};
+
+const readBoundedDocument = async (path, maxBytes = 262_144) => {
+  const handle = await open(path, 'r');
+  try {
+    const { size } = await handle.stat();
+    if (size > maxBytes) {
+      throw Object.assign(new Error('Constraint owner asset exceeds the bounded read limit.'), { code: 'CONTEXT_CONSTRAINT_INVALID' });
+    }
+    const bytes = Buffer.alloc(size);
+    let offset = 0;
+    while (offset < size) {
+      const { bytesRead } = await handle.read(bytes, offset, size - offset, offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    return bytes.subarray(0, offset).toString('utf8');
   } finally {
     await handle.close();
   }
@@ -144,22 +166,6 @@ const lineageOf = (domains, domainId) => {
   return lineage;
 };
 
-const routeOrder = (primaryId, edges) => {
-  const order = [primaryId];
-  const seen = new Set(order);
-  while (true) {
-    let changed = false;
-    for (const edge of edges) {
-      if (!seen.has(edge.source_id) || seen.has(edge.target_id)) continue;
-      seen.add(edge.target_id);
-      order.push(edge.target_id);
-      changed = true;
-    }
-    if (!changed) break;
-  }
-  return order;
-};
-
 const stopFor = ({ conflicts, openQuestions, evidenceGaps }) => {
   if (conflicts.length > 0) return { code: 'CONFLICT', reason: 'Explicit current-context conflicts require semantic review.' };
   if (openQuestions.length > 0) return { code: 'NEEDS_USER', reason: 'A material routing question requires user confirmation.' };
@@ -187,7 +193,8 @@ export async function selectContext(inputValue, operations = {}) {
   if (!mapValidation.ok) return mapValidation;
   const byId = new Map(map.domains.map((domain) => [domain.id, domain]));
   const candidates = uniqueSorted(input.candidate_domain_ids);
-  if (!byId.has(input.primary_domain_id) || candidates.some((id) => !byId.has(id))
+  if (candidates.length !== input.candidate_domain_ids.length
+    || !byId.has(input.primary_domain_id) || candidates.some((id) => !byId.has(id))
     || !candidates.includes(input.primary_domain_id)) {
     return failure('CONTEXT_DOMAIN_INVALID', '/candidate_domain_ids', 'Primary and candidate domains must be explicit canonical map IDs.');
   }
@@ -198,8 +205,8 @@ export async function selectContext(inputValue, operations = {}) {
   const edgeKeys = new Set();
   for (const [index, edge] of input.applicable_relationships.entries()) {
     if (!isRecord(edge) || !['depends_on', 'governed_by', 'coordinates_with'].includes(edge.kind)
-      || !candidates.includes(edge.source_id) || !candidates.includes(edge.target_id)) {
-      return failure('CONTEXT_RELATIONSHIP_INVALID', `/applicable_relationships/${index}`, 'Applicable relationships must remain within caller-supplied candidate domains.');
+      || !byId.has(edge.source_id) || !byId.has(edge.target_id)) {
+      return failure('CONTEXT_RELATIONSHIP_INVALID', `/applicable_relationships/${index}`, 'Applicable relationships must reference canonical map domains.');
     }
     const declared = byId.get(edge.source_id).relationships.some(({ kind, target_id: targetId }) => (
       kind === edge.kind && targetId === edge.target_id
@@ -214,10 +221,36 @@ export async function selectContext(inputValue, operations = {}) {
     `${left.source_id}:${left.kind}:${left.target_id}`,
     `${right.source_id}:${right.kind}:${right.target_id}`,
   ));
-  const domainOrder = routeOrder(input.primary_domain_id, applicableEdges);
-  if (!same(uniqueSorted(domainOrder), candidates)) {
-    return failure('CONTEXT_RELATIONSHIP_INVALID', '/candidate_domain_ids', 'Every non-primary candidate requires an explicitly applicable path from the primary domain.');
+  const selectedDomainIds = new Set(candidates);
+  while (true) {
+    let changed = false;
+    for (const edge of applicableEdges) {
+      if (edge.kind !== 'depends_on' || !selectedDomainIds.has(edge.source_id)
+        || selectedDomainIds.has(edge.target_id)) continue;
+      selectedDomainIds.add(edge.target_id);
+      changed = true;
+    }
+    if (!changed) break;
   }
+  const governingOwnerIds = new Set();
+  for (const [index, edge] of applicableEdges.entries()) {
+    if (!selectedDomainIds.has(edge.source_id)) {
+      return failure('CONTEXT_RELATIONSHIP_INVALID', `/applicable_relationships/${index}`, 'Applicable relationship source is not task-selected or dependency-grounded.');
+    }
+    if (edge.kind === 'coordinates_with' && !candidates.includes(edge.target_id)) {
+      return failure('CONTEXT_RELATIONSHIP_INVALID', `/applicable_relationships/${index}`, 'Coordinated domains require independent caller applicability.');
+    }
+    if (edge.kind === 'governed_by') governingOwnerIds.add(edge.target_id);
+  }
+  const selectedDomains = [...selectedDomainIds].map((id) => byId.get(id));
+  if (selectedDomains.some((domain) => ['merged', 'retired'].includes(domain.domain_state))) {
+    return failure('CONTEXT_DOMAIN_INVALID', '/applicable_relationships', 'Dependency-grounded domains must remain current routing domains.');
+  }
+  const domainOrder = [
+    input.primary_domain_id,
+    ...candidates.filter((id) => id !== input.primary_domain_id),
+    ...uniqueSorted([...selectedDomainIds].filter((id) => !candidates.includes(id))),
+  ];
 
   const exclusionIds = new Set();
   for (const [index, exclusion] of input.material_exclusions.entries()) {
@@ -230,16 +263,54 @@ export async function selectContext(inputValue, operations = {}) {
     exclusionIds.add(exclusion.id);
   }
 
+  const acceptedBaselines = new Set([
+    ...(map.project_identity ? [map.project_identity.calibration_ref] : []),
+    ...map.domains.filter(({ domain_state }) => domain_state === 'materialized').map(({ baseline }) => baseline),
+  ].filter(Boolean));
   const evidenceGaps = [...input.evidence_gaps];
+  if (!acceptedBaselines.has(input.knowledge_baseline)) evidenceGaps.push(`baseline:${input.knowledge_baseline}`);
+  const derivedConflicts = [...input.conflicts];
   const selected = [];
-  const constraints = map.constraints
-    .filter((constraint) => domainOrder.some((domainId) => applicableConstraint(
+  const verticalConstraints = map.constraints.filter((constraint) => domainOrder.some((domainId) => applicableConstraint(
       constraint,
       domainId,
       lineageOf(map.domains, domainId),
-    )))
-    .sort((left, right) => compareCodePoints(left.id, right.id));
+    )));
+  const governingConstraints = map.constraints.filter((constraint) => (
+    constraint.lifecycle_state === 'current'
+    && governingOwnerIds.has(constraint.owner_id)
+    && applicableEdges.some((edge) => edge.kind === 'governed_by'
+      && edge.target_id === constraint.owner_id
+      && !(constraint.exceptions ?? []).some(({ domain_id: exceptionId }) => exceptionId === edge.source_id))
+  ));
+  const constraints = [...new Map(
+    [...verticalConstraints, ...governingConstraints].map((constraint) => [constraint.id, constraint]),
+  ).values()].sort((left, right) => compareCodePoints(left.id, right.id));
+  const constraintSources = new Map();
   for (const constraint of constraints) {
+    const owner = byId.get(constraint.owner_id);
+    const expectedAnchor = `constraint-${constraint.id}`;
+    if (!owner || owner.domain_state !== 'materialized' || !owner.paired_assets
+      || constraint.knowledge_refs.en !== `${owner.paired_assets.en}#${expectedAnchor}`
+      || constraint.knowledge_refs['zh-CN'] !== `${owner.paired_assets['zh-CN']}#${expectedAnchor}`) {
+      return failure('CONTEXT_CONSTRAINT_INVALID', `/constraints/${constraint.id}`, 'Constraint knowledge reference must resolve to its exact current owner asset and anchor.');
+    }
+    let source = constraintSources.get(owner.paired_assets.en);
+    if (source === undefined) {
+      try {
+        const path = await resolveReadable(lifecycleRoot, owner.paired_assets.en);
+        source = await readBoundedDocument(path);
+        constraintSources.set(owner.paired_assets.en, source);
+        onRead({ level: 'L1', locator: owner.paired_assets.en, section: 'constraint-anchor' });
+      } catch (error) {
+        return failure(error?.code ?? 'CONTEXT_CONSTRAINT_INVALID', `/constraints/${constraint.id}`, 'Constraint owner asset could not be read safely.');
+      }
+    }
+    const anchor = `<a id="${expectedAnchor}"></a>`;
+    const marker = `<!-- project-lifecycle:constraint id=${constraint.id} revision=${constraint.semantic_revision} -->`;
+    if (!source.includes(anchor) || !source.includes(marker) || !source.includes('<!-- /project-lifecycle:constraint -->')) {
+      return failure('CONTEXT_CONSTRAINT_INVALID', `/constraints/${constraint.id}`, 'Constraint anchor or semantic revision is missing from its current owner asset.');
+    }
     selected.push({
       kind: 'constraint', id: constraint.id,
       version_ref: `${constraint.knowledge_refs.en}@revision-${constraint.semantic_revision}`,
@@ -272,7 +343,7 @@ export async function selectContext(inputValue, operations = {}) {
     selected.push({
       kind: 'domain_asset', id: domainId,
       version_ref: `${domain.paired_assets.en}@${frontmatter.last_verified_baseline}`,
-      reason: index === 0 ? 'PRIMARY' : 'DEPENDENCY',
+      reason: index === 0 ? 'PRIMARY' : candidates.includes(domainId) ? 'USER_EXPLICIT' : 'DEPENDENCY',
     });
   }
 
@@ -292,10 +363,14 @@ export async function selectContext(inputValue, operations = {}) {
       frontmatter = parsed.value;
       onRead({ level: frontmatter.retention_tier === 'archive' ? 'L5' : 'L4', locator: reference.locator, section: 'frontmatter' });
     } catch (error) {
-      return failure(error?.code ?? 'CONTEXT_TARGET_INVALID', `/task_delivery_refs/${index}`, 'Delivery Frontmatter could not be read safely.');
+      const code = ['PATH_SYMLINK_ESCAPE', 'CONTEXT_TARGET_INVALID'].includes(error?.code)
+        ? error.code : 'CONTEXT_TARGET_INVALID';
+      return failure(code, `/task_delivery_refs/${index}`, 'Delivery Frontmatter could not be read safely.');
     }
     if (frontmatter.artifact_id !== reference.artifact_id
-      || !frontmatter.domain_ids.some((id) => candidates.includes(id))) {
+      || !frontmatter.domain_ids.some((id) => selectedDomainIds.has(id))
+      || frontmatter.project_id_at_creation !== map.project_id
+      || (frontmatter.retention_tier === 'active' && frontmatter.current_project_id !== map.project_id)) {
       return failure('CONTEXT_DELIVERY_INVALID', `/task_delivery_refs/${index}`, 'Task-linked delivery must match its ID and selected domains.');
     }
     if (frontmatter.retention_tier === 'archive') {
@@ -309,7 +384,31 @@ export async function selectContext(inputValue, operations = {}) {
       }
       continue;
     }
+    if (frontmatter.retention_tier === 'closed-summary') {
+      if (!exclusionIds.has(reference.artifact_id)) {
+        exclusions.push({
+          id: reference.artifact_id,
+          reason: 'OUT_OF_SCOPE',
+          explanation: 'Closed summaries are locators, not active task context.',
+        });
+        exclusionIds.add(reference.artifact_id);
+      }
+      continue;
+    }
     if (frontmatter.retention_tier !== 'active') continue;
+    if (frontmatter.knowledge_baseline !== input.knowledge_baseline
+      || !acceptedBaselines.has(frontmatter.knowledge_baseline)) {
+      if (!exclusionIds.has(reference.artifact_id)) {
+        exclusions.push({
+          id: reference.artifact_id,
+          reason: 'STALE',
+          explanation: 'Active delivery is pinned to a different knowledge baseline.',
+        });
+        exclusionIds.add(reference.artifact_id);
+      }
+      derivedConflicts.push(`delivery-baseline:${reference.artifact_id}`);
+      continue;
+    }
     selected.push({
       kind: 'active_delivery', id: reference.artifact_id,
       version_ref: `${reference.locator}@${frontmatter.knowledge_baseline}`,
@@ -318,20 +417,46 @@ export async function selectContext(inputValue, operations = {}) {
   }
 
   const openQuestions = uniqueSorted(input.open_questions);
-  const conflicts = uniqueSorted(input.conflicts);
+  const conflicts = uniqueSorted(derivedConflicts);
   const sortedEvidenceGaps = uniqueSorted(evidenceGaps);
   const materialExclusions = [...exclusions]
     .sort((left, right) => compareCodePoints(left.id, right.id));
   if (selected.length > 100 || materialExclusions.length > 100) {
     return failure('CONTEXT_SELECTION_LIMIT', '/', 'Bounded context selection exceeds the shared receipt limits.');
   }
-  return ok({
+  const selectedContext = selected.sort((left, right) => compareCodePoints(left.id, right.id));
+  const selectedIds = new Set();
+  for (const selection of selectedContext) {
+    if (selectedIds.has(selection.id)) {
+      return failure('CONTEXT_SELECTION_CONFLICT', '/selected_context', 'Selected context IDs must be unique across all kinds.');
+    }
+    selectedIds.add(selection.id);
+  }
+  const stop = stopFor({ conflicts, openQuestions, evidenceGaps: sortedEvidenceGaps });
+  const value = {
     knowledge_baseline: input.knowledge_baseline,
     primary_domain_id: input.primary_domain_id,
-    affected_domain_ids: candidates,
-    selected_context: selected.sort((left, right) => compareCodePoints(left.id, right.id)),
+    affected_domain_ids: uniqueSorted([...selectedDomainIds]),
+    selected_context: selectedContext,
     material_exclusions: materialExclusions,
     open_questions: openQuestions,
-    stop: stopFor({ conflicts, openQuestions, evidenceGaps: sortedEvidenceGaps }),
+    stop,
+  };
+  const receiptValidation = validateJson('context-receipt', {
+    schema_version: 1,
+    prd_id: 'prd-context-selection',
+    receipt_revision: 1,
+    updated_at: '2000-01-01T00:00:00Z',
+    knowledge_baseline: value.knowledge_baseline,
+    intent_summary: 'Bounded task context selection.',
+    route: { primary_domain_id: value.primary_domain_id, affected_domain_ids: value.affected_domain_ids },
+    selected_context: value.selected_context,
+    material_exclusions: value.material_exclusions,
+    open_questions: value.open_questions,
+    stop: value.stop,
   });
+  if (!receiptValidation.ok) {
+    return failure('CONTEXT_SELECTION_CONFLICT', '/selected_context', 'Selected context violates the shared Context Receipt invariants.');
+  }
+  return ok(value);
 }

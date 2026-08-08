@@ -7,12 +7,24 @@ import test from 'node:test';
 import { selectContext } from '../../scripts/knowledge/select-context.mjs';
 import { validateJson } from '../../scripts/lib/validate-json.mjs';
 
-const capability = (id, pairedAsset, baseline = 'baseline-7') => `---\nid: ${id}\nknowledge_state: current\npaired_asset: ${pairedAsset}\nlast_verified_baseline: ${baseline}\nimplementation_refs:\n  - repo:src/${id}\nverification_refs:\n  - repo:test/${id}\n---\n\n# SECRET BODY ${id}\n`;
+const constraintBlocks = (id) => id === 'desktop-experience'
+  ? '\n<a id="constraint-desktop-privacy"></a>\n<!-- project-lifecycle:constraint id=desktop-privacy revision=3 -->\nprivacy\n<!-- /project-lifecycle:constraint -->\n<a id="constraint-desktop-self"></a>\n<!-- project-lifecycle:constraint id=desktop-self revision=1 -->\nself\n<!-- /project-lifecycle:constraint -->\n<a id="constraint-wiki-selected"></a>\n<!-- project-lifecycle:constraint id=wiki-selected revision=2 -->\nselected\n<!-- /project-lifecycle:constraint -->\n'
+  : id === 'unrelated-workspace'
+    ? '\n<a id="constraint-other-policy"></a>\n<!-- project-lifecycle:constraint id=other-policy revision=1 -->\npolicy\n<!-- /project-lifecycle:constraint -->\n'
+    : '';
 
-const delivery = ({ id, tier = 'active', domainIds = ['wiki-workspace'] }) => `---\nschema_version: 1\nartifact_id: ${id}\nartifact_kind: prd\nprimary_route: PRD_DELIVERY\nproject_id_at_creation: sample-project\n${tier === 'active' ? 'current_project_id: sample-project\n' : ''}domain_ids:\n${domainIds.map((domainId) => `  - ${domainId}`).join('\n')}\nknowledge_baseline: baseline-7\nrelationships:\n  feedback_ids: []\n  prd_ids: []\n  legacy_artifact_refs: []\nretention_tier: ${tier}\nreclassified_from_refs: []\nobligations: []\n---\n\n# SECRET DELIVERY BODY ${id}\n`;
+const capability = (id, pairedAsset, baseline = 'baseline-7') => `---\nid: ${id}\nknowledge_state: current\npaired_asset: ${pairedAsset}\nlast_verified_baseline: ${baseline}\nimplementation_refs:\n  - repo:src/${id}\nverification_refs:\n  - repo:test/${id}\n---\n\n# SECRET BODY ${id}\n${constraintBlocks(id)}`;
+
+const delivery = ({ id, tier = 'active', domainIds = ['wiki-workspace'], kind = 'prd', baseline = 'baseline-7', projectId = 'sample-project' }) => `---\nschema_version: 1\nartifact_id: ${id}\nartifact_kind: ${kind}\nprimary_route: PRD_DELIVERY\nproject_id_at_creation: ${projectId}\n${tier === 'active' ? `current_project_id: ${projectId}\n` : ''}domain_ids:\n${domainIds.map((domainId) => `  - ${domainId}`).join('\n')}\nknowledge_baseline: ${baseline}\nrelationships:\n  feedback_ids: []\n  prd_ids: []\n  legacy_artifact_refs: []\nretention_tier: ${tier}\nreclassified_from_refs: []\nobligations: []\n---\n\n# SECRET DELIVERY BODY ${id}\n`;
 
 const projectMap = {
-  schema_version: 1, project_id: 'sample-project', identity_lineage: [], repositories: [],
+  schema_version: 1, project_id: 'sample-project',
+  project_identity: {
+    label: { en: 'Sample project', 'zh-CN': '示例项目' },
+    purpose: { en: 'Routes sample work.', 'zh-CN': '路由示例工作。' },
+    calibration_ref: 'calibration:sample-project',
+  },
+  identity_lineage: [], repositories: [],
   constraints: [
     {
       id: 'desktop-privacy', scope: 'descendants', owner_id: 'desktop-experience', semantic_revision: 3,
@@ -31,6 +43,14 @@ const projectMap = {
         'zh-CN': 'knowledge/desktop-experience.md#constraint-desktop-self',
       },
       exceptions: [],
+    },
+    {
+      id: 'other-policy', scope: 'self', owner_id: 'unrelated-workspace', semantic_revision: 1,
+      lifecycle_state: 'current',
+      knowledge_refs: {
+        en: 'knowledge/unrelated-workspace-en.md#constraint-other-policy',
+        'zh-CN': 'knowledge/unrelated-workspace.md#constraint-other-policy',
+      }, exceptions: [],
     },
     {
       id: 'wiki-selected', scope: 'selected_descendants', owner_id: 'desktop-experience',
@@ -63,7 +83,7 @@ const projectMap = {
     {
       id: 'wiki-workspace', kind: 'capability', label: { en: 'Wiki', 'zh-CN': '维基' }, purpose: { en: 'Wiki.', 'zh-CN': '维基。' },
       domain_state: 'materialized', scope: { includes: ['wiki'], excludes: [] }, parent_id: 'desktop-experience',
-      relationships: [{ kind: 'depends_on', target_id: 'source-workspace' }, { kind: 'coordinates_with', target_id: 'unrelated-workspace' }],
+      relationships: [{ kind: 'depends_on', target_id: 'source-workspace' }, { kind: 'coordinates_with', target_id: 'unrelated-workspace' }, { kind: 'governed_by', target_id: 'unrelated-workspace' }],
       evidence_refs: ['repo:src/wiki'], known_gaps: [], baseline: 'baseline-7',
       paired_assets: { en: 'knowledge/wiki-workspace-en.md', 'zh-CN': 'knowledge/wiki-workspace.md' },
     },
@@ -83,6 +103,7 @@ const setup = async (context) => {
   }
   await writeFile(join(lifecycle, 'delivery/prd-wiki-refresh-en.md'), delivery({ id: 'prd-wiki-refresh' }));
   await writeFile(join(lifecycle, 'delivery/prd-wiki-history-en.md'), delivery({ id: 'prd-wiki-history', tier: 'archive' }));
+  await writeFile(join(lifecycle, 'delivery/prd-wiki-closed-en.md'), delivery({ id: 'prd-wiki-closed', tier: 'closed-summary' }));
   return root;
 };
 
@@ -98,6 +119,7 @@ const baseInput = (root) => ({
   task_delivery_refs: [
     { artifact_id: 'prd-wiki-refresh', locator: 'delivery/prd-wiki-refresh-en.md' },
     { artifact_id: 'prd-wiki-history', locator: 'delivery/prd-wiki-history-en.md' },
+    { artifact_id: 'prd-wiki-closed', locator: 'delivery/prd-wiki-closed-en.md' },
   ],
   material_exclusions: [], evidence_gaps: [], open_questions: [], conflicts: [],
 });
@@ -118,15 +140,18 @@ test('selects exact vertical constraints, explicit cyclic dependencies, and acti
     ['domain_asset', 'wiki-workspace'],
   ]);
   assert.equal(result.value.selected_context.some(({ id }) => id === 'desktop-self'), false);
-  assert.deepEqual(result.value.material_exclusions, [{
-    id: 'prd-wiki-history', reason: 'ARCHIVE_GATED', explanation: 'Archive content requires a separate Archive Access Receipt.',
-  }]);
+  assert.deepEqual(result.value.material_exclusions, [
+    { id: 'prd-wiki-closed', reason: 'OUT_OF_SCOPE', explanation: 'Closed summaries are locators, not active task context.' },
+    { id: 'prd-wiki-history', reason: 'ARCHIVE_GATED', explanation: 'Archive content requires a separate Archive Access Receipt.' },
+  ]);
   assert.deepEqual(reads.map(({ level, locator, section }) => [level, locator, section]), [
     ['L0', 'project-map.json', 'document'],
+    ['L1', 'knowledge/desktop-experience-en.md', 'constraint-anchor'],
     ['L2', 'knowledge/wiki-workspace-en.md', 'frontmatter'],
     ['L3', 'knowledge/source-workspace-en.md', 'frontmatter'],
     ['L4', 'delivery/prd-wiki-refresh-en.md', 'frontmatter'],
     ['L5', 'delivery/prd-wiki-history-en.md', 'frontmatter'],
+    ['L4', 'delivery/prd-wiki-closed-en.md', 'frontmatter'],
   ]);
   assert.equal(reads.some(({ locator, section }) => locator.includes('unrelated') && section === 'body'), false);
   assert.equal(reads.some(({ locator, section }) => locator.includes('history') && section === 'body'), false);
@@ -162,6 +187,21 @@ test('does not follow undeclared or caller-inapplicable horizontal edges', async
   assert.equal(reads.some(({ locator }) => locator.includes('unrelated-workspace')), false);
 });
 
+test('applies relationship kinds without generic governing-body traversal', async (context) => {
+  const root = await setup(context);
+  const reads = [];
+  const input = baseInput(root);
+  input.candidate_domain_ids = ['wiki-workspace'];
+  input.applicable_relationships = [{ source_id: 'wiki-workspace', kind: 'governed_by', target_id: 'unrelated-workspace' }];
+  input.task_delivery_refs = [];
+  const result = await selectContext(input, { onRead: (entry) => reads.push(entry) });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.value.selected_context.some(({ id }) => id === 'other-policy'), true);
+  assert.equal(result.value.selected_context.some(({ id }) => id === 'unrelated-workspace'), false);
+  assert.equal(reads.some(({ level, locator }) => level === 'L3' && locator.includes('unrelated')), false);
+  assert.equal(reads.some(({ level, locator }) => level === 'L1' && locator.includes('unrelated')), true);
+});
+
 test('validates caller routing, dependency grounding, delivery linkage, versions, and bounded locators', async (context) => {
   const root = await setup(context);
   const cases = [
@@ -169,6 +209,8 @@ test('validates caller routing, dependency grounding, delivery linkage, versions
     { patch: { candidate_domain_ids: ['missing-domain', 'wiki-workspace'] }, code: 'CONTEXT_DOMAIN_INVALID' },
     { patch: { applicable_relationships: [{ source_id: 'wiki-workspace', kind: 'depends_on', target_id: 'unrelated-workspace' }] }, code: 'CONTEXT_RELATIONSHIP_INVALID' },
     { patch: { task_delivery_refs: [{ artifact_id: 'prd-wiki-refresh', locator: '../outside.md' }] }, code: 'CONTEXT_TARGET_INVALID' },
+    { patch: { task_delivery_refs: [{ artifact_id: 'prd-wiki-refresh', locator: 'delivery/bad).md' }] }, code: 'CONTEXT_TARGET_INVALID' },
+    { patch: { task_delivery_refs: [{ artifact_id: 'prd-wiki-refresh', locator: 'delivery/bad#fragment.md' }] }, code: 'CONTEXT_TARGET_INVALID' },
   ];
   for (const entry of cases) {
     const result = await selectContext({ ...baseInput(root), ...entry.patch });
@@ -193,6 +235,57 @@ test('validates caller routing, dependency grounding, delivery linkage, versions
   const escaped = await selectContext({ ...baseInput(root), task_delivery_refs: [] });
   assert.equal(escaped.ok, false);
   assert.equal(escaped.errors[0].code, 'PATH_SYMLINK_ESCAPE');
+});
+
+test('pins accepted baselines, delivery identity/retention, and selected ID uniqueness', async (context) => {
+  const root = await setup(context);
+  const invented = await selectContext({ ...baseInput(root), knowledge_baseline: 'invented-baseline', task_delivery_refs: [] });
+  assert.equal(invented.ok, true);
+  assert.equal(invented.value.stop.code, 'NEEDS_EVIDENCE');
+
+  await writeFile(join(root, 'docs/project-lifecycle/delivery/prd-foreign-en.md'), delivery({ id: 'prd-foreign', projectId: 'foreign-project' }));
+  const foreign = await selectContext({ ...baseInput(root), task_delivery_refs: [{ artifact_id: 'prd-foreign', locator: 'delivery/prd-foreign-en.md' }] });
+  assert.equal(foreign.ok, false);
+  assert.equal(foreign.errors[0].code, 'CONTEXT_DELIVERY_INVALID');
+
+  await writeFile(join(root, 'docs/project-lifecycle/delivery/prd-stale-en.md'), delivery({ id: 'prd-stale', baseline: 'baseline-old' }));
+  const stale = await selectContext({ ...baseInput(root), task_delivery_refs: [{ artifact_id: 'prd-stale', locator: 'delivery/prd-stale-en.md' }] });
+  assert.equal(stale.ok, true, JSON.stringify(stale));
+  assert.equal(stale.value.stop.code, 'CONFLICT');
+  assert.deepEqual(stale.value.material_exclusions, [{
+    id: 'prd-stale', reason: 'STALE', explanation: 'Active delivery is pinned to a different knowledge baseline.',
+  }]);
+  assert.equal(stale.value.selected_context.some(({ id }) => id === 'prd-stale'), false);
+
+  await writeFile(join(root, 'docs/project-lifecycle/delivery/wiki-workspace-en.md'), delivery({ id: 'wiki-workspace', kind: 'architecture' }));
+  const collision = await selectContext({ ...baseInput(root), task_delivery_refs: [{ artifact_id: 'wiki-workspace', locator: 'delivery/wiki-workspace-en.md' }] });
+  assert.equal(collision.ok, false);
+  assert.equal(collision.errors[0].code, 'CONTEXT_SELECTION_CONFLICT');
+});
+
+test('rejects a missing or stale constraint anchor before capability selection', async (context) => {
+  const root = await setup(context);
+  const path = join(root, 'docs/project-lifecycle/knowledge/desktop-experience-en.md');
+  await writeFile(path, capability('desktop-experience', 'desktop-experience.md').replace(
+    '<a id="constraint-desktop-privacy"></a>',
+    '<a id="constraint-renamed"></a>',
+  ));
+  const reads = [];
+
+  const result = await selectContext({ ...baseInput(root), task_delivery_refs: [] }, { onRead: (entry) => reads.push(entry) });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'CONTEXT_CONSTRAINT_INVALID');
+  assert.equal(reads.some(({ level }) => level === 'L2' || level === 'L3'), false);
+});
+
+test('accepts CRLF and reordered Frontmatter keys without reading the body', async (context) => {
+  const root = await setup(context);
+  const path = join(root, 'docs/project-lifecycle/knowledge/wiki-workspace-en.md');
+  const reordered = `---\nverification_refs:\n  - repo:test/wiki-workspace\nimplementation_refs:\n  - repo:src/wiki-workspace\nlast_verified_baseline: baseline-7\npaired_asset: wiki-workspace.md\nknowledge_state: current\nid: wiki-workspace\n---\n\n# BODY MUST STAY UNREAD\n`.replaceAll('\n', '\r\n');
+  await writeFile(path, reordered);
+  const result = await selectContext({ ...baseInput(root), candidate_domain_ids: ['wiki-workspace'], applicable_relationships: [], task_delivery_refs: [] });
+  assert.equal(result.ok, true, JSON.stringify(result));
 });
 
 test('derives only the four permitted stop codes from explicit gaps, questions, and conflicts', async (context) => {

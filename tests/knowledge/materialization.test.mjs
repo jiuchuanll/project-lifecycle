@@ -164,6 +164,7 @@ test('capability templates expose only six Frontmatter fields and exactly eight 
 
 test('materializes exactly one bilingual pair, map update, and regenerated paired indexes', async (context) => {
   const { root, lifecycleRoot } = await createProject(context);
+  const originalMap = await readJson(join(lifecycleRoot, 'project-map.json'));
   const result = await materializeCapability(await validInput(root));
 
   assert.deepEqual(result, {
@@ -190,6 +191,8 @@ test('materializes exactly one bilingual pair, map update, and regenerated paire
 
   const map = await readJson(join(lifecycleRoot, 'project-map.json'));
   const node = map.domains.find(({ id }) => id === 'wiki-workspace');
+  assert.equal(map.project_id, originalMap.project_id);
+  assert.deepEqual(map.project_identity, originalMap.project_identity);
   assert.equal(node.domain_state, 'materialized');
   assert.equal(node.baseline, 'baseline-2026-08-09');
   assert.deepEqual(node.paired_assets, {
@@ -210,6 +213,9 @@ test('materializes exactly one bilingual pair, map update, and regenerated paire
   assert.equal(chineseIndex.includes('[`wiki-workspace`](knowledge/wiki-workspace.md)'), true);
   assert.equal(englishIndex.includes('approval:user-current-wiki'), false);
   assert.equal(chineseIndex.includes('approval:user-current-wiki'), false);
+  for (const value of ['Sample Application', '示例应用', 'calibration:initial-user-approval']) {
+    assert.equal(`${englishIndex}\n${chineseIndex}`.includes(value), true);
+  }
   assert.equal(englishDocument.includes('Canonical owner: `wiki-workspace`'), true);
   assert.equal(chineseDocument.includes('规范所有者：`wiki-workspace`'), true);
   assert.equal(englishDocument.includes('Declared dependency: `app-shell`'), true);

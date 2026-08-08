@@ -1,6 +1,11 @@
 {
   "schema_version": 1,
   "project_id": "sample-app",
+  "project_identity": {
+    "label": { "en": "Sample app", "zh-CN": "示例应用" },
+    "purpose": { "en": "Accepted project knowledge.", "zh-CN": "已验收项目知识。" },
+    "calibration_ref": "calibration:sample-app"
+  },
   "identity_lineage": [],
   "repositories": [],
   "constraints": [

@@ -42,6 +42,21 @@ test('accepts the minimal valid project map', async () => {
   assert.deepEqual(result.errors, []);
 });
 
+test('accepts a strict optional canonical project identity and rejects partial or extra identity fields', async () => {
+  const value = await fixture('valid.json');
+  value.project_identity = {
+    label: { en: 'Sample app', 'zh-CN': '示例应用' },
+    purpose: { en: 'Owns sample behavior.', 'zh-CN': '负责示例行为。' },
+    calibration_ref: 'calibration:accepted',
+  };
+  assert.equal(validateJson('project-map', value).ok, true);
+  delete value.project_identity.purpose;
+  assert.ok(validateJson('project-map', value).errors.some(({ path }) => path === '/project_identity/purpose'));
+  value.project_identity.purpose = { en: 'Owns sample behavior.', 'zh-CN': '负责示例行为。' };
+  value.project_identity.extra = true;
+  assert.ok(validateJson('project-map', value).errors.some(({ path }) => path === '/project_identity/extra'));
+});
+
 for (const [name, code, path] of [
   ['id-with-parent-path.json', 'SCHEMA_INVALID', '/domains/0/id'],
   ['missing-zh.json', 'SCHEMA_INVALID', '/domains/0/label/zh-CN'],

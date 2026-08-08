@@ -111,6 +111,26 @@ test('SEMANTIC increments exactly one and calculates descendant impact', async (
   assert.deepEqual(accepted.value.affected_domain_ids, ['desktop-experience', 'inbox-workspace', 'source-workspace', 'wiki-workspace']);
 });
 
+test('rejects project identity changes bundled into a domain or constraint proposal', async () => {
+  const map = await readJson(new URL('../fixtures/knowledge/topology/base/docs/project-lifecycle/project-map.json', import.meta.url));
+  const candidate = clone(map);
+  candidate.constraints[0].semantic_revision = 2;
+  candidate.project_identity.purpose.en = 'Smuggled unrelated identity purpose.';
+
+  const result = analyzeImpact({
+    current_map: map,
+    candidate_map: candidate,
+    change_class: 'SEMANTIC',
+    changed_fields: ['constraint_meaning'],
+    target_id: 'desktop-privacy',
+    operation: 'UPDATE_CONSTRAINT',
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'CHANGE_NOT_BOUNDED');
+  assert.equal(result.errors[0].path, '/candidate_map/project_identity');
+});
+
 test('approved SEMANTIC application atomically updates map, pair, indexes, traceability, and revalidation markers', async (context) => {
   const root = await setup(context);
   const map = await readJson(join(lifecycle(root), 'project-map.json'));
@@ -130,10 +150,15 @@ test('approved SEMANTIC application atomically updates map, pair, indexes, trace
   });
 
   assert.equal(result.ok, true);
-  assert.equal((await readJson(join(lifecycle(root), 'project-map.json'))).constraints[0].semantic_revision, 2);
+  const appliedMap = await readJson(join(lifecycle(root), 'project-map.json'));
+  assert.equal(appliedMap.constraints[0].semantic_revision, 2);
+  assert.equal(appliedMap.project_id, map.project_id);
+  assert.deepEqual(appliedMap.project_identity, map.project_identity);
   assert.deepEqual((await readJson(join(lifecycle(root), 'pending-changes.json'))).changes, []);
   assert.match(await readFile(join(lifecycle(root), 'knowledge/desktop-experience-en.md'), 'utf8'), /id=desktop-privacy revision=2/);
   assert.match(await readFile(join(lifecycle(root), 'INDEX-en.md'), 'utf8'), /desktop-experience/);
+  assert.match(await readFile(join(lifecycle(root), 'INDEX-en.md'), 'utf8'), /Sample app/);
+  assert.match(await readFile(join(lifecycle(root), 'INDEX.md'), 'utf8'), /示例应用/);
 });
 
 test('SEMANTIC application requires approval and complete child dispositions', async (context) => {

@@ -449,6 +449,11 @@ test('bootstrap creates only the calibrated fixed-root skeleton and paired index
   assert.equal(validateJson('project-map', map).ok, true);
   assert.equal(validateJson('pending-changes', pending).ok, true);
   assert.equal(map.project_id, input.project_id);
+  assert.deepEqual(map.project_identity, {
+    label: input.label,
+    purpose: input.purpose,
+    calibration_ref: input.calibration_ref,
+  });
   assert.deepEqual(map.domains[0].evidence_refs, [
     'calibration:initial-user-approval',
     'repo:README.md',
@@ -456,6 +461,7 @@ test('bootstrap creates only the calibrated fixed-root skeleton and paired index
   assert.deepEqual(pending, { schema_version: 1, changes: [] });
   for (const [index, language] of [[englishIndex, 'Sample Application'], [chineseIndex, '示例应用']]) {
     assert.equal(index.includes(language), true);
+    assert.equal(index.includes(language === 'Sample Application' ? input.purpose.en : input.purpose['zh-CN']), true);
     assert.equal(index.includes(input.calibration_ref), true);
     assert.equal(index.includes('desktop-experience'), true);
   }
