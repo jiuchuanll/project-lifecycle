@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 import { ERROR_CODES, createError } from '../lib/errors.mjs';
+import { validateBilingualPair } from '../lib/bilingual-pair.mjs';
 import { fail } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 
@@ -32,6 +33,22 @@ Commands:
   validate-fixtures`);
 } else if (command === 'version') {
   console.log(version);
+} else if (command === 'validate-pair') {
+  const [enPath, zhPath, mapPath] = process.argv.slice(3);
+  if (!enPath || !zhPath || !mapPath) {
+    console.error('CLI_VALIDATE_PAIR_USAGE: validate-pair <en-path> <zh-path> <project-map>');
+    process.exitCode = 2;
+  } else {
+    try {
+      const map = JSON.parse(await readFile(mapPath, 'utf8'));
+      const result = await validateBilingualPair(enPath, zhPath, map);
+      console.log(JSON.stringify(result));
+      if (!result.ok) process.exitCode = 1;
+    } catch (error) {
+      console.error(`CLI_VALIDATE_PAIR_ERROR: ${error.message}`);
+      process.exitCode = 2;
+    }
+  }
 } else if (command === 'validate-json') {
   const [kind, file] = process.argv.slice(3);
   if (!kind || !file) {

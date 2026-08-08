@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pending-changes",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "changes"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "changes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/change" }
+    }
+  },
+  "$defs": {
+    "refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "notes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "change_id",
+        "kind",
+        "trigger_refs",
+        "affected_refs",
+        "proposed_disposition",
+        "risks",
+        "evidence_gaps",
+        "review_state",
+        "created_at"
+      ],
+      "properties": {
+        "change_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "kind": {
+          "enum": [
+            "constraint_identity",
+            "constraint_scope",
+            "constraint_semantics",
+            "fact_identity",
+            "fact_ownership",
+            "material_conflict",
+            "ownership",
+            "project_identity",
+            "repository_attachment",
+            "topology"
+          ]
+        },
+        "trigger_refs": { "$ref": "#/$defs/refs" },
+        "affected_refs": { "$ref": "#/$defs/refs" },
+        "proposed_disposition": { "type": "string", "minLength": 1 },
+        "risks": { "$ref": "#/$defs/notes" },
+        "evidence_gaps": { "$ref": "#/$defs/notes" },
+        "review_state": { "const": "open" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
