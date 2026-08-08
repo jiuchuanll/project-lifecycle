@@ -23,6 +23,7 @@ import { fail, ok } from '../lib/result.mjs';
 import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 import { analyzeImpact, hashProjectMap } from './impact.mjs';
+import { generateIndexesFromRoot } from './generate-indexes.mjs';
 
 const applicationFailure = (code, path, message) => fail([createError(code, path, message)]);
 const jsonContent = (value) => `${JSON.stringify(value, null, 2)}\n`;
@@ -64,21 +65,6 @@ const resolveRoots = async (inputRoot) => {
 };
 
 const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'));
-
-const indexContent = (existing, map, language) => {
-  const heading = language === 'en' ? '## Confirmed domains' : '## 已确认领域';
-  const headingIndex = existing.indexOf(`${heading}\n`);
-  if (headingIndex === -1 || !existing.startsWith('<!--')) {
-    throw Object.assign(new Error('Generated index is invalid.'), { code: 'CHANGE_INDEX_INVALID' });
-  }
-  const prefix = existing.slice(0, headingIndex + heading.length + 1);
-  const lines = map.domains.map((domain) => {
-    const description = `${domain.label[language]}: ${domain.purpose[language]}`;
-    if (domain.domain_state !== 'materialized') return `- \`${domain.id}\` — ${description}`;
-    return `- [\`${domain.id}\`](${domain.paired_assets[language]}) — ${description}`;
-  });
-  return `${prefix}\n${lines.join('\n')}\n`;
-};
 
 const validateIndex = (source, expected, map) => (
   source === expected
@@ -430,16 +416,12 @@ export async function applyApprovedChange(input, operations = {}) {
   let roots;
   let currentMap;
   let pending;
-  let englishIndexSource;
-  let chineseIndexSource;
   let originalFingerprint;
   try {
     roots = await resolveRoots(input.root);
-    [currentMap, pending, englishIndexSource, chineseIndexSource] = await Promise.all([
+    [currentMap, pending] = await Promise.all([
       readJson(join(roots.lifecycleRoot, 'project-map.json')),
       readJson(join(roots.lifecycleRoot, 'pending-changes.json')),
-      readFile(join(roots.lifecycleRoot, 'INDEX-en.md'), 'utf8'),
-      readFile(join(roots.lifecycleRoot, 'INDEX.md'), 'utf8'),
     ]);
     originalFingerprint = await directoryFingerprint(roots.lifecycleRoot);
   } catch (error) {
@@ -482,15 +464,18 @@ export async function applyApprovedChange(input, operations = {}) {
   };
   const pendingCandidateValidation = validateJson('pending-changes', candidatePending);
   if (!pendingCandidateValidation.ok) return pendingCandidateValidation;
-  let indexes;
-  try {
-    indexes = {
-      en: indexContent(englishIndexSource, input.candidate_map, 'en'),
-      'zh-CN': indexContent(chineseIndexSource, input.candidate_map, 'zh-CN'),
-    };
-  } catch {
+  const overlays = Object.fromEntries(input.knowledge_updates.flatMap((update) => (
+    ['en', 'zh-CN'].map((language) => [update[language].locator, update[language].content])
+  )));
+  const generatedIndexes = await generateIndexesFromRoot({
+    map: input.candidate_map,
+    lifecycleRoot: roots.lifecycleRoot,
+    overlays,
+  });
+  if (!generatedIndexes.ok) {
     return applicationFailure('CHANGE_INDEX_INVALID', '/', 'Generated indexes cannot be regenerated.');
   }
+  const indexes = { en: generatedIndexes.value.en, 'zh-CN': generatedIndexes.value['zh-CN'] };
 
   const write = operations.atomicWriteValidated ?? atomicWriteValidated;
   const publish = operations.rename ?? rename;

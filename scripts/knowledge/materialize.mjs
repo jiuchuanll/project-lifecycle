@@ -29,6 +29,7 @@ import { parseFrontmatter } from '../lib/markdown.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
+import { generateIndexesFromRoot } from './generate-indexes.mjs';
 
 const englishTemplateUrl = new URL(
   '../../skills/maintain-project-knowledge/assets/capability-en.md',
@@ -434,23 +435,6 @@ const validateTargets = async (lifecycleRoot, domainId, targets) => {
   return ok(targets);
 };
 
-const indexContent = (existing, map, language) => {
-  const heading = language === 'en' ? '## Confirmed domains' : '## 已确认领域';
-  const headingIndex = existing.indexOf(`${heading}\n`);
-  if (headingIndex === -1 || !existing.startsWith('<!--')) {
-    const error = new Error('Existing generated index is invalid.');
-    error.code = 'MATERIALIZATION_INDEX_INVALID';
-    throw error;
-  }
-  const prefix = existing.slice(0, headingIndex + heading.length + 1);
-  const lines = map.domains.map((domain) => {
-    const description = `${domain.label[language]}: ${domain.purpose[language]}`;
-    if (domain.domain_state !== 'materialized') return `- \`${domain.id}\` — ${description}`;
-    return `- [\`${domain.id}\`](${domain.paired_assets[language]}) — ${description}`;
-  });
-  return `${prefix}\n${lines.join('\n')}\n`;
-};
-
 const validateRenderedDocument = (source) => {
   const frontmatter = parseFrontmatter(source);
   if (!frontmatter.ok) return frontmatter;
@@ -761,8 +745,6 @@ export async function materializeCapability(input, operations = {}) {
     );
   }
   let map;
-  let englishIndexSource;
-  let chineseIndexSource;
   try {
     const rootStat = await fileState(lifecycleRoot);
     if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) {
@@ -772,11 +754,7 @@ export async function materializeCapability(input, operations = {}) {
         'A regular bootstrapped lifecycle root is required.',
       );
     }
-    [map, englishIndexSource, chineseIndexSource] = await Promise.all([
-      readJson(join(lifecycleRoot, 'project-map.json')),
-      readFile(join(lifecycleRoot, 'INDEX-en.md'), 'utf8'),
-      readFile(join(lifecycleRoot, 'INDEX.md'), 'utf8'),
-    ]);
+    map = await readJson(join(lifecycleRoot, 'project-map.json'));
   } catch {
     return materializationFailure(
       'MATERIALIZATION_ROOT_INVALID',
@@ -919,18 +897,23 @@ export async function materializeCapability(input, operations = {}) {
   const candidateMapValidation = validateJson('project-map', candidateMap);
   if (!candidateMapValidation.ok) return candidateMapValidation;
 
-  let englishIndex;
-  let chineseIndex;
-  try {
-    englishIndex = indexContent(englishIndexSource, candidateMap, 'en');
-    chineseIndex = indexContent(chineseIndexSource, candidateMap, 'zh-CN');
-  } catch {
+  const indexes = await generateIndexesFromRoot({
+    map: candidateMap,
+    lifecycleRoot,
+    overlays: {
+      [input.targets.en]: englishDocument,
+      [input.targets['zh-CN']]: chineseDocument,
+    },
+  });
+  if (!indexes.ok) {
     return materializationFailure(
       'MATERIALIZATION_INDEX_INVALID',
       '/',
-      'Existing generated indexes cannot be regenerated.',
+      'Generated indexes cannot be rebuilt from validated navigation Frontmatter.',
     );
   }
+  const englishIndex = indexes.value.en;
+  const chineseIndex = indexes.value['zh-CN'];
 
   const writeArtifact = operations.atomicWriteValidated ?? atomicWriteValidated;
   const publish = operations.rename ?? rename;
