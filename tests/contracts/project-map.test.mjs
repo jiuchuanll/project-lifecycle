@@ -89,7 +89,7 @@ test('rejects a pointer without resolved project-map context', () => {
 test('validates a pointer whose locally resolved map has the same project_id', async (context) => {
   const directory = await mkdtemp(join(tmpdir(), 'project-lifecycle-pointer-'));
   context.after(() => rm(directory, { force: true, recursive: true }));
-  await writeFile(join(directory, 'project-map.json'), JSON.stringify({ project_id: 'sample-app' }));
+  await writeFile(join(directory, 'project-map.json'), JSON.stringify(await fixture('valid.json')));
   const pointerFile = join(directory, 'project-pointer.json');
   await writeFile(pointerFile, JSON.stringify({
     schema_version: 1,
@@ -110,7 +110,10 @@ test('CLI rejects a pointer whose resolved map has another project_id', async (c
   context.after(() => rm(directory, { force: true, recursive: true }));
   const mapFile = join(directory, 'project-map.json');
   const pointerFile = join(directory, 'project-pointer.json');
-  await writeFile(mapFile, JSON.stringify({ project_id: 'another-project' }));
+  await writeFile(mapFile, JSON.stringify({
+    ...await fixture('valid.json'),
+    project_id: 'another-project',
+  }));
   await writeFile(pointerFile, JSON.stringify({
     schema_version: 1,
     project_id: 'sample-app',
@@ -125,6 +128,25 @@ test('CLI rejects a pointer whose resolved map has another project_id', async (c
   assert.ok(JSON.parse(result.stdout).errors.some((error) => (
     error.code === 'REFERENCE_MISSING' && error.path === '/project_id'
   )));
+});
+
+test('rejects an incomplete resolved map before pointer project_id comparison', () => {
+  const pointer = {
+    schema_version: 1,
+    project_id: 'sample-app',
+    repository_id: 'sample-repository',
+    governance_locator: './project-map.json',
+  };
+
+  const result = validateJson('project-pointer', pointer, {
+    resolvedProjectMap: { project_id: 'sample-app' },
+  });
+
+  assert.deepEqual(result.errors[0], {
+    code: 'SCHEMA_INVALID',
+    path: '/governance_locator/schema_version',
+    message: 'Resolved governance target is not a valid project map.',
+  });
 });
 
 for (const locator of ['./missing-project-map.json', 'https://example.test/project-map.json']) {
@@ -201,6 +223,154 @@ test('rejects selected descendants outside the constraint owner subtree', async 
     error.code === 'SCHEMA_INVALID' && error.path === '/constraints/0/selected_descendants/0'
   )));
 });
+
+test('rejects unsorted project-map relationship target IDs', async () => {
+  const value = await fixture('valid.json');
+  value.domains.push(
+    {
+      ...value.domains[0],
+      id: 'alpha-domain',
+      label: { en: 'Alpha', 'zh-CN': '甲' },
+      purpose: { en: 'Owns alpha', 'zh-CN': '负责甲' },
+      scope: { includes: ['alpha'], excludes: [] },
+    },
+    {
+      ...value.domains[0],
+      id: 'zeta-domain',
+      label: { en: 'Zeta', 'zh-CN': '乙' },
+      purpose: { en: 'Owns zeta', 'zh-CN': '负责乙' },
+      scope: { includes: ['zeta'], excludes: [] },
+    },
+  );
+  value.domains[0].relationships = [
+    { kind: 'depends_on', target_id: 'zeta-domain' },
+    { kind: 'coordinates_with', target_id: 'alpha-domain' },
+  ];
+
+  const result = validateJson('project-map', value);
+
+  assert.ok(result.errors.some(({ code, path }) => (
+    code === 'SCHEMA_INVALID' && path === '/domains/0/relationships/1/target_id'
+  )));
+});
+
+test('rejects unsorted project-map evidence references', async () => {
+  const value = await fixture('valid.json');
+  value.domains[0].evidence_refs = ['test:zeta', 'repo:alpha'];
+
+  const result = validateJson('project-map', value);
+
+  assert.ok(result.errors.some(({ code, path }) => (
+    code === 'SCHEMA_INVALID' && path === '/domains/0/evidence_refs/1'
+  )));
+});
+
+test('rejects unsorted selected descendant IDs', async () => {
+  const value = await fixture('valid.json');
+  value.domains[0].scope.includes = ['alpha', 'zeta'];
+  value.domains.push(
+    {
+      ...value.domains[0],
+      id: 'alpha-domain',
+      label: { en: 'Alpha', 'zh-CN': '甲' },
+      purpose: { en: 'Owns alpha', 'zh-CN': '负责甲' },
+      scope: { includes: ['alpha'], excludes: [] },
+      parent_id: 'desktop-experience',
+    },
+    {
+      ...value.domains[0],
+      id: 'zeta-domain',
+      label: { en: 'Zeta', 'zh-CN': '乙' },
+      purpose: { en: 'Owns zeta', 'zh-CN': '负责乙' },
+      scope: { includes: ['zeta'], excludes: [] },
+      parent_id: 'desktop-experience',
+    },
+  );
+  value.constraints.push({
+    id: 'selected-children',
+    scope: 'selected_descendants',
+    owner_id: 'desktop-experience',
+    selected_descendants: ['zeta-domain', 'alpha-domain'],
+  });
+
+  const result = validateJson('project-map', value);
+
+  assert.ok(result.errors.some(({ code, path }) => (
+    code === 'SCHEMA_INVALID' && path === '/constraints/0/selected_descendants/1'
+  )));
+});
+
+const mergedMap = async () => {
+  const value = await fixture('valid.json');
+  value.domains = [
+    {
+      ...value.domains[0],
+      id: 'merged-domain',
+      domain_state: 'merged',
+      successor_id: 'successor-domain',
+    },
+    {
+      ...value.domains[0],
+      id: 'successor-domain',
+      label: { en: 'Successor', 'zh-CN': '后继领域' },
+      purpose: { en: 'Owns successor routing', 'zh-CN': '负责后继路由' },
+    },
+  ];
+  return value;
+};
+
+test('accepts a merged domain with a distinct routable successor', async () => {
+  assert.equal(validateJson('project-map', await mergedMap()).ok, true);
+});
+
+test('requires merged domains to declare a successor redirect', async () => {
+  const value = await mergedMap();
+  delete value.domains[0].successor_id;
+
+  const result = validateJson('project-map', value);
+
+  assert.ok(result.errors.some(({ code, path }) => (
+    code === 'STATE_REQUIREMENT_MISSING' && path === '/domains/0/successor_id'
+  )));
+});
+
+for (const [name, successorId, successorState, expected] of [
+  ['itself', 'merged-domain', 'confirmed', {
+    code: 'SCHEMA_INVALID',
+    path: '/domains/0/successor_id',
+    message: 'Merged domain successor must differ from its own ID.',
+  }],
+  ['a missing domain', 'missing-domain', 'confirmed', {
+    code: 'REFERENCE_MISSING',
+    path: '/domains/0/successor_id',
+    message: 'Merged domain successor is absent from the project map.',
+  }],
+  ['a retired domain', 'successor-domain', 'retired', {
+    code: 'SCHEMA_INVALID',
+    path: '/domains/0/successor_id',
+    message: 'Merged domain successor must be routable.',
+  }],
+  ['another merged domain', 'successor-domain', 'merged', {
+    code: 'SCHEMA_INVALID',
+    path: '/domains/0/successor_id',
+    message: 'Merged domain successor must be routable.',
+  }],
+]) {
+  test(`rejects a merged successor that targets ${name}`, async () => {
+    const value = await mergedMap();
+    value.domains[0].successor_id = successorId;
+    value.domains[1].domain_state = successorState;
+    if (successorState === 'retired') value.domains[1].retirement_reason = 'No longer routed';
+    if (successorState === 'merged') value.domains[1].successor_id = 'merged-domain';
+
+    const result = validateJson('project-map', value);
+
+    assert.deepEqual(
+      result.errors.find(({ path }) => path === '/domains/0/successor_id'),
+      expected,
+    );
+  });
+}
 
 test('rejects unknown fields in specified constraint objects', async () => {
   const value = await fixture('valid.json');

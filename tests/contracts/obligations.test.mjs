@@ -103,7 +103,7 @@ test('rejects an obligation transition between different obligation IDs first', 
 test('reopens a resolved or waived obligation only for a new trigger without active resolution', () => {
   const reopenedWithNewTrigger = {
     ...open,
-    trigger_refs: [...open.trigger_refs, 'evidence-invalidated-43'],
+    trigger_refs: ['evidence-invalidated-43', 'prd-runtime-v1'],
   };
 
   assert.equal(validateObligationTransition(resolved, reopenedWithNewTrigger).ok, true);
@@ -120,6 +120,85 @@ test('treats SUPERSEDED as terminal', () => {
 test('rejects direct transitions between result states', () => {
   assert.equal(validateObligationTransition(resolved, waived).errors[0].code, 'OBLIGATION_TRANSITION_INVALID');
 });
+
+test('rejects unsorted obligation relationship references before transition logic', () => {
+  const unsorted = { ...open, scope_refs: ['zeta-domain', 'alpha-domain'] };
+
+  const result = validateObligationTransition(null, unsorted);
+
+  assert.deepEqual(result.errors[0], {
+    code: 'SCHEMA_INVALID',
+    path: '/next/scope_refs/1',
+    message: 'Invalid next obligation instance.',
+  });
+});
+
+test('schema-validates both transition inputs before transition logic', () => {
+  const malformedPrevious = { ...open, trigger_refs: 'not-an-array' };
+  const malformedNext = { ...open, status: 'UNKNOWN' };
+
+  assert.doesNotThrow(() => validateObligationTransition(malformedPrevious, open));
+  assert.doesNotThrow(() => validateObligationTransition(open, malformedNext));
+  assert.deepEqual(validateObligationTransition(malformedPrevious, open).errors[0], {
+    code: 'SCHEMA_INVALID',
+    path: '/previous/trigger_refs',
+    message: 'Invalid previous obligation instance.',
+  });
+  assert.deepEqual(validateObligationTransition(open, malformedNext).errors[0], {
+    code: 'SCHEMA_INVALID',
+    path: '/next/status',
+    message: 'Invalid next obligation instance.',
+  });
+});
+
+test('never throws or accepts malformed reopen candidates', () => {
+  const malformedPrevious = { ...resolved, trigger_refs: null };
+  const malformedNext = null;
+
+  assert.doesNotThrow(() => validateObligationTransition(malformedPrevious, open));
+  assert.doesNotThrow(() => validateObligationTransition(resolved, malformedNext));
+  assert.equal(validateObligationTransition(malformedPrevious, open).ok, false);
+  assert.equal(validateObligationTransition(resolved, malformedNext).ok, false);
+});
+
+test('does not treat malformed terminal evidence as a missing outcome requirement', () => {
+  const malformedNext = { ...resolved, evidence_refs: 'not-an-array' };
+
+  assert.doesNotThrow(() => validateObligationTransition(open, malformedNext));
+  assert.deepEqual(validateObligationTransition(open, malformedNext).errors[0], {
+    code: 'SCHEMA_INVALID',
+    path: '/next/evidence_refs',
+    message: 'Invalid next obligation instance.',
+  });
+});
+
+for (const [status, base, conflictingField] of [
+  ['RESOLVED', resolved, 'human_approval_ref'],
+  ['RESOLVED', resolved, 'successor_obligation_ref'],
+  ['WAIVED', waived, 'resolution_ref'],
+  ['WAIVED', waived, 'successor_obligation_ref'],
+  ['SUPERSEDED', superseded, 'resolution_ref'],
+  ['SUPERSEDED', superseded, 'human_approval_ref'],
+]) {
+  test(`rejects ${status} with conflicting ${conflictingField}`, () => {
+    const value = {
+      ...base,
+      [conflictingField]: conflictingField === 'successor_obligation_ref'
+        ? 'prd-shared-contracts#replacement'
+        : 'conflicting-result-marker',
+    };
+
+    const schemaResult = validateJson('obligation-instance', value);
+    const transitionResult = validateObligationTransition(open, value);
+
+    assert.ok(schemaResult.errors.some(({ code, path }) => (
+      code === 'SCHEMA_INVALID' && path === `/${conflictingField}`
+    )));
+    assert.ok(transitionResult.errors.some(({ code, path }) => (
+      code === 'SCHEMA_INVALID' && path === `/next/${conflictingField}`
+    )));
+  });
+}
 
 test('accepts a delivery update that preserves identity and primary route', () => {
   const previous = { artifact_id: 'prd-wiki-layout-v2', primary_route: 'PRD_DELIVERY' };

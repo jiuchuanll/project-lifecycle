@@ -57,6 +57,8 @@
         "required": ["resolution_ref"],
         "properties": {
           "resolution_ref": { "$ref": "#/$defs/ref" },
+          "human_approval_ref": false,
+          "successor_obligation_ref": false,
           "evidence_refs": { "type": "array", "minItems": 1 }
         }
       }
@@ -68,6 +70,8 @@
         "required": ["human_approval_ref"],
         "properties": {
           "human_approval_ref": { "$ref": "#/$defs/ref" },
+          "resolution_ref": false,
+          "successor_obligation_ref": false,
           "evidence_refs": { "type": "array", "minItems": 1 }
         }
       }
@@ -78,6 +82,8 @@
         "type": "object",
         "required": ["successor_obligation_ref"],
         "properties": {
+          "resolution_ref": false,
+          "human_approval_ref": false,
           "successor_obligation_ref": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9-]*#[a-z][a-z0-9-]*$"

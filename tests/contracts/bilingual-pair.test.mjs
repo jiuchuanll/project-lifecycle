@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -219,6 +219,20 @@ test('rejects differing heading-level sequences while allowing localized heading
   assert.equal(hasError(result, 'PAIR_SECTION_MISMATCH', '/sections'), true);
 });
 
+test('ignores fenced-code headings when comparing bilingual structure', async (context) => {
+  const { enPath, map, zhPath } = await withPair(
+    context,
+    (value) => value.replace(
+      '## Verification',
+      '```md\n# Example heading, not document structure\n```\n\n## Verification',
+    ),
+  );
+
+  const result = await validateBilingualPair(enPath, zhPath, map);
+
+  assert.equal(result.ok, true);
+});
+
 test('rejects differing fact machine fields', async (context) => {
   const { enPath, map, zhPath } = await withPair(
     context,
@@ -265,6 +279,71 @@ test('rejects EN and ZH assets from different roots before reading them', async 
 
   assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/paths'), true);
   assert.equal(hasError(result, 'FACT_BLOCK_MALFORMED', '/frontmatter'), false);
+});
+
+test('rejects supplied bilingual asset symlinks that escape the real knowledge root', async (context) => {
+  const sandbox = await mkdtemp(join(tmpdir(), 'project-lifecycle-pair-symlink-'));
+  context.after(() => rm(sandbox, { force: true, recursive: true }));
+  const knowledgeDirectory = join(sandbox, 'knowledge');
+  const outsideDirectory = join(sandbox, 'outside');
+  await mkdir(knowledgeDirectory);
+  await mkdir(outsideDirectory);
+  const enPath = join(knowledgeDirectory, 'wiki-workspace-en.md');
+  const zhPath = join(knowledgeDirectory, 'wiki-workspace.md');
+  const outsideEn = join(outsideDirectory, 'wiki-workspace-en.md');
+  const outsideZh = join(outsideDirectory, 'wiki-workspace.md');
+  await writeFile(outsideEn, await readFile(fixtureUrl('wiki-workspace-en.md'), 'utf8'));
+  await writeFile(outsideZh, await readFile(fixtureUrl('wiki-workspace.md'), 'utf8'));
+  await symlink(outsideEn, enPath);
+  await symlink(outsideZh, zhPath);
+  const map = await readMap();
+  map.domains[0].paired_assets.en = 'knowledge/wiki-workspace-en.md';
+  map.domains[0].paired_assets['zh-CN'] = 'knowledge/wiki-workspace.md';
+
+  const result = await validateBilingualPair(enPath, zhPath, map);
+
+  assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/paths'), true);
+});
+
+test('accepts supplied asset symlinks that remain inside the real knowledge root', async (context) => {
+  const sandbox = await mkdtemp(join(tmpdir(), 'project-lifecycle-pair-safe-link-'));
+  context.after(() => rm(sandbox, { force: true, recursive: true }));
+  const knowledgeDirectory = join(sandbox, 'knowledge');
+  const canonicalDirectory = join(knowledgeDirectory, 'canonical');
+  await mkdir(knowledgeDirectory);
+  await mkdir(canonicalDirectory);
+  const canonicalEn = join(canonicalDirectory, 'en-source.md');
+  const canonicalZh = join(canonicalDirectory, 'zh-source.md');
+  await writeFile(canonicalEn, await readFile(fixtureUrl('wiki-workspace-en.md'), 'utf8'));
+  await writeFile(canonicalZh, await readFile(fixtureUrl('wiki-workspace.md'), 'utf8'));
+  const enPath = join(knowledgeDirectory, 'wiki-workspace-en.md');
+  const zhPath = join(knowledgeDirectory, 'wiki-workspace.md');
+  await symlink(canonicalEn, enPath);
+  await symlink(canonicalZh, zhPath);
+  const map = await readMap();
+  map.domains[0].paired_assets.en = 'knowledge/wiki-workspace-en.md';
+  map.domains[0].paired_assets['zh-CN'] = 'knowledge/wiki-workspace.md';
+
+  const result = await validateBilingualPair(enPath, zhPath, map);
+
+  assert.equal(result.ok, true);
+});
+
+test('rejects paired_asset symlink targets outside the real knowledge root', async (context) => {
+  const sandbox = await mkdtemp(join(tmpdir(), 'project-lifecycle-paired-target-'));
+  context.after(() => rm(sandbox, { force: true, recursive: true }));
+  const outside = join(sandbox, 'outside.md');
+  await writeFile(outside, 'outside');
+  const changeTarget = (value) => value.replace(
+    'paired_asset: wiki-workspace.md',
+    'paired_asset: outside-link.md',
+  );
+  const { directory, enPath, map, zhPath } = await withPair(context, changeTarget, changeTarget);
+  await symlink(outside, join(directory, 'outside-link.md'));
+
+  const result = await validateBilingualPair(enPath, zhPath, map);
+
+  assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset'), true);
 });
 
 test('rejects traversing authoritative map asset locators before reading assets', async () => {

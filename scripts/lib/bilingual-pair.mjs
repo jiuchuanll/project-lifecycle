@@ -1,10 +1,10 @@
-import { access, readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, normalize, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createError } from './errors.mjs';
 import { parseFactBlocks } from './fact-blocks.mjs';
-import { parseFrontmatter } from './markdown.mjs';
+import { maskFencedMarkdown, parseFrontmatter } from './markdown.mjs';
 import { fail, ok } from './result.mjs';
 import { validateJson } from './validate-json.mjs';
 
@@ -28,7 +28,7 @@ const inside = (root, candidate) => {
   return path === '' || (!path.startsWith('..') && !isAbsolute(path));
 };
 
-const headingLevels = (body) => [...body.matchAll(/^(#{1,6})[ \t]+.+$/gm)]
+const headingLevels = (body) => [...maskFencedMarkdown(body).matchAll(/^(#{1,6})[ \t]+.+$/gm)]
   .map((match) => match[1].length);
 
 const commonAssetRoot = (left, right) => {
@@ -54,7 +54,7 @@ const rootFromLocator = (assetPath, locator) => {
   return resolve(root, locator) === assetPath ? root : null;
 };
 
-const establishTrustedPair = (enPath, zhPath, map) => {
+const establishTrustedPair = async (enPath, zhPath, map) => {
   for (const domain of map.domains) {
     if (!domain.paired_assets) continue;
     for (const language of ['en', 'zh-CN']) {
@@ -77,11 +77,35 @@ const establishTrustedPair = (enPath, zhPath, map) => {
     const zhAsset = resolve(enRoot, domain.paired_assets['zh-CN']);
     if (enAsset !== enPath || zhAsset !== zhPath) continue;
     if (!inside(enRoot, enAsset) || !inside(enRoot, zhAsset)) continue;
-    return ok({
-      domain,
-      projectRoot: enRoot,
-      root: commonAssetRoot(enAsset, zhAsset),
-    });
+    const knowledgeRoot = commonAssetRoot(enAsset, zhAsset);
+    try {
+      const [realKnowledgeRoot, realEnAsset, realZhAsset] = await Promise.all([
+        realpath(knowledgeRoot),
+        realpath(enAsset),
+        realpath(zhAsset),
+      ]);
+      if (!inside(realKnowledgeRoot, realEnAsset) || !inside(realKnowledgeRoot, realZhAsset)) {
+        return fail([createError(
+          'PAIR_MACHINE_MISMATCH',
+          '/paths',
+          'Supplied bilingual assets escape the real knowledge root.',
+        )]);
+      }
+      return ok({
+        domain,
+        enReadPath: realEnAsset,
+        knowledgeRoot,
+        projectRoot: enRoot,
+        realKnowledgeRoot,
+        zhReadPath: realZhAsset,
+      });
+    } catch {
+      return fail([createError(
+        'PAIR_MACHINE_MISMATCH',
+        '/frontmatter/paired_asset',
+        'Paired capability asset is missing.',
+      )]);
+    }
   }
 
   return fail([createError(
@@ -104,12 +128,21 @@ export const validateBilingualPair = async (enPathValue, zhPathValue, map) => {
   const zhPath = toPath(zhPathValue);
   const mapResult = validateJson('project-map', map);
   if (!mapResult.ok) return mapResult;
-  const trustedPair = establishTrustedPair(enPath, zhPath, map);
+  const trustedPair = await establishTrustedPair(enPath, zhPath, map);
   if (!trustedPair.ok) return trustedPair;
-  const { domain, projectRoot, root } = trustedPair.value;
+  const {
+    domain,
+    enReadPath,
+    knowledgeRoot,
+    projectRoot,
+    realKnowledgeRoot,
+    zhReadPath,
+  } = trustedPair.value;
 
-  const enDocument = await readDocument(enPath);
-  const zhDocument = await readDocument(zhPath);
+  // Phase 1 assumes the sole Project Lifecycle writer during this bounded read.
+  // It does not claim protection from hostile concurrent filesystem mutation.
+  const enDocument = await readDocument(enReadPath);
+  const zhDocument = await readDocument(zhReadPath);
   if (enDocument.error || zhDocument.error) return fail([enDocument.error ?? zhDocument.error]);
 
   const enFrontmatter = parseFrontmatter(enDocument.source);
@@ -130,12 +163,15 @@ export const validateBilingualPair = async (enPathValue, zhPathValue, map) => {
 
   for (const [path, frontmatter] of [[enPath, enFrontmatter], [zhPath, zhFrontmatter]]) {
     const pairedPath = resolve(dirname(path), frontmatter.value.data.paired_asset);
-    if (!inside(root, pairedPath)) {
+    if (!inside(knowledgeRoot, pairedPath)) {
       errors.push(createError('PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset', 'paired_asset escapes the allowed knowledge root.'));
       continue;
     }
     try {
-      await access(pairedPath);
+      const realPairedPath = await realpath(pairedPath);
+      if (!inside(realKnowledgeRoot, realPairedPath)) {
+        errors.push(createError('PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset', 'paired_asset escapes the real knowledge root.'));
+      }
     } catch {
       errors.push(createError('PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset', 'paired_asset does not exist.'));
     }

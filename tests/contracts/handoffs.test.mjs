@@ -68,6 +68,17 @@ test('rejects Context Receipt selections that are not ID-sorted', async () => {
   )));
 });
 
+test('rejects unsorted Context Receipt affected domain IDs at the exact item path', async () => {
+  const receipt = await fixture('context-receipt.valid.json');
+  receipt.route.affected_domain_ids = ['zeta-domain', 'alpha-domain'];
+
+  const result = validateJson('context-receipt', receipt);
+
+  assert.ok(result.errors.some(({ code, path }) => (
+    code === 'SCHEMA_INVALID' && path === '/route/affected_domain_ids/1'
+  )));
+});
+
 test('rejects a sufficient Context Receipt with unresolved questions', async () => {
   const receipt = await fixture('context-receipt.valid.json');
   receipt.open_questions.push('Which density preset is authoritative?');
@@ -103,6 +114,17 @@ test('rejects archive globs and unbounded artifact sets', async () => {
 
   assert.ok(result.errors.some(({ path }) => path === '/artifact_ids'));
   assert.ok(result.errors.some(({ path }) => path === '/artifact_ids/0'));
+});
+
+test('rejects unsorted Archive Receipt artifact IDs', async () => {
+  const receipt = await fixture('archive-access-receipt.valid.json');
+  receipt.artifact_ids = ['prd-zeta', 'prd-alpha'];
+
+  const result = validateJson('archive-access-receipt', receipt);
+
+  assert.ok(result.errors.some(({ code, path }) => (
+    code === 'SCHEMA_INVALID' && path === '/artifact_ids/1'
+  )));
 });
 
 test('rejects NEEDS_USER as a durable primary route', async () => {
@@ -179,4 +201,54 @@ test('rejects cross-reference IDs in the wrong typed relationship', async () => 
 
   assert.ok(result.errors.some(({ path }) => path === '/relationships/feedback_ids/0'));
   assert.ok(result.errors.some(({ path }) => path === '/relationships/prd_ids/0'));
+});
+
+test('uses Unicode code-point order for delivery relationship references', async () => {
+  const frontmatter = await fixture('delivery-frontmatter.valid.json');
+  frontmatter.relationships.legacy_artifact_refs = ['😀-artifact', '�-artifact'];
+
+  const result = validateJson('delivery-frontmatter', frontmatter);
+
+  assert.ok(result.errors.some(({ code, path }) => (
+    code === 'SCHEMA_INVALID' && path === '/relationships/legacy_artifact_refs/1'
+  )));
+});
+
+test('rejects unsorted Knowledge Diff fact operations', async () => {
+  const diff = await fixture('knowledge-diff.valid.json');
+  diff.operations = [
+    { ...diff.operations[0], fact_id: 'fact-zeta' },
+    { ...diff.operations[0], fact_id: 'fact-alpha' },
+  ];
+
+  const result = validateJson('knowledge-diff', diff);
+
+  assert.ok(result.errors.some(({ code, path }) => (
+    code === 'SCHEMA_INVALID' && path === '/operations/1/fact_id'
+  )));
+});
+
+test('rejects unsorted Pending Change identifiers and relationship references', () => {
+  const change = {
+    change_id: 'change-zeta',
+    kind: 'topology',
+    trigger_refs: ['trigger-zeta', 'trigger-alpha'],
+    affected_refs: ['domain-alpha'],
+    proposed_disposition: 'Review topology',
+    risks: [],
+    evidence_gaps: [],
+    review_state: 'open',
+    created_at: '2026-08-08T10:00:00Z',
+  };
+  const result = validateJson('pending-changes', {
+    schema_version: 1,
+    changes: [change, { ...change, change_id: 'change-alpha', trigger_refs: ['trigger-alpha'] }],
+  });
+
+  assert.ok(result.errors.some(({ code, path }) => (
+    code === 'SCHEMA_INVALID' && path === '/changes/1/change_id'
+  )));
+  assert.ok(result.errors.some(({ code, path }) => (
+    code === 'SCHEMA_INVALID' && path === '/changes/0/trigger_refs/1'
+  )));
 });

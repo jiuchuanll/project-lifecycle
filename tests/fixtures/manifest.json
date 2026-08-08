@@ -105,6 +105,14 @@
       "path": "contracts/project-map/valid.json",
       "validator": "json:project-map",
       "expected_code": "OK"
+    },
+    {
+      "path": "contracts/project-pointer/valid.json",
+      "validator": "json:project-pointer",
+      "expected_code": "OK",
+      "inputs": {
+        "resolved_project_map": "../project-map/valid.json"
+      }
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { createError } from './errors.mjs';
 import { fail, ok } from './result.mjs';
+import { validateJson } from './validate-json.mjs';
 
 const error = (code, path, message) => fail([createError(code, path, message)]);
 
@@ -40,7 +41,52 @@ const validateOutcomeRequirements = (obligation) => {
   return null;
 };
 
+const semanticRequirementPaths = (obligation) => {
+  if (obligation?.status === 'OPEN') {
+    return new Set([
+      '/',
+      '/resolution_ref',
+      '/human_approval_ref',
+      '/successor_obligation_ref',
+    ]);
+  }
+  if (obligation?.status === 'RESOLVED') return new Set(['/', '/evidence_refs', '/resolution_ref']);
+  if (obligation?.status === 'WAIVED') return new Set(['/', '/evidence_refs', '/human_approval_ref']);
+  if (obligation?.status === 'SUPERSEDED') return new Set(['/', '/successor_obligation_ref']);
+  return new Set();
+};
+
+const isTransitionRequirementError = (obligation, allowed, { path, message }) => {
+  if (path === '/') return message.endsWith('must match "then" schema');
+  if (!allowed.has(path)) return false;
+  if (obligation.status === 'OPEN') return message.endsWith('boolean schema is false');
+  if (path === '/evidence_refs') return message.endsWith('must NOT have fewer than 1 items');
+  return message.includes('must have required property');
+};
+
+const validateInstance = (label, value, allowTransitionRequirements = false) => {
+  const result = validateJson('obligation-instance', value);
+  if (result.ok) return null;
+  if (allowTransitionRequirements) {
+    const allowed = semanticRequirementPaths(value);
+    const specificErrors = result.errors.filter(({ path }) => path !== '/');
+    if (specificErrors.length > 0 && result.errors.every((entry) => (
+      isTransitionRequirementError(value, allowed, entry)
+    ))) return null;
+  }
+  return fail(result.errors.map(({ code, path }) => createError(
+    code,
+    `/${label}${path === '/' ? '' : path}`,
+    `Invalid ${label} obligation instance.`,
+  )));
+};
+
 export const validateObligationTransition = (previous, next) => {
+  const previousValidation = previous === null ? null : validateInstance('previous', previous);
+  if (previousValidation) return previousValidation;
+  const nextValidation = validateInstance('next', next, true);
+  if (nextValidation) return nextValidation;
+
   if (!previous) {
     if (next.status !== 'OPEN') {
       return error('OBLIGATION_CREATION_OPEN_REQUIRED', '/status', 'Obligation creation must start OPEN.');

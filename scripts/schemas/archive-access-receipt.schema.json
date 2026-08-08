@@ -18,7 +18,7 @@
     "schema_version": { "const": 1 },
     "receipt_id": { "$ref": "#/$defs/id" },
     "task_ref": { "$ref": "#/$defs/ref" },
-    "reason": { "enum": ["AUDIT", "REGRESSION", "INCIDENT", "EXPLICIT_ID", "HISTORICAL_COMPARISON"] },
+    "reason": { "enum": ["AUDIT", "EXPLICIT_ID", "HISTORICAL_COMPARISON", "INCIDENT", "REGRESSION"] },
     "question": { "type": "string", "minLength": 1, "maxLength": 1000 },
     "insufficiency_reason": { "type": "string", "minLength": 1, "maxLength": 1000 },
     "artifact_ids": {

@@ -1,5 +1,6 @@
 import { isAlias, isMap, isPair, isSeq, parseDocument } from 'yaml';
 
+import { codePointOrderErrors } from './deterministic-order.mjs';
 import { createError } from './errors.mjs';
 import { fail, ok } from './result.mjs';
 import { getSchemaValidator } from './schema-registry.mjs';
@@ -7,6 +8,26 @@ import { getSchemaValidator } from './schema-registry.mjs';
 const malformed = (path, message) => fail([
   createError('FACT_BLOCK_MALFORMED', path, message),
 ]);
+
+const maskedLine = (line) => line.replace(/[^\n]/g, ' ');
+
+export const maskFencedMarkdown = (source) => {
+  let fence = null;
+  return source.split(/(?<=\n)/).map((line) => {
+    if (fence) {
+      const closing = /^ {0,3}(`+|~+)[ \t]*(?:\n)?$/.exec(line);
+      if (closing && closing[1][0] === fence.character && closing[1].length >= fence.length) {
+        fence = null;
+      }
+      return maskedLine(line);
+    }
+
+    const opening = /^ {0,3}(`{3,}|~{3,})[^\n]*(?:\n)?$/.exec(line);
+    if (!opening) return line;
+    fence = { character: opening[1][0], length: opening[1].length };
+    return maskedLine(line);
+  }).join('');
+};
 
 const inspectNode = (node) => {
   if (!node) return null;
@@ -70,6 +91,15 @@ export const parseFrontmatter = (source) => {
       `Invalid capability Frontmatter: ${error.message}`,
     )));
   }
+
+  const orderErrors = [];
+  for (const field of ['implementation_refs', 'verification_refs']) {
+    orderErrors.push(...codePointOrderErrors(parsed.value[field], {
+      code: 'FACT_BLOCK_MALFORMED',
+      pathAt: (index) => `/frontmatter/${field}/${index}`,
+    }));
+  }
+  if (orderErrors.length > 0) return fail(orderErrors);
 
   return ok({
     data: parsed.value,

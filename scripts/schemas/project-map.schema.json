@@ -67,6 +67,7 @@
         "known_gaps": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "paired_assets": { "$ref": "#/$defs/pairedAssets" },
         "baseline": { "type": "string", "minLength": 1 },
+        "successor_id": { "$ref": "#/$defs/id" },
         "retirement_reason": { "type": "string", "minLength": 1 }
       }
     },

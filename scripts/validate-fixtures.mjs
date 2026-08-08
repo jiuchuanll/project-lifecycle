@@ -2,6 +2,7 @@ import { readdir, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, posix, relative, resolve, sep } from 'node:path';
 
 import { validateBilingualPair } from './lib/bilingual-pair.mjs';
+import { compareCodePoints } from './lib/deterministic-order.mjs';
 import { ERROR_CODES } from './lib/errors.mjs';
 import { getSchemaValidator } from './lib/schema-registry.mjs';
 import { validateJson } from './lib/validate-json.mjs';
@@ -9,6 +10,7 @@ import { validateJson } from './lib/validate-json.mjs';
 const JSON_PREFIX = 'json:';
 const PAIR_VALIDATOR = 'bilingual-pair';
 const PAIR_INPUTS = ['en', 'zh-CN', 'project_map'];
+const POINTER_INPUTS = ['resolved_project_map'];
 const ENTRY_FIELDS = ['expected_code', 'inputs', 'path', 'validator'];
 const MANIFEST_FIELDS = ['fixtures', 'schema_version'];
 const EXPECTED_CODES = new Set([
@@ -21,15 +23,6 @@ const EXPECTED_CODES = new Set([
   'PAIR_SECTION_MISMATCH',
 ]);
 
-const compareCodePoints = (left, right) => {
-  const leftPoints = [...left].map((character) => character.codePointAt(0));
-  const rightPoints = [...right].map((character) => character.codePointAt(0));
-  const length = Math.min(leftPoints.length, rightPoints.length);
-  for (let index = 0; index < length; index += 1) {
-    if (leftPoints[index] !== rightPoints[index]) return leftPoints[index] - rightPoints[index];
-  }
-  return leftPoints.length - rightPoints.length;
-};
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const manifestError = (path) => ({ code: 'FIXTURE_MANIFEST_INVALID', path });
 const suiteError = () => ({
@@ -89,6 +82,7 @@ const validateManifest = (manifest) => {
     if (!path) entryErrors.push(manifestError(`${entryPath}/path`));
 
     let validatorValid = false;
+    const pointerValidator = entry.validator === `${JSON_PREFIX}project-pointer`;
     if (entry.validator === PAIR_VALIDATOR) {
       validatorValid = true;
     } else if (typeof entry.validator === 'string' && entry.validator.startsWith(JSON_PREFIX)) {
@@ -112,6 +106,22 @@ const validateManifest = (manifest) => {
         }
         for (const field of PAIR_INPUTS) {
           const canonical = path ? canonicalInputPath(path, entry.inputs[field]) : null;
+          if (!canonical) entryErrors.push(manifestError(`${entryPath}/inputs/${field}`));
+          else inputs[field] = canonical;
+        }
+      }
+    } else if (pointerValidator) {
+      if (!isRecord(entry.inputs)) {
+        entryErrors.push(manifestError(`${entryPath}/inputs`));
+      } else {
+        inputs = {};
+        for (const field of Object.keys(entry.inputs)) {
+          if (!POINTER_INPUTS.includes(field)) entryErrors.push(manifestError(`${entryPath}/inputs/${field}`));
+        }
+        for (const field of POINTER_INPUTS) {
+          const canonical = path
+            ? canonicalInputPath(posix.dirname(path), entry.inputs[field])
+            : null;
           if (!canonical) entryErrors.push(manifestError(`${entryPath}/inputs/${field}`));
           else inputs[field] = canonical;
         }
@@ -159,7 +169,7 @@ const listFixtureFiles = async (root, directory = root) => {
 };
 
 const declaredFiles = (entry) => entry.validator.startsWith(JSON_PREFIX)
-  ? [entry.path]
+  ? [entry.path, ...Object.values(entry.inputs ?? {})]
   : Object.values(entry.inputs);
 
 const validateEntry = async (root, entry) => {
@@ -167,6 +177,12 @@ const validateEntry = async (root, entry) => {
     const path = await resolveListedPath(root, entry.path);
     if (!path) return { ok: false, errors: [{ code: 'FIXTURE_PATH_INVALID' }] };
     const value = JSON.parse(await readFile(path, 'utf8'));
+    if (entry.validator === `${JSON_PREFIX}project-pointer`) {
+      const mapPath = await resolveListedPath(root, entry.inputs.resolved_project_map);
+      if (!mapPath) return { ok: false, errors: [{ code: 'FIXTURE_PATH_INVALID' }] };
+      const resolvedProjectMap = JSON.parse(await readFile(mapPath, 'utf8'));
+      return validateJson('project-pointer', value, { resolvedProjectMap });
+    }
     return validateJson(entry.validator.slice(JSON_PREFIX.length), value);
   }
 

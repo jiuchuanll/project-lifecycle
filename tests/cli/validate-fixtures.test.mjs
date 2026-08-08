@@ -67,6 +67,14 @@ const validPairEntry = (overrides = {}) => ({
   ...overrides,
 });
 
+const validPointerEntry = (overrides = {}) => ({
+  path: 'pointer.json',
+  validator: 'json:project-pointer',
+  expected_code: 'OK',
+  inputs: { resolved_project_map: 'project-map.json' },
+  ...overrides,
+});
+
 const writeManifest = (root, manifest) => writeFile(
   join(root, 'manifest.json'),
   `${JSON.stringify(manifest, null, 2)}\n`,
@@ -186,7 +194,9 @@ for (const [name, manifest, expectedPath] of [
   ['unknown fixture entry fields', { schema_version: 1, fixtures: [validJsonEntry({ unexpected: true })] }, '/fixtures/0/unexpected'],
   ['non-string validator kinds', { schema_version: 1, fixtures: [validJsonEntry({ validator: 42 })] }, '/fixtures/0/validator'],
   ['unknown expected result codes', { schema_version: 1, fixtures: [validJsonEntry({ expected_code: 'SUCCESS' })] }, '/fixtures/0/expected_code'],
-  ['inputs on JSON validators', { schema_version: 1, fixtures: [validJsonEntry({ inputs: {} })] }, '/fixtures/0/inputs'],
+  ['inputs on non-pointer JSON validators', { schema_version: 1, fixtures: [validJsonEntry({ inputs: {} })] }, '/fixtures/0/inputs'],
+  ['missing pointer map input', { schema_version: 1, fixtures: [validPointerEntry({ inputs: {} })] }, '/fixtures/0/inputs/resolved_project_map'],
+  ['extra pointer map input', { schema_version: 1, fixtures: [validPointerEntry({ inputs: { resolved_project_map: 'project-map.json', extra: 'extra.json' } })] }, '/fixtures/0/inputs/extra'],
   ['missing bilingual inputs', { schema_version: 1, fixtures: [validPairEntry({ inputs: { en: 'capability-en.md', project_map: 'project-map.json' } })] }, '/fixtures/0/inputs/zh-CN'],
   ['extra bilingual inputs', { schema_version: 1, fixtures: [validPairEntry({ inputs: { ...validPairEntry().inputs, extra: 'extra.md' } })] }, '/fixtures/0/inputs/extra'],
   ['non-string bilingual inputs', { schema_version: 1, fixtures: [validPairEntry({ inputs: { ...validPairEntry().inputs, en: 42 } })] }, '/fixtures/0/inputs/en'],
@@ -195,6 +205,34 @@ for (const [name, manifest, expectedPath] of [
     await assertManifestError(context, manifest, expectedPath);
   });
 }
+
+test('validates a project-pointer fixture with its declared resolved project map', async (context) => {
+  const root = await createFixtureRoot(context);
+  const map = await readFile(join(fixtureRoot, 'contracts', 'project-map', 'valid.json'));
+  await writeFile(join(root, 'project-map.json'), map);
+  await writeFile(join(root, 'pointer.json'), JSON.stringify({
+    schema_version: 1,
+    project_id: 'sample-app',
+    repository_id: 'sample-repository',
+    governance_locator: './project-map.json',
+  }));
+  await writeManifest(root, {
+    schema_version: 1,
+    fixtures: [validPointerEntry()],
+  });
+
+  const result = await runCli(root);
+
+  assert.equal(result.status, 0);
+  assert.equal(result.stderr, '');
+  assert.deepEqual(JSON.parse(result.stdout).results, [{
+    path: 'pointer.json',
+    validator: 'json:project-pointer',
+    expected_code: 'OK',
+    actual_code: 'OK',
+    matched: true,
+  }]);
+});
 
 test('rejects an unknown JSON validator before it can satisfy SCHEMA_INVALID', async (context) => {
   const root = await createFixtureRoot(context);

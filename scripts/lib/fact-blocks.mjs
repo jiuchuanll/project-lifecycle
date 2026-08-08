@@ -1,6 +1,7 @@
 import { createError } from './errors.mjs';
+import { codePointOrderErrors } from './deterministic-order.mjs';
 import { fail, ok } from './result.mjs';
-import { parseRestrictedYaml } from './markdown.mjs';
+import { maskFencedMarkdown, parseRestrictedYaml } from './markdown.mjs';
 
 const OPEN = '<!-- project-lifecycle:fact';
 const CLOSE = '<!-- /project-lifecycle:fact -->';
@@ -30,6 +31,11 @@ const validateMachineFields = (value, index) => {
     errors.push(malformed(`${path}/evidence_refs`, 'evidence_refs must be an array of non-empty references.'));
   } else if (new Set(value.evidence_refs).size !== value.evidence_refs.length) {
     errors.push(malformed(`${path}/evidence_refs`, 'evidence_refs must be unique.'));
+  } else {
+    errors.push(...codePointOrderErrors(value.evidence_refs, {
+      code: 'FACT_BLOCK_MALFORMED',
+      pathAt: (itemIndex) => `${path}/evidence_refs/${itemIndex}`,
+    }));
   }
   if (typeof value.last_verified_baseline !== 'string' || value.last_verified_baseline.length === 0) {
     errors.push(malformed(`${path}/last_verified_baseline`, 'last_verified_baseline must be non-empty.'));
@@ -39,7 +45,9 @@ const validateMachineFields = (value, index) => {
 
 const parseHumanContent = (source, index) => {
   const path = `/facts/${index}`;
-  const limitsMatch = /^(#{1,6})[ \t]+(?:Known limits|已知限制)[ \t]*$/m.exec(source);
+  const limitsMatch = /^(#{1,6})[ \t]+(?:Known limits|已知限制)[ \t]*$/m.exec(
+    maskFencedMarkdown(source),
+  );
   if (!limitsMatch) return { errors: [malformed(`${path}/known_limits`, 'A localized known-limits section is required.')] };
   const statement = source.slice(0, limitsMatch.index).trim();
   const knownLimits = source.slice(limitsMatch.index + limitsMatch[0].length).trim();

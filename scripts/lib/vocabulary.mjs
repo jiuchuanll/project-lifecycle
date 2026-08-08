@@ -27,7 +27,7 @@ const formatDiagnosticValue = (value) => {
 export const loadCoreVocabulary = () => vocabulary;
 
 export const assertVocabularyValue = (kind, value, path) => {
-  if (!Object.hasOwn(vocabulary, kind)) {
+  if (typeof kind !== 'string' || !Object.hasOwn(vocabulary, kind)) {
     return fail([
       createError(
         ERROR_CODES.VOCAB_UNKNOWN_KIND,

@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import archiveAccessReceiptSchema from '../../scripts/schemas/archive-access-receipt.schema.json' with { type: 'json' };
+import capabilityFrontmatterSchema from '../../scripts/schemas/capability-frontmatter.schema.json' with { type: 'json' };
+import contextReceiptSchema from '../../scripts/schemas/context-receipt.schema.json' with { type: 'json' };
+import deliveryFrontmatterSchema from '../../scripts/schemas/delivery-frontmatter.schema.json' with { type: 'json' };
+import obligationInstanceSchema from '../../scripts/schemas/obligation-instance.schema.json' with { type: 'json' };
+import projectMapSchema from '../../scripts/schemas/project-map.schema.json' with { type: 'json' };
 import { ok } from '../../scripts/lib/result.mjs';
 import { assertVocabularyValue, loadCoreVocabulary } from '../../scripts/lib/vocabulary.mjs';
 
@@ -84,4 +90,65 @@ test('rejects BigInt and cyclic unknown inputs without diagnostic serialization 
     assert.equal(result.errors[0].path, path);
     assert.deepEqual(Object.keys(result.errors[0]), ['code', 'path', 'message']);
   }
+});
+
+test('rejects hostile vocabulary property keys without coercion', () => {
+  const hostileKind = {
+    [Symbol.toPrimitive]() {
+      throw new Error('must not coerce property key');
+    },
+  };
+
+  assert.doesNotThrow(() => assertVocabularyValue(hostileKind, 'PRD_DELIVERY', '/kind'));
+  assert.deepEqual(assertVocabularyValue(hostileKind, 'PRD_DELIVERY', '/kind').errors[0], {
+    code: 'VOCAB_UNKNOWN_KIND',
+    path: '/kind',
+    message: 'Unknown vocabulary kind: {}',
+  });
+});
+
+test('keeps every schema-bound core vocabulary exactly aligned with core.json', () => {
+  const vocabulary = loadCoreVocabulary();
+  const bindings = {
+    archive_reasons: archiveAccessReceiptSchema.properties.reason.enum,
+    constraint_scopes: projectMapSchema.$defs.constraint.properties.scope.enum,
+    delivery_retention_tiers: deliveryFrontmatterSchema.properties.retention_tier.enum,
+    domain_states: projectMapSchema.$defs.domain.properties.domain_state.enum,
+    knowledge_states: capabilityFrontmatterSchema.properties.knowledge_state.enum,
+    node_kinds: projectMapSchema.$defs.domain.properties.kind.enum,
+    obligation_statuses: obligationInstanceSchema.properties.status.enum,
+    primary_routes: deliveryFrontmatterSchema.properties.primary_route.enum,
+    relationship_kinds: projectMapSchema.$defs.relationship.properties.kind.enum,
+    secondary_obligation_kinds: obligationInstanceSchema.properties.kind.enum,
+  };
+
+  assert.deepEqual(Object.keys(bindings), [
+    'archive_reasons',
+    'constraint_scopes',
+    'delivery_retention_tiers',
+    'domain_states',
+    'knowledge_states',
+    'node_kinds',
+    'obligation_statuses',
+    'primary_routes',
+    'relationship_kinds',
+    'secondary_obligation_kinds',
+  ]);
+  for (const [kind, values] of Object.entries(bindings)) {
+    assert.deepEqual(values, vocabulary[kind], `${kind} must be sourced from core.json`);
+  }
+
+  const contextStopCodes = contextReceiptSchema.properties.stop.properties.code.enum;
+  assert.deepEqual(
+    contextStopCodes.filter((code) => vocabulary.route_stops.includes(code)),
+    vocabulary.route_stops,
+    'route_stops must remain the route-specific subset of Context Receipt stop codes',
+  );
+
+  const explicitlyUnbound = ['constraint_change_classes'];
+  assert.deepEqual(
+    [...Object.keys(bindings), 'route_stops', ...explicitlyUnbound].toSorted(),
+    Object.keys(vocabulary).toSorted(),
+    'every core vocabulary must have an exact schema binding, subset binding, or explicit no-schema status',
+  );
 });

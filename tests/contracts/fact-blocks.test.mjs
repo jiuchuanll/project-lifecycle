@@ -103,11 +103,44 @@ test('rejects a fact without a known-limits section', async () => {
   assert.equal(hasError(result, 'FACT_BLOCK_MALFORMED', '/facts/0/known_limits'), true);
 });
 
+test('does not accept a fenced known-limits label as fact structure', async () => {
+  const source = (await validSource())
+    .replace('#### Known limits', '#### Constraints')
+    .replace(
+      'Wiki workspace currently uses a three-column layout.',
+      'Wiki workspace currently uses a three-column layout.\n\n```md\n#### Known limits\nExample only.\n```',
+    );
+
+  const result = parseFactBlocks(source);
+
+  assert.equal(hasError(result, 'FACT_BLOCK_MALFORMED', '/facts/0/known_limits'), true);
+});
+
 test('rejects duplicate evidence references inside a fact', async () => {
   const source = (await validSource()).replace('  - test-ref', '  - code-ref');
   const result = parseFactBlocks(source);
 
   assert.equal(hasError(result, 'FACT_BLOCK_MALFORMED', '/facts/0/evidence_refs'), true);
+});
+
+test('rejects unsorted fact evidence references', async () => {
+  const source = (await validSource()).replace(
+    '  - code-ref\n  - test-ref',
+    '  - test-ref\n  - code-ref',
+  );
+  const result = parseFactBlocks(source);
+
+  assert.equal(hasError(result, 'FACT_BLOCK_MALFORMED', '/facts/0/evidence_refs/1'), true);
+});
+
+test('rejects unsorted capability Frontmatter references', async () => {
+  const source = (await validSource()).replace(
+    'implementation_refs:\n  - repo:src/wiki',
+    'implementation_refs:\n  - repo:src/zeta\n  - repo:src/alpha',
+  );
+  const result = parseFrontmatter(source);
+
+  assert.equal(hasError(result, 'FACT_BLOCK_MALFORMED', '/frontmatter/implementation_refs/1'), true);
 });
 
 for (const [name, edit, path] of [

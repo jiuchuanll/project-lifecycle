@@ -1,4 +1,5 @@
 import { ERROR_CODES, createError } from './errors.mjs';
+import { codePointOrderErrors } from './deterministic-order.mjs';
 import { fail, ok } from './result.mjs';
 import { getSchemaValidator } from './schema-registry.mjs';
 
@@ -64,6 +65,12 @@ const validateProjectMap = (value) => {
     if (domain.domain_state === 'retired' && !domain.retirement_reason) {
       errors.push(createError(ERROR_CODES.STATE_REQUIREMENT_MISSING, `${path}/retirement_reason`, 'Retired domains require a retirement_reason.'));
     }
+    if (domain.domain_state === 'merged' && !domain.successor_id) {
+      errors.push(createError(ERROR_CODES.STATE_REQUIREMENT_MISSING, `${path}/successor_id`, 'Merged domains require a successor redirect.'));
+    }
+    if (domain.domain_state !== 'merged' && domain.successor_id) {
+      errors.push(createError(ERROR_CODES.SCHEMA_INVALID, `${path}/successor_id`, 'Only merged domains may declare a successor redirect.'));
+    }
   }
 
   for (const [index, domain] of value.domains.entries()) {
@@ -79,6 +86,28 @@ const validateProjectMap = (value) => {
     for (const [relationshipIndex, relationship] of domain.relationships.entries()) {
       if (!entriesById.has(relationship.target_id)) {
         errors.push(createError(ERROR_CODES.REFERENCE_MISSING, `${path}/relationships/${relationshipIndex}/target_id`, `Unknown relationship target ID: ${relationship.target_id}`));
+      }
+    }
+    if (domain.domain_state === 'merged' && domain.successor_id) {
+      const successor = domainById.get(domain.successor_id);
+      if (domain.successor_id === domain.id) {
+        errors.push(createError(
+          ERROR_CODES.SCHEMA_INVALID,
+          `${path}/successor_id`,
+          'Merged domain successor must differ from its own ID.',
+        ));
+      } else if (!successor) {
+        errors.push(createError(
+          ERROR_CODES.REFERENCE_MISSING,
+          `${path}/successor_id`,
+          'Merged domain successor is absent from the project map.',
+        ));
+      } else if (!['confirmed', 'materialized'].includes(successor.domain_state)) {
+        errors.push(createError(
+          ERROR_CODES.SCHEMA_INVALID,
+          `${path}/successor_id`,
+          'Merged domain successor must be routable.',
+        ));
       }
     }
   }
@@ -112,9 +141,6 @@ const validateProjectExtensions = (value) => {
     if (!extensionId.test(entry)) {
       errors.push(createError(ERROR_CODES.SCHEMA_INVALID, path, 'Extension ID must use the current project namespace and REQUIRED suffix.'));
     }
-    if (index > 0 && value.secondary_obligation_kinds[index - 1] > entry) {
-      errors.push(createError(ERROR_CODES.SCHEMA_INVALID, path, 'Extension IDs must be sorted by ID.'));
-    }
   }
 
   return errors;
@@ -131,9 +157,82 @@ const validateContextReceipt = (value) => {
     } else {
       selectedIds.add(selection.id);
     }
-    if (index > 0 && value.selected_context[index - 1].id > selection.id) {
-      errors.push(createError(ERROR_CODES.SCHEMA_INVALID, path, 'Selected context entries must be sorted by ID.'));
+  }
+
+  return errors;
+};
+
+const appendOrderErrors = (errors, items, basePath, field) => {
+  errors.push(...codePointOrderErrors(items, {
+    valueAt: field ? (item) => item[field] : (item) => item,
+    pathAt: (index) => `${basePath}/${index}${field ? `/${field}` : ''}`,
+  }));
+};
+
+const validateDeterministicOrder = (kind, value) => {
+  const errors = [];
+
+  if (kind === 'project-map') {
+    appendOrderErrors(errors, value.constraints, '/constraints', 'id');
+    appendOrderErrors(errors, value.domains, '/domains', 'id');
+    for (const [index, constraint] of value.constraints.entries()) {
+      if (constraint.selected_descendants) {
+        appendOrderErrors(errors, constraint.selected_descendants, `/constraints/${index}/selected_descendants`);
+      }
     }
+    for (const [index, domain] of value.domains.entries()) {
+      appendOrderErrors(errors, domain.relationships, `/domains/${index}/relationships`, 'target_id');
+      appendOrderErrors(errors, domain.evidence_refs, `/domains/${index}/evidence_refs`);
+    }
+  } else if (kind === 'project-extensions') {
+    appendOrderErrors(errors, value.secondary_obligation_kinds, '/secondary_obligation_kinds');
+  } else if (kind === 'context-receipt') {
+    appendOrderErrors(errors, value.route.affected_domain_ids, '/route/affected_domain_ids');
+    appendOrderErrors(errors, value.selected_context, '/selected_context', 'id');
+    appendOrderErrors(errors, value.material_exclusions, '/material_exclusions', 'id');
+  } else if (kind === 'archive-access-receipt') {
+    appendOrderErrors(errors, value.artifact_ids, '/artifact_ids');
+    appendOrderErrors(errors, value.scope.domain_ids, '/scope/domain_ids');
+    appendOrderErrors(errors, value.returned_artifacts, '/returned_artifacts', 'artifact_id');
+  } else if (kind === 'delivery-frontmatter') {
+    appendOrderErrors(errors, value.domain_ids, '/domain_ids');
+    appendOrderErrors(errors, value.relationships.feedback_ids, '/relationships/feedback_ids');
+    appendOrderErrors(errors, value.relationships.prd_ids, '/relationships/prd_ids');
+    appendOrderErrors(errors, value.relationships.legacy_artifact_refs, '/relationships/legacy_artifact_refs');
+    appendOrderErrors(errors, value.reclassified_from_refs, '/reclassified_from_refs');
+    appendOrderErrors(errors, value.obligations, '/obligations', 'obligation_id');
+    for (const [index, obligation] of value.obligations.entries()) {
+      for (const field of ['trigger_refs', 'scope_refs', 'responsible_refs', 'evidence_refs']) {
+        appendOrderErrors(errors, obligation[field], `/obligations/${index}/${field}`);
+      }
+    }
+  } else if (kind === 'obligation-instance') {
+    for (const field of ['trigger_refs', 'scope_refs', 'responsible_refs', 'evidence_refs']) {
+      appendOrderErrors(errors, value[field], `/${field}`);
+    }
+  } else if (kind === 'knowledge-diff') {
+    appendOrderErrors(errors, value.operations, '/operations', 'fact_id');
+    appendOrderErrors(errors, value.domain_changes, '/domain_changes', 'domain_id');
+    appendOrderErrors(errors, value.entry_points, '/entry_points');
+    appendOrderErrors(errors, value.evidence_refs, '/evidence_refs');
+    for (const [index, operation] of value.operations.entries()) {
+      appendOrderErrors(errors, operation.evidence_refs, `/operations/${index}/evidence_refs`);
+    }
+    for (const [index, change] of value.domain_changes.entries()) {
+      if (change.relationship_refs) {
+        appendOrderErrors(errors, change.relationship_refs, `/domain_changes/${index}/relationship_refs`);
+      }
+      appendOrderErrors(errors, change.evidence_refs, `/domain_changes/${index}/evidence_refs`);
+    }
+  } else if (kind === 'pending-changes') {
+    appendOrderErrors(errors, value.changes, '/changes', 'change_id');
+    for (const [index, change] of value.changes.entries()) {
+      appendOrderErrors(errors, change.trigger_refs, `/changes/${index}/trigger_refs`);
+      appendOrderErrors(errors, change.affected_refs, `/changes/${index}/affected_refs`);
+    }
+  } else if (kind === 'capability-frontmatter') {
+    appendOrderErrors(errors, value.implementation_refs, '/implementation_refs');
+    appendOrderErrors(errors, value.verification_refs, '/verification_refs');
   }
 
   return errors;
@@ -166,6 +265,14 @@ const validateProjectPointer = (value, options) => {
       'Project pointer validation requires a resolved project map.',
     )];
   }
+  const mapResult = validateJson('project-map', options.resolvedProjectMap);
+  if (!mapResult.ok) {
+    return mapResult.errors.map((error) => createError(
+      error.code,
+      `/governance_locator${error.path === '/' ? '' : error.path}`,
+      'Resolved governance target is not a valid project map.',
+    ));
+  }
   if (value.project_id === options.resolvedProjectMap.project_id) return [];
   return [createError(
     ERROR_CODES.REFERENCE_MISSING,
@@ -192,5 +299,6 @@ export const validateJson = (kind, value, options = {}) => {
           : kind === 'project-pointer'
             ? validateProjectPointer(value, options)
             : [];
+  errors.push(...validateDeterministicOrder(kind, value));
   return errors.length === 0 ? ok(value) : fail(errors);
 };
