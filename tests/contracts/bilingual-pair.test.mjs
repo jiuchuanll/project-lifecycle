@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import test from 'node:test';
 
-import { readProjectMap, validateBilingualPair } from '../../scripts/lib/bilingual-pair.mjs';
+import { validateBilingualPair } from '../../scripts/lib/bilingual-pair.mjs';
 
 const fixtureUrl = (name) => new URL(`../fixtures/contracts/knowledge-pairs/valid/${name}`, import.meta.url);
-const readMap = async () => readProjectMap(fixtureUrl('project-map.json'));
+const readMap = async () => JSON.parse(await readFile(fixtureUrl('project-map.json'), 'utf8'));
 
 const hasError = (result, code, path) => result.errors.some((error) => (
   error.code === code && error.path === path
@@ -19,11 +19,9 @@ const withPair = async (context, editEn = (value) => value, editZh = (value) => 
   context.after(() => rm(directory, { force: true, recursive: true }));
   const enPath = join(directory, 'wiki-workspace-en.md');
   const zhPath = join(directory, 'wiki-workspace.md');
-  const mapPath = join(directory, 'project-map.json');
   await writeFile(enPath, editEn(await readFile(fixtureUrl('wiki-workspace-en.md'), 'utf8')));
   await writeFile(zhPath, editZh(await readFile(fixtureUrl('wiki-workspace.md'), 'utf8')));
-  await writeFile(mapPath, await readFile(fixtureUrl('project-map.json'), 'utf8'));
-  return { directory, enPath, map: await readProjectMap(mapPath), zhPath };
+  return { directory, enPath, map: await readMap(), zhPath };
 };
 
 const runCli = (args) => new Promise((resolve, reject) => {
@@ -48,6 +46,52 @@ test('accepts a valid bilingual capability pair with localized prose', async () 
   assert.equal(result.ok, true);
   assert.deepEqual(result.errors, []);
   assert.deepEqual(result.value.fact_ids, ['fact-wiki-layout-model']);
+});
+
+test('accepts an ordinary strictly valid JSON-parsed project map', async () => {
+  const result = await validateBilingualPair(
+    fixtureUrl('wiki-workspace-en.md'),
+    fixtureUrl('wiki-workspace.md'),
+    await readMap(),
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test('accepts a raw map whose authoritative assets use nested knowledge locators', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'project-lifecycle-nested-pair-'));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const knowledgeDirectory = join(directory, 'knowledge');
+  await mkdir(knowledgeDirectory);
+  const enPath = join(knowledgeDirectory, 'wiki-workspace-en.md');
+  const zhPath = join(knowledgeDirectory, 'wiki-workspace.md');
+  await writeFile(enPath, await readFile(fixtureUrl('wiki-workspace-en.md'), 'utf8'));
+  await writeFile(zhPath, await readFile(fixtureUrl('wiki-workspace.md'), 'utf8'));
+  const map = await readMap();
+  map.domains[0].paired_assets.en = 'knowledge/wiki-workspace-en.md';
+  map.domains[0].paired_assets['zh-CN'] = 'knowledge/wiki-workspace.md';
+
+  const result = await validateBilingualPair(enPath, zhPath, map);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test('rejects relocated assets that no longer match nested authoritative locators', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'project-lifecycle-relocated-pair-'));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const enPath = join(directory, 'wiki-workspace-en.md');
+  const zhPath = join(directory, 'wiki-workspace.md');
+  await writeFile(enPath, await readFile(fixtureUrl('wiki-workspace-en.md'), 'utf8'));
+  await writeFile(zhPath, await readFile(fixtureUrl('wiki-workspace.md'), 'utf8'));
+  const map = await readMap();
+  map.domains[0].paired_assets.en = 'knowledge/wiki-workspace-en.md';
+  map.domains[0].paired_assets['zh-CN'] = 'knowledge/wiki-workspace.md';
+
+  const result = await validateBilingualPair(enPath, zhPath, map);
+
+  assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/paths'), true);
 });
 
 test('library rejects unknown project-map fields before reading pair assets', async () => {
@@ -116,11 +160,10 @@ test('rejects mismatched language-neutral Frontmatter fields', async (context) =
 
 test('rejects missing paired assets', async () => {
   const directory = new URL('../fixtures/contracts/knowledge-pairs/missing-pair/', import.meta.url);
-  const map = await readProjectMap(new URL('project-map.json', directory));
   const result = await validateBilingualPair(
     new URL('wiki-workspace-en.md', directory),
     new URL('wiki-workspace.md', directory),
-    map,
+    await readMap(),
   );
 
   assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset'), true);
@@ -221,6 +264,23 @@ test('rejects traversing authoritative map asset locators before reading assets'
   assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset'), false);
 });
 
+for (const locator of [
+  '/absolute/wiki-workspace-en.md',
+  'C:\\absolute\\wiki-workspace-en.md',
+  'https://example.test/wiki-workspace-en.md',
+  'knowledge/../wiki-workspace-en.md',
+]) {
+  test(`rejects unsafe authoritative map asset locator ${locator}`, async () => {
+    const map = await readMap();
+    map.domains[0].paired_assets.en = locator;
+
+    const result = await validateBilingualPair('/missing/en.md', '/missing/zh.md', map);
+
+    assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/map/paired_assets/en'), true);
+    assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset'), false);
+  });
+}
+
 test('derives the knowledge root from authoritative map assets, not the map directory', async (context) => {
   const directory = await mkdtemp(join(tmpdir(), 'project-lifecycle-knowledge-root-'));
   context.after(() => rm(directory, { force: true, recursive: true }));
@@ -240,43 +300,34 @@ test('derives the knowledge root from authoritative map assets, not the map dire
   const mapPath = join(directory, 'project-map.json');
   await writeFile(mapPath, JSON.stringify(rawMap));
 
-  const result = await validateBilingualPair(enPath, zhPath, await readProjectMap(mapPath));
+  const result = await validateBilingualPair(enPath, zhPath, JSON.parse(await readFile(mapPath, 'utf8')));
 
   assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset'), true);
 });
 
-test('CLI anchors pair assets to the project-map directory', async (context) => {
+test('CLI rejects pair paths that do not match authoritative locator structure', async (context) => {
   const directory = await mkdtemp(join(tmpdir(), 'project-lifecycle-far-pair-'));
   context.after(() => rm(directory, { force: true, recursive: true }));
   const enPath = join(directory, 'wiki-workspace-en.md');
   const zhPath = join(directory, 'wiki-workspace.md');
   await writeFile(enPath, await readFile(fixtureUrl('wiki-workspace-en.md'), 'utf8'));
   await writeFile(zhPath, await readFile(fixtureUrl('wiki-workspace.md'), 'utf8'));
+  const map = await readMap();
+  map.domains[0].paired_assets.en = 'knowledge/wiki-workspace-en.md';
+  map.domains[0].paired_assets['zh-CN'] = 'knowledge/wiki-workspace.md';
+  const mapPath = join(directory, 'project-map.json');
+  await writeFile(mapPath, JSON.stringify(map));
 
   const result = await runCli([
     'validate-pair',
     enPath,
     zhPath,
-    fixtureUrl('project-map.json').pathname,
+    mapPath,
   ]);
 
   assert.equal(result.stderr, '');
   assert.equal(result.status, 1);
   assert.equal(hasError(JSON.parse(result.stdout), 'PAIR_MACHINE_MISMATCH', '/paths'), true);
-});
-
-test('unbound raw maps cannot relocate both assets to a caller-selected root', async (context) => {
-  const directory = await mkdtemp(join(tmpdir(), 'project-lifecycle-unbound-map-'));
-  context.after(() => rm(directory, { force: true, recursive: true }));
-  const enPath = join(directory, 'wiki-workspace-en.md');
-  const zhPath = join(directory, 'wiki-workspace.md');
-  await writeFile(enPath, await readFile(fixtureUrl('wiki-workspace-en.md'), 'utf8'));
-  await writeFile(zhPath, await readFile(fixtureUrl('wiki-workspace.md'), 'utf8'));
-  const rawMap = JSON.parse(await readFile(fixtureUrl('project-map.json'), 'utf8'));
-
-  const result = await validateBilingualPair(enPath, zhPath, rawMap);
-
-  assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/map'), true);
 });
 
 test('CLI validates the valid pair and emits the result model', async () => {

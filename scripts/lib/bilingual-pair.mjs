@@ -17,7 +17,6 @@ const MACHINE_FIELDS = [
   'verification_refs',
 ];
 const FACT_FIELDS = ['fact_id', 'revision', 'evidence_refs', 'last_verified_baseline'];
-const projectMapLocations = new WeakMap();
 
 const toPath = (value) => value instanceof URL ? fileURLToPath(value) : resolve(value);
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
@@ -40,10 +39,19 @@ const locatorSegments = (locator) => normalize(locator).split(sep).filter(Boolea
 const safeLocator = (locator) => typeof locator === 'string'
   && locator.length > 0
   && !isAbsolute(locator)
+  && !/^[A-Za-z]:[\\/]/.test(locator)
+  && !locator.includes('\\')
   && !locator.includes('://')
-  && locatorSegments(locator).every((segment) => segment !== '..');
+  && !locator.split('/').includes('..')
+  && locatorSegments(locator).length > 0;
 
-const establishTrustedPair = (enPath, zhPath, map, mapPath) => {
+const rootFromLocator = (assetPath, locator) => {
+  let root = assetPath;
+  for (const _segment of locatorSegments(locator)) root = dirname(root);
+  return resolve(root, locator) === assetPath ? root : null;
+};
+
+const establishTrustedPair = (enPath, zhPath, map) => {
   for (const domain of map.domains) {
     if (!domain.paired_assets) continue;
     for (const language of ['en', 'zh-CN']) {
@@ -57,22 +65,20 @@ const establishTrustedPair = (enPath, zhPath, map, mapPath) => {
     }
   }
 
-  if (!mapPath) {
-    return fail([createError(
-      'PAIR_MACHINE_MISMATCH',
-      '/map',
-      'Project-map location is required to establish the trusted knowledge root.',
-    )]);
-  }
-
-  const anchoredRoot = dirname(toPath(mapPath));
   for (const domain of map.domains) {
     if (!domain.paired_assets) continue;
-    const enAsset = resolve(anchoredRoot, domain.paired_assets.en);
-    const zhAsset = resolve(anchoredRoot, domain.paired_assets['zh-CN']);
+    const enRoot = rootFromLocator(enPath, domain.paired_assets.en);
+    const zhRoot = rootFromLocator(zhPath, domain.paired_assets['zh-CN']);
+    if (!enRoot || enRoot !== zhRoot) continue;
+    const enAsset = resolve(enRoot, domain.paired_assets.en);
+    const zhAsset = resolve(enRoot, domain.paired_assets['zh-CN']);
     if (enAsset !== enPath || zhAsset !== zhPath) continue;
-    if (!inside(anchoredRoot, enAsset) || !inside(anchoredRoot, zhAsset)) continue;
-    return ok({ domain, root: commonAssetRoot(enAsset, zhAsset) });
+    if (!inside(enRoot, enAsset) || !inside(enRoot, zhAsset)) continue;
+    return ok({
+      domain,
+      projectRoot: enRoot,
+      root: commonAssetRoot(enAsset, zhAsset),
+    });
   }
 
   return fail([createError(
@@ -90,14 +96,14 @@ const readDocument = async (path) => {
   }
 };
 
-const validatePair = async (enPathValue, zhPathValue, map, mapPath = null) => {
+export const validateBilingualPair = async (enPathValue, zhPathValue, map) => {
   const enPath = toPath(enPathValue);
   const zhPath = toPath(zhPathValue);
   const mapResult = validateJson('project-map', map);
   if (!mapResult.ok) return mapResult;
-  const trustedPair = establishTrustedPair(enPath, zhPath, map, mapPath);
+  const trustedPair = establishTrustedPair(enPath, zhPath, map);
   if (!trustedPair.ok) return trustedPair;
-  const { domain, root } = trustedPair.value;
+  const { domain, projectRoot, root } = trustedPair.value;
 
   const enDocument = await readDocument(enPath);
   const zhDocument = await readDocument(zhPath);
@@ -172,7 +178,10 @@ const validatePair = async (enPathValue, zhPathValue, map, mapPath = null) => {
     if (domain.baseline !== enFrontmatter.value.data.last_verified_baseline) {
       errors.push(createError('PAIR_MACHINE_MISMATCH', '/frontmatter/last_verified_baseline', 'Capability baseline differs from the project map.'));
     }
-    const expectedAssets = { en: relative(root, enPath), 'zh-CN': relative(root, zhPath) };
+    const expectedAssets = {
+      en: relative(projectRoot, enPath),
+      'zh-CN': relative(projectRoot, zhPath),
+    };
     for (const language of ['en', 'zh-CN']) {
       if (domain.paired_assets?.[language] !== expectedAssets[language]) {
         errors.push(createError('PAIR_MACHINE_MISMATCH', `/map/paired_assets/${language}`, `Project-map paired asset differs for ${language}.`));
@@ -183,23 +192,4 @@ const validatePair = async (enPathValue, zhPathValue, map, mapPath = null) => {
   return errors.length > 0
     ? fail(errors)
     : ok({ fact_ids: enFacts.value.map((fact) => fact.fact_id) });
-};
-
-export const readProjectMap = async (mapPathValue) => {
-  const mapPath = toPath(mapPathValue);
-  const map = JSON.parse(await readFile(mapPath, 'utf8'));
-  projectMapLocations.set(map, mapPath);
-  return map;
-};
-
-export const validateBilingualPair = (enPathValue, zhPathValue, map) => validatePair(
-  enPathValue,
-  zhPathValue,
-  map,
-  projectMapLocations.get(map),
-);
-
-export const validateBilingualPairFromMapFile = async (enPathValue, zhPathValue, mapPathValue) => {
-  const map = await readProjectMap(mapPathValue);
-  return validateBilingualPair(enPathValue, zhPathValue, map);
 };
