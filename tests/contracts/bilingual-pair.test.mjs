@@ -27,6 +27,40 @@ const withPair = async (context, editEn = (value) => value, editZh = (value) => 
   return { directory, enPath, map: await readMap(), zhPath };
 };
 
+const constraintBlock = (id = 'wiki-privacy', revision = 2) => `\n<a id="constraint-${id}"></a>\n<!-- project-lifecycle:constraint id=${id} revision=${revision} -->\nConstraint statement.\n<!-- /project-lifecycle:constraint -->\n`;
+
+const addOwnedConstraint = (map) => {
+  map.domains[0].paired_assets = {
+    en: 'knowledge/wiki-workspace-en.md',
+    'zh-CN': 'knowledge/wiki-workspace.md',
+  };
+  map.constraints = [{
+    id: 'wiki-privacy',
+    scope: 'self',
+    owner_id: 'wiki-workspace',
+    semantic_revision: 2,
+    lifecycle_state: 'current',
+    knowledge_refs: {
+      en: 'knowledge/wiki-workspace-en.md#constraint-wiki-privacy',
+      'zh-CN': 'knowledge/wiki-workspace.md#constraint-wiki-privacy',
+    },
+    exceptions: [],
+  }];
+  return map;
+};
+
+const withConstraintPair = async (context, editEn = (value) => value, editZh = (value) => value) => {
+  const directory = await mkdtemp(join(tmpdir(), 'project-lifecycle-constraint-pair-'));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const knowledge = join(directory, 'knowledge');
+  await mkdir(knowledge);
+  const enPath = join(knowledge, 'wiki-workspace-en.md');
+  const zhPath = join(knowledge, 'wiki-workspace.md');
+  await writeFile(enPath, editEn(await readFile(fixtureUrl('wiki-workspace-en.md'), 'utf8')));
+  await writeFile(zhPath, editZh(await readFile(fixtureUrl('wiki-workspace.md'), 'utf8')));
+  return { enPath, map: addOwnedConstraint(await readMap()), zhPath };
+};
+
 const runCli = (args) => new Promise((resolve, reject) => {
   const child = spawn(process.execPath, ['scripts/bin/project-lifecycle.mjs', ...args], {
     cwd: new URL('../..', import.meta.url),
@@ -49,6 +83,57 @@ test('accepts a valid bilingual capability pair with localized prose', async () 
   assert.equal(result.ok, true);
   assert.deepEqual(result.errors, []);
   assert.deepEqual(result.value.fact_ids, ['fact-wiki-layout-model']);
+});
+
+test('accepts exactly one matching governed constraint section in each language', async (context) => {
+  const pair = await withConstraintPair(
+    context,
+    (source) => `${source}${constraintBlock()}`,
+    (source) => `${source}${constraintBlock()}`,
+  );
+
+  const result = await validateBilingualPair(pair.enPath, pair.zhPath, pair.map);
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+});
+
+test('rejects missing, duplicate, fenced-only, mismatched, or one-language governed anchors', async (context) => {
+  const cases = [
+    {
+      name: 'missing',
+      en: (source) => source,
+      zh: (source) => source,
+    },
+    {
+      name: 'distant duplicate',
+      en: (source) => `${source}${constraintBlock()}${'TAIL\n'.repeat(2_000)}${constraintBlock()}`,
+      zh: (source) => `${source}${constraintBlock()}${'TAIL\n'.repeat(2_000)}${constraintBlock()}`,
+    },
+    {
+      name: 'fenced only',
+      en: (source) => `${source}\n\`\`\`md${constraintBlock()}\`\`\`\n`,
+      zh: (source) => `${source}\n\`\`\`md${constraintBlock()}\`\`\`\n`,
+    },
+    {
+      name: 'mismatched section id',
+      en: (source) => `${source}${constraintBlock('other-privacy')}`,
+      zh: (source) => `${source}${constraintBlock('other-privacy')}`,
+    },
+    {
+      name: 'one-language only',
+      en: (source) => `${source}${constraintBlock()}`,
+      zh: (source) => source,
+    },
+  ];
+
+  for (const entry of cases) {
+    const pair = await withConstraintPair(context, entry.en, entry.zh);
+    const result = await validateBilingualPair(pair.enPath, pair.zhPath, pair.map);
+    assert.equal(result.ok, false, entry.name);
+    assert.equal(result.errors.some(({ code, path }) => (
+      code === 'PAIR_MACHINE_MISMATCH' && path.startsWith('/constraints/wiki-privacy/knowledge_refs/')
+    )), true, entry.name);
+  }
 });
 
 test('accepts an ordinary strictly valid JSON-parsed project map', async () => {

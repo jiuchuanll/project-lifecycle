@@ -121,28 +121,25 @@ const inspectConstraintPrefix = (source, constraintId, revision, eof = false) =>
     : masked.split('\n').slice(0, -1);
   const anchor = `<a id="constraint-${constraintId}"></a>`;
   const marker = `<!-- project-lifecycle:constraint id=${constraintId} revision=${revision} -->`;
-  const markerPrefix = `<!-- project-lifecycle:constraint id=${constraintId} revision=`;
   const close = '<!-- /project-lifecycle:constraint -->';
-  const anchorIndexes = [];
-  const markerIndexes = [];
-  for (const [index, line] of completeLines.entries()) {
-    if (line === anchor) anchorIndexes.push(index);
-    if (line.startsWith(markerPrefix) && line.endsWith(' -->')) markerIndexes.push(index);
-  }
-  if (anchorIndexes.length > 1 || markerIndexes.length > 1) {
-    throw constraintReadFailure('Constraint section identity is duplicated.');
-  }
-  if (markerIndexes.length === 1 && (anchorIndexes.length === 0 || markerIndexes[0] < anchorIndexes[0])) {
-    throw constraintReadFailure('Constraint marker appears before its exact anchor.');
-  }
-  if (anchorIndexes.length === 0) return { complete: false };
-  const anchorIndex = anchorIndexes[0];
-  if (completeLines.length <= anchorIndex + 1) return { complete: false };
-  if (completeLines[anchorIndex + 1] !== marker) {
-    throw constraintReadFailure('Constraint semantic revision marker is missing or stale.');
-  }
-  for (let index = anchorIndex + 2; index < completeLines.length; index += 1) {
-    const line = completeLines[index];
+  const markerPrefix = `<!-- project-lifecycle:constraint id=${constraintId} revision=`;
+  let state = 'seeking-anchor';
+  for (const line of completeLines) {
+    if (state === 'seeking-anchor') {
+      if (line === anchor) {
+        state = 'expecting-marker';
+      } else if (line.startsWith(markerPrefix)) {
+        throw constraintReadFailure('Constraint marker appears before its exact anchor.');
+      }
+      continue;
+    }
+    if (state === 'expecting-marker') {
+      if (line !== marker) {
+        throw constraintReadFailure('Constraint semantic revision marker is missing or stale.');
+      }
+      state = 'inside-section';
+      continue;
+    }
     if (line === close) return { complete: true };
     if (line.startsWith('<a id="constraint-')
       || line.startsWith('<!-- project-lifecycle:constraint id=')) {

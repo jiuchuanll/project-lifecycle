@@ -381,6 +381,35 @@ test('stops bounded L1 reads after an early exact section and rejects cap overfl
   assert.equal(overflowReads.some(({ level }) => level === 'L2' || level === 'L3'), false);
 });
 
+test('treats immediate and distant post-close duplicate anchors identically at the selector trust boundary', async (context) => {
+  const duplicate = '<a id="constraint-desktop-privacy"></a>\n<!-- project-lifecycle:constraint id=desktop-privacy revision=3 -->\nDuplicate.\n<!-- /project-lifecycle:constraint -->\n';
+  const outcomes = [];
+  for (const spacing of ['', 'UNREAD_TAIL\n'.repeat(1_000)]) {
+    const root = await setup(context);
+    const path = join(root, 'docs/project-lifecycle/knowledge/desktop-experience-en.md');
+    const original = capability('desktop-experience', 'desktop-experience.md');
+    const closeNeedle = 'privacy\n<!-- /project-lifecycle:constraint -->';
+    const closeEnd = Buffer.byteLength(original.slice(0, original.indexOf(closeNeedle) + closeNeedle.length));
+    const padLength = (64 - ((closeEnd + 1) % 256) + 256) % 256;
+    const padded = original.replace(
+      '<a id="constraint-desktop-privacy"></a>',
+      `${'P'.repeat(padLength)}\n<a id="constraint-desktop-privacy"></a>`,
+    );
+    await writeFile(path, padded.replace(closeNeedle, `${closeNeedle}\n${spacing}${duplicate}`));
+    const reads = [];
+    const result = await selectContext(
+      { ...baseInput(root), task_delivery_refs: [] },
+      { onRead: (entry) => reads.push(entry) },
+    );
+    outcomes.push({ ok: result.ok, stop: result.value?.stop.code, levels: reads.map(({ level }) => level) });
+  }
+
+  assert.deepEqual(outcomes, [
+    { ok: true, stop: 'SUFFICIENT', levels: ['L0', 'L1', 'L1', 'L2', 'L3'] },
+    { ok: true, stop: 'SUFFICIENT', levels: ['L0', 'L1', 'L1', 'L2', 'L3'] },
+  ]);
+});
+
 test('accepts CRLF and reordered Frontmatter keys without reading the body', async (context) => {
   const root = await setup(context);
   const path = join(root, 'docs/project-lifecycle/knowledge/wiki-workspace-en.md');

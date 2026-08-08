@@ -17,6 +17,7 @@ import test from 'node:test';
 
 import { bootstrap } from '../../scripts/knowledge/bootstrap.mjs';
 import { materializeCapability } from '../../scripts/knowledge/materialize.mjs';
+import { selectContext } from '../../scripts/knowledge/select-context.mjs';
 import { validateBilingualPair } from '../../scripts/lib/bilingual-pair.mjs';
 import { atomicWriteValidated } from '../../scripts/lib/atomic-write.mjs';
 import { parseFrontmatter } from '../../scripts/lib/markdown.mjs';
@@ -79,6 +80,27 @@ const createProject = async (context) => {
 };
 
 const validInput = async (root) => ({ root, ...clone(await readJson(fixturePath)) });
+
+const appShellInput = async (root) => {
+  const input = await validInput(root);
+  input.domain_id = 'app-shell';
+  input.owner_id = 'app-shell';
+  input.baseline = 'baseline-alpha';
+  input.approval_ref = 'approval:alpha';
+  input.dependency_ids = [];
+  input.authoritative_evidence_refs = ['repo:src/shell', 'test:shell'];
+  input.implementation_refs = ['repo:src/shell'];
+  input.verification_refs = ['test:shell'];
+  input.targets = {
+    en: 'knowledge/app-shell-en.md',
+    'zh-CN': 'knowledge/app-shell.md',
+  };
+  for (const language of ['en', 'zh-CN']) {
+    input.pair[language].facts[0].fact_id = 'fact-app-shell';
+    input.pair[language].facts[0].evidence_refs = ['repo:src/shell', 'test:shell'];
+  }
+  return input;
+};
 
 const treeSnapshot = async (root, prefix = '') => {
   const entries = await readdir(join(root, prefix), { withFileTypes: true });
@@ -241,6 +263,95 @@ test('keeps a valid proposed pair proposed without requiring approval', async (c
     assert.equal(frontmatter.ok, true);
     assert.equal(frontmatter.value.data.knowledge_state, 'proposed');
   }
+});
+
+test('preserves the accepted alpha baseline when a later beta capability is only proposed', async (context) => {
+  const { root, lifecycleRoot } = await createProject(context);
+  assert.equal((await materializeCapability(await appShellInput(root))).ok, true);
+  const beta = await validInput(root);
+  beta.baseline = 'baseline-beta';
+  beta.knowledge_state = 'proposed';
+  delete beta.approval_ref;
+
+  const proposed = await materializeCapability(beta);
+  const map = await readJson(join(lifecycleRoot, 'project-map.json'));
+  const index = await readFile(join(lifecycleRoot, 'INDEX-en.md'), 'utf8');
+  const selection = await selectContext({
+    root,
+    knowledge_baseline: 'baseline-alpha',
+    primary_domain_id: 'app-shell',
+    candidate_domain_ids: ['app-shell'],
+    applicable_relationships: [],
+    task_delivery_refs: [],
+    material_exclusions: [],
+    evidence_gaps: [],
+    open_questions: [],
+    conflicts: [],
+  });
+  const proposedSelection = await selectContext({
+    root,
+    knowledge_baseline: 'baseline-alpha',
+    primary_domain_id: 'wiki-workspace',
+    candidate_domain_ids: ['app-shell', 'wiki-workspace'],
+    applicable_relationships: [{
+      source_id: 'wiki-workspace', kind: 'depends_on', target_id: 'app-shell',
+    }],
+    task_delivery_refs: [],
+    material_exclusions: [],
+    evidence_gaps: [],
+    open_questions: [],
+    conflicts: [],
+  });
+
+  assert.equal(proposed.ok, true, JSON.stringify(proposed));
+  assert.equal(map.knowledge_baseline, 'baseline-alpha');
+  assert.equal(map.domains.find(({ id }) => id === 'wiki-workspace').baseline, 'baseline-beta');
+  assert.match(index, /## Project baseline\n\n- `baseline-alpha`/u);
+  assert.match(index, /wiki-workspace[^\n]*knowledge_state=proposed[^\n]*last_verified_baseline=baseline-beta/u);
+  assert.equal(selection.ok, true, JSON.stringify(selection));
+  assert.equal(selection.value.stop.code, 'SUFFICIENT');
+  assert.equal(proposedSelection.ok, true, JSON.stringify(proposedSelection));
+  assert.equal(proposedSelection.value.stop.code, 'NEEDS_EVIDENCE');
+  assert.equal(proposedSelection.value.knowledge_baseline, 'baseline-alpha');
+  assert.equal(proposedSelection.value.selected_context.some(({ id, version_ref: versionRef }) => (
+    id === 'wiki-workspace' && versionRef.endsWith('@baseline-beta')
+  )), true);
+});
+
+test('rejects duplicate governed anchors injected into a Task 3 candidate before publication', async (context) => {
+  const project = await createProject(context);
+  const mapPath = join(project.lifecycleRoot, 'project-map.json');
+  const map = await readJson(mapPath);
+  map.constraints.push({
+    id: 'wiki-privacy',
+    scope: 'self',
+    owner_id: 'wiki-workspace',
+    semantic_revision: 1,
+    lifecycle_state: 'current',
+    knowledge_refs: {
+      en: 'knowledge/wiki-workspace-en.md#constraint-wiki-privacy',
+      'zh-CN': 'knowledge/wiki-workspace.md#constraint-wiki-privacy',
+    },
+    exceptions: [],
+  });
+  await writeFile(mapPath, `${JSON.stringify(map, null, 2)}\n`);
+  const before = await treeSnapshot(project.lifecycleRoot);
+  const block = '\n<a id="constraint-wiki-privacy"></a>\n<!-- project-lifecycle:constraint id=wiki-privacy revision=1 -->\nPrivacy.\n<!-- /project-lifecycle:constraint -->\n';
+
+  const result = await materializeCapability(await validInput(project.root), {
+    atomicWriteValidated: async (options) => {
+      const written = await atomicWriteValidated(options);
+      if (['knowledge/wiki-workspace-en.md', 'knowledge/wiki-workspace.md'].includes(options.target)) {
+        const target = join(options.root, options.target);
+        await writeFile(target, `${await readFile(target, 'utf8')}${block}${block}`);
+      }
+      return written;
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'MATERIALIZATION_WRITE_FAILED');
+  assert.deepEqual(await treeSnapshot(project.lifecycleRoot), before);
 });
 
 test('keeps the advanced global baseline byte-identical on an identical materialization retry', async (context) => {

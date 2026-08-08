@@ -123,6 +123,52 @@ const readDocument = async (path) => {
   }
 };
 
+const validateOwnedConstraintSections = ({ domain, map, sources }) => {
+  const errors = [];
+  const constraints = map.constraints.filter(({ knowledge_refs: refs, owner_id: ownerId }) => (
+    ownerId === domain.id && Boolean(refs)
+  ));
+  for (const constraint of constraints) {
+    const anchor = `<a id="constraint-${constraint.id}"></a>`;
+    const marker = `<!-- project-lifecycle:constraint id=${constraint.id} revision=${constraint.semantic_revision} -->`;
+    const close = '<!-- /project-lifecycle:constraint -->';
+    for (const language of ['en', 'zh-CN']) {
+      const path = `/constraints/${constraint.id}/knowledge_refs/${language}`;
+      const expectedRef = `${domain.paired_assets[language]}#constraint-${constraint.id}`;
+      const lines = maskFencedMarkdown(sources[language].replaceAll('\r\n', '\n')).split('\n');
+      const anchors = lines.flatMap((line, index) => line === anchor ? [index] : []);
+      const markers = lines.flatMap((line, index) => line === marker ? [index] : []);
+      let valid = constraint.knowledge_refs[language] === expectedRef
+        && anchors.length === 1
+        && markers.length === 1;
+      if (valid) {
+        const anchorIndex = anchors[0];
+        const markerIndex = markers[0];
+        valid = markerIndex === anchorIndex + 1;
+        let closed = false;
+        for (let index = markerIndex + 1; valid && index < lines.length; index += 1) {
+          const line = lines[index];
+          if (line === close) {
+            closed = true;
+            break;
+          }
+          if (line.startsWith('<a id="constraint-')
+            || line.startsWith('<!-- project-lifecycle:constraint id=')) valid = false;
+        }
+        valid = valid && closed;
+      }
+      if (!valid) {
+        errors.push(createError(
+          'PAIR_MACHINE_MISMATCH',
+          path,
+          `Governed constraint section must occur exactly once with its current marker in ${language}.`,
+        ));
+      }
+    }
+  }
+  return errors;
+};
+
 export const validateBilingualPair = async (enPathValue, zhPathValue, map) => {
   const enPath = toPath(enPathValue);
   const zhPath = toPath(zhPathValue);
@@ -160,6 +206,12 @@ export const validateBilingualPair = async (enPathValue, zhPathValue, map) => {
       errors.push(createError('PAIR_MACHINE_MISMATCH', `/frontmatter/${field}`, `Bilingual Frontmatter field differs: ${field}`));
     }
   }
+
+  errors.push(...validateOwnedConstraintSections({
+    domain,
+    map,
+    sources: { en: enDocument.source, 'zh-CN': zhDocument.source },
+  }));
 
   for (const [path, frontmatter] of [[enPath, enFrontmatter], [zhPath, zhFrontmatter]]) {
     const pairedPath = resolve(dirname(path), frontmatter.value.data.paired_asset);

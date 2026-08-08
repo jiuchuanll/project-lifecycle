@@ -886,7 +886,7 @@ export async function materializeCapability(input, operations = {}) {
   }
 
   const candidateMap = clone(map);
-  candidateMap.knowledge_baseline = input.baseline;
+  if (input.knowledge_state === 'current') candidateMap.knowledge_baseline = input.baseline;
   const candidateNode = candidateMap.domains.find(({ id }) => id === input.domain_id);
   candidateNode.domain_state = 'materialized';
   candidateNode.paired_assets = clone(input.targets);

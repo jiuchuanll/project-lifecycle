@@ -435,6 +435,28 @@ test('rejects a structurally mismatched bilingual proposal before pending write'
   assert.equal(await fingerprint(root), before);
 });
 
+test('rejects duplicate governed anchors before a Task 4 proposal can become pending', async (context) => {
+  const root = await setup(context);
+  const map = await readJson(join(lifecycle(root), 'project-map.json'));
+  const candidate = clone(map);
+  candidate.constraints[0].semantic_revision = 2;
+  const updates = await updateConstraintSections(root, 'desktop-privacy', 'desktop-privacy', 2);
+  const duplicate = '\n<a id="constraint-desktop-privacy"></a>\n<!-- project-lifecycle:constraint id=desktop-privacy revision=2 -->\nDuplicate.\n<!-- /project-lifecycle:constraint -->\n';
+  for (const language of ['en', 'zh-CN']) {
+    updates[0][language].content = `${updates[0][language].content}${'TAIL\n'.repeat(2_000)}${duplicate}`;
+  }
+  const before = await fingerprint(root);
+
+  const result = await proposeChange({
+    root,
+    change: proposalFor(candidate, { knowledge_candidates: updates }),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors.some(({ code }) => code === 'PAIR_MACHINE_MISMATCH'), true);
+  assert.equal(await fingerprint(root), before);
+});
+
 test('applies an approved semantic exception with revision and revalidation impact', async (context) => {
   const root = await setup(context);
   const map = await readJson(join(lifecycle(root), 'project-map.json'));
