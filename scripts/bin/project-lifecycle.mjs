@@ -16,6 +16,12 @@ const resolvePointerMap = async (pointerFile, locator) => {
   return JSON.parse(await readFile(mapFile, 'utf8'));
 };
 
+const hasStringGovernanceLocator = (value) => value !== null
+  && typeof value === 'object'
+  && !Array.isArray(value)
+  && typeof value.governance_locator === 'string'
+  && value.governance_locator.length > 0;
+
 if (command === 'help') {
   console.log(`Project Lifecycle ${version}
 
@@ -34,16 +40,21 @@ Commands:
   } else {
     try {
       const value = JSON.parse(await readFile(file, 'utf8'));
-      let result = validateJson(kind, value, { allowUnresolvedProjectMap: kind === 'project-pointer' });
-      if (result.ok && kind === 'project-pointer') {
+      let result;
+      if (kind === 'project-pointer' && hasStringGovernanceLocator(value)) {
         try {
           const resolvedProjectMap = await resolvePointerMap(file, value.governance_locator);
           result = validateJson(kind, value, { resolvedProjectMap });
         } catch (error) {
-          result = fail([
-            createError(ERROR_CODES.REFERENCE_MISSING, '/governance_locator', 'Unable to resolve governance locator.'),
-          ]);
+          const unresolvedResult = validateJson(kind, value);
+          result = unresolvedResult.errors.some(({ code }) => code === ERROR_CODES.SCHEMA_INVALID)
+            ? unresolvedResult
+            : fail([
+              createError(ERROR_CODES.REFERENCE_MISSING, '/governance_locator', 'Unable to resolve governance locator.'),
+            ]);
         }
+      } else {
+        result = validateJson(kind, value);
       }
       console.log(JSON.stringify(result));
       if (!result.ok) process.exitCode = 1;

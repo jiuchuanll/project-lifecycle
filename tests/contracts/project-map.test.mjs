@@ -63,18 +63,27 @@ for (const [name, code, path] of [
 }
 
 test('rejects a pointer without resolved project-map context', () => {
-  const result = validateJson('project-pointer', {
+  const pointer = {
     schema_version: 1,
     project_id: 'sample-app',
     repository_id: 'sample-repository',
     governance_locator: './project-map.json',
-  });
-
-  assert.deepEqual(result.errors, [{
+  };
+  const expectedError = [{
     code: 'REFERENCE_MISSING',
     path: '/governance_locator',
     message: 'Project pointer validation requires a resolved project map.',
-  }]);
+  }];
+
+  assert.deepEqual(validateJson('project-pointer', pointer).errors, expectedError);
+  assert.deepEqual(
+    validateJson('project-pointer', pointer, { allowUnresolvedProjectMap: true }).errors,
+    expectedError,
+  );
+  assert.deepEqual(
+    validateJson('project-pointer', pointer, { allowUnresolvedProjectMap: true, unrelated: 'value' }).errors,
+    expectedError,
+  );
 });
 
 test('validates a pointer whose locally resolved map has the same project_id', async (context) => {

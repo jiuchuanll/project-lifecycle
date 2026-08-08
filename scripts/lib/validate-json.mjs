@@ -121,7 +121,6 @@ const validateProjectExtensions = (value) => {
 };
 
 const validateProjectPointer = (value, options) => {
-  if (options.allowUnresolvedProjectMap) return [];
   if (!options.resolvedProjectMap) {
     return [createError(
       ERROR_CODES.REFERENCE_MISSING,
