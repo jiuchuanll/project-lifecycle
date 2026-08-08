@@ -51,7 +51,7 @@
       }
     },
     {
-      "if": { "type": "object", "properties": { "status": { "enum": ["RESOLVED", "WAIVED", "SUPERSEDED"] } }, "required": ["status"] },
+      "if": { "type": "object", "properties": { "status": { "const": "RESOLVED" } }, "required": ["status"] },
       "then": {
         "type": "object",
         "required": ["resolution_ref"],
@@ -66,7 +66,10 @@
       "then": {
         "type": "object",
         "required": ["human_approval_ref"],
-        "properties": { "human_approval_ref": { "$ref": "#/$defs/ref" } }
+        "properties": {
+          "human_approval_ref": { "$ref": "#/$defs/ref" },
+          "evidence_refs": { "type": "array", "minItems": 1 }
+        }
       }
     },
     {

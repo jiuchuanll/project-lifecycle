@@ -41,6 +41,19 @@ test('rejects duplicate Context Receipt IDs even when selection fields differ', 
   )));
 });
 
+test('routes exact duplicate Context Receipt selections to the deterministic ID error', async () => {
+  const receipt = await fixture('context-receipt.valid.json');
+  receipt.selected_context.push({ ...receipt.selected_context[0] });
+
+  const result = validateJson('context-receipt', receipt);
+
+  assert.deepEqual(result.errors[0], {
+    code: 'ID_DUPLICATE',
+    path: '/selected_context/1/id',
+    message: 'Duplicate selected context ID: fact-wiki-layout-model',
+  });
+});
+
 test('rejects Context Receipt selections that are not ID-sorted', async () => {
   const receipt = await fixture('context-receipt.valid.json');
   receipt.selected_context = [
@@ -133,6 +146,19 @@ test('rejects duplicate owner-local obligation IDs even when instance fields dif
   assert.ok(result.errors.some(({ code, path }) => (
     code === 'ID_DUPLICATE' && path === '/obligations/1/obligation_id'
   )));
+});
+
+test('routes exact duplicate owner-local obligations to the deterministic ID error', async () => {
+  const frontmatter = await fixture('delivery-frontmatter.valid.json');
+  frontmatter.obligations.push({ ...frontmatter.obligations[0] });
+
+  const result = validateJson('delivery-frontmatter', frontmatter);
+
+  assert.deepEqual(result.errors[0], {
+    code: 'ID_DUPLICATE',
+    path: '/obligations/1/obligation_id',
+    message: 'Duplicate obligation ID: layout-dependency',
+  });
 });
 
 test('rejects duplicate cross-reference IDs in delivery relationships', async () => {

@@ -40,7 +40,6 @@
     "selected_context": {
       "type": "array",
       "maxItems": 100,
-      "uniqueItems": true,
       "items": { "$ref": "#/$defs/selectedContext" }
     },
     "material_exclusions": {

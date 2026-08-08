@@ -31,10 +31,12 @@ No CLI file change was needed or made.
 
 - `validateObligationTransition(null, next)` is the creation check; creation must start `OPEN`.
 - A resolved result needs evidence plus `resolution_ref`.
-- A waived result needs evidence, `resolution_ref`, and `human_approval_ref`.
-- A superseded result needs evidence, `resolution_ref`, and qualified `successor_obligation_ref` in `owner-asset#obligation-id` form.
+- A waived result needs evidence plus `human_approval_ref`; it does not require `resolution_ref`.
+- A superseded result needs only qualified `successor_obligation_ref` in `owner-asset#obligation-id` form; evidence and `resolution_ref` are optional.
 - Reopening `RESOLVED` or `WAIVED` requires at least one trigger absent from the previous instance and removes `resolution_ref`, `human_approval_ref`, and successor state.
 - `SUPERSEDED` is terminal. Same-status updates remain valid only when the target continues to satisfy that status's result requirements.
+- `validateObligationTransition(previous, next)` rejects differing obligation IDs before terminal or status checks.
+- `validateDeliveryTransition(previous, next)` compares only `artifact_id` and durable `primary_route`: identity must match and the route must not change.
 - Obligations are embedded in their delivery owner. The strict obligation schema has no owner/global-ledger field, so a synthetic `owner_ref` is rejected at the exact embedded path.
 - Legacy delivery association is represented by bounded `relationships.legacy_artifact_refs`; Feedback and PRD relationships use separate prefix-checked stable ID arrays.
 
@@ -143,13 +145,13 @@ exit 0
 
 ```text
 node --test tests/contracts/handoffs.test.mjs tests/contracts/obligations.test.mjs
-exit 0; 25 pass, 0 fail
+exit 0; 35 pass, 0 fail
 
 node scripts/bin/project-lifecycle.mjs validate-json context-receipt tests/fixtures/contracts/handoffs/context-receipt.valid.json
 exit 0; {"ok":true,...,"errors":[]}
 
 npm test
-exit 0; 104 pass, 0 fail
+exit 0; 114 pass, 0 fail
 
 git diff --check
 exit 0; no output
@@ -189,10 +191,52 @@ Modified under explicit scope corrections:
 - Relationships: Feedback/PRD IDs are prefix-typed, unique, and kept separate; legacy and reclassification references are bounded.
 - Context: same-ID/different-object duplicates and unsorted selections fail at the second offending ID path.
 - Owner-local identity: same-ID/different-instance obligations fail at the second offending obligation ID path.
-- Mutation check: removing each conditional schema gate, typed relationship pattern, transition branch, evidence check, active-marker cleanup check, duplicate check, or order check fails at least one focused test.
+- Mutation check: focused tests independently cover each required result field, both valid minimal terminal shapes, exact and differing-object duplicate IDs, obligation identity ordering, delivery identity, primary-route immutability, reopen cleanup, terminal status, typed relationships, and Context Receipt ordering.
 
 ## Concerns
 
 - JSON reference arrays validate strict shape, type, uniqueness, and bounds, but external target existence needs the owning project/delivery graph context and is not claimed by these standalone schemas.
-- Historical immutability of an already materialized `primary_route` is a lifecycle comparison against the prior owner revision; this Task 5 interface requires the field and bounded successor links but does not introduce a separate delivery-transition API.
 - Task 6 safe-write and Task 7 aggregate fixture/privacy gates remain intentionally out of scope.
+
+## Fix Round 1
+
+All four Important review findings were addressed within the existing Task 5 files.
+
+### Finding mapping
+
+1. **Exact result matrix**
+   - `RESOLVED` requires `evidence_refs` plus `resolution_ref`.
+   - `WAIVED` requires `evidence_refs` plus `human_approval_ref`; a minimal instance without `resolution_ref` passes both schema and transition validation.
+   - `SUPERSEDED` requires only qualified `successor_obligation_ref`; a minimal instance with empty evidence and no `resolution_ref` passes both validators.
+   - Tests assert evidence and resolution independently for `RESOLVED`, evidence and approval independently for `WAIVED`, successor independently for `SUPERSEDED`, and both minimal valid terminal shapes.
+2. **Deterministic duplicate IDs**
+   - Removed array-level `uniqueItems` from `selected_context` and owner-local `obligations`, because it intercepted exact duplicates before semantic ID validation.
+   - Exact duplicates and same-ID/different-object duplicates now both return `ID_DUPLICATE` at the second `/selected_context/<index>/id` or `/obligations/<index>/obligation_id`.
+3. **Obligation identity preservation**
+   - `validateObligationTransition` compares `obligation_id` before terminal or result-state logic and returns `OBLIGATION_ID_MISMATCH` at `/obligation_id`.
+4. **Durable primary-route immutability**
+   - Added `validateDeliveryTransition(previous, next)` to `scripts/lib/obligations.mjs`.
+   - It checks only stable `artifact_id` and unchanged `primary_route`; no reclassification or business semantics are inferred.
+   - Stable failures use `DELIVERY_ID_MISMATCH` at `/artifact_id` and `PRIMARY_ROUTE_IMMUTABLE` at `/primary_route`.
+
+### RED
+
+```text
+node --test tests/contracts/handoffs.test.mjs tests/contracts/obligations.test.mjs
+exit 1
+1..35
+# pass 25
+# fail 10
+```
+
+The ten failures were the two schema-masked exact duplicates, absent delivery-transition export and its three behavior tests, rejected minimal WAIVED/SUPERSEDED shapes, wrong SUPERSEDED first error, and obligation-ID mismatch losing to the terminal check.
+
+### GREEN
+
+```text
+node --test tests/contracts/handoffs.test.mjs tests/contracts/obligations.test.mjs
+exit 0
+1..35
+# pass 35
+# fail 0
+```

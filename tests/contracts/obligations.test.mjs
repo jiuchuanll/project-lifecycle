@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { validateJson } from '../../scripts/lib/validate-json.mjs';
+
 const obligationsModule = await import('../../scripts/lib/obligations.mjs').catch(() => ({}));
-const { validateObligationTransition } = obligationsModule;
+const { validateDeliveryTransition, validateObligationTransition } = obligationsModule;
 
 const open = {
   obligation_id: 'shared-contract',
@@ -26,20 +28,18 @@ const waived = {
   ...open,
   status: 'WAIVED',
   evidence_refs: ['risk-assessment-shared-contract'],
-  resolution_ref: 'waiver-shared-contract',
   human_approval_ref: 'approval-product-owner-42',
 };
 
 const superseded = {
   ...open,
   status: 'SUPERSEDED',
-  evidence_refs: ['decision-split-shared-contract'],
-  resolution_ref: 'supersession-shared-contract',
   successor_obligation_ref: 'prd-shared-contracts#split-contract',
 };
 
 test('exports the obligation transition validator', () => {
   assert.equal(typeof validateObligationTransition, 'function');
+  assert.equal(typeof validateDeliveryTransition, 'function');
 });
 
 test('requires new obligation instances to start OPEN', () => {
@@ -47,18 +47,35 @@ test('requires new obligation instances to start OPEN', () => {
   assert.equal(validateObligationTransition(null, open).ok, true);
 });
 
-test('requires evidence and a resolution to resolve an obligation', () => {
+test('requires evidence to resolve an obligation', () => {
   const resolvedWithoutEvidence = { ...resolved, evidence_refs: [] };
-  delete resolvedWithoutEvidence.resolution_ref;
 
   assert.equal(validateObligationTransition(open, resolvedWithoutEvidence).errors[0].code, 'OBLIGATION_EVIDENCE_REQUIRED');
 });
 
-test('requires evidence and human approval to waive an obligation', () => {
+test('requires a resolution reference to resolve an obligation', () => {
+  const resolvedWithoutResolution = { ...resolved };
+  delete resolvedWithoutResolution.resolution_ref;
+
+  assert.equal(validateObligationTransition(open, resolvedWithoutResolution).errors[0].code, 'OBLIGATION_RESOLUTION_REQUIRED');
+});
+
+test('requires evidence to waive an obligation', () => {
+  const waivedWithoutEvidence = { ...waived, evidence_refs: [] };
+
+  assert.equal(validateObligationTransition(open, waivedWithoutEvidence).errors[0].code, 'OBLIGATION_EVIDENCE_REQUIRED');
+});
+
+test('requires human approval to waive an obligation', () => {
   const waivedWithoutApproval = { ...waived };
   delete waivedWithoutApproval.human_approval_ref;
 
   assert.equal(validateObligationTransition(open, waivedWithoutApproval).errors[0].code, 'OBLIGATION_APPROVAL_REQUIRED');
+});
+
+test('accepts a minimal waived obligation without a resolution reference', () => {
+  assert.equal(validateJson('obligation-instance', waived).ok, true);
+  assert.equal(validateObligationTransition(open, waived).ok, true);
 });
 
 test('requires a qualified successor when superseding an obligation', () => {
@@ -66,6 +83,21 @@ test('requires a qualified successor when superseding an obligation', () => {
   delete supersededWithoutSuccessor.successor_obligation_ref;
 
   assert.equal(validateObligationTransition(open, supersededWithoutSuccessor).errors[0].code, 'OBLIGATION_SUCCESSOR_REQUIRED');
+});
+
+test('accepts a minimal superseded obligation without evidence or resolution', () => {
+  assert.equal(validateJson('obligation-instance', superseded).ok, true);
+  assert.equal(validateObligationTransition(open, superseded).ok, true);
+});
+
+test('rejects an obligation transition between different obligation IDs first', () => {
+  const anotherObligation = { ...open, obligation_id: 'another-obligation' };
+
+  assert.deepEqual(validateObligationTransition(superseded, anotherObligation).errors[0], {
+    code: 'OBLIGATION_ID_MISMATCH',
+    path: '/obligation_id',
+    message: 'Obligation transition must preserve obligation_id.',
+  });
 });
 
 test('reopens a resolved or waived obligation only for a new trigger without active resolution', () => {
@@ -87,4 +119,33 @@ test('treats SUPERSEDED as terminal', () => {
 
 test('rejects direct transitions between result states', () => {
   assert.equal(validateObligationTransition(resolved, waived).errors[0].code, 'OBLIGATION_TRANSITION_INVALID');
+});
+
+test('accepts a delivery update that preserves identity and primary route', () => {
+  const previous = { artifact_id: 'prd-wiki-layout-v2', primary_route: 'PRD_DELIVERY' };
+  const next = { ...previous, knowledge_baseline: 'knowledge-revision-43' };
+
+  assert.equal(validateDeliveryTransition(previous, next).ok, true);
+});
+
+test('rejects a delivery update that changes durable primary_route', () => {
+  const previous = { artifact_id: 'prd-wiki-layout-v2', primary_route: 'PRD_DELIVERY' };
+  const next = { ...previous, primary_route: 'NON_PRD_DELIVERY' };
+
+  assert.deepEqual(validateDeliveryTransition(previous, next).errors[0], {
+    code: 'PRIMARY_ROUTE_IMMUTABLE',
+    path: '/primary_route',
+    message: 'Durable delivery primary_route is immutable.',
+  });
+});
+
+test('rejects a delivery transition between different artifact IDs', () => {
+  const previous = { artifact_id: 'prd-wiki-layout-v2', primary_route: 'PRD_DELIVERY' };
+  const next = { ...previous, artifact_id: 'prd-wiki-layout-v3' };
+
+  assert.deepEqual(validateDeliveryTransition(previous, next).errors[0], {
+    code: 'DELIVERY_ID_MISMATCH',
+    path: '/artifact_id',
+    message: 'Delivery transition must preserve artifact_id.',
+  });
 });

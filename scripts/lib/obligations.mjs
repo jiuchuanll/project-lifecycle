@@ -18,17 +18,24 @@ const validateOutcomeRequirements = (obligation) => {
     }
     return null;
   }
-  if (!hasEvidence(obligation)) {
-    return error('OBLIGATION_EVIDENCE_REQUIRED', '/evidence_refs', `${obligation.status} obligations require evidence.`);
+  if (obligation.status === 'RESOLVED') {
+    if (!hasEvidence(obligation)) {
+      return error('OBLIGATION_EVIDENCE_REQUIRED', '/evidence_refs', 'RESOLVED obligations require evidence.');
+    }
+    if (!obligation.resolution_ref) {
+      return error('OBLIGATION_RESOLUTION_REQUIRED', '/resolution_ref', 'RESOLVED obligations require a resolution reference.');
+    }
   }
-  if (obligation.status === 'WAIVED' && !obligation.human_approval_ref) {
-    return error('OBLIGATION_APPROVAL_REQUIRED', '/human_approval_ref', 'WAIVED obligations require a human approval reference.');
+  if (obligation.status === 'WAIVED') {
+    if (!hasEvidence(obligation)) {
+      return error('OBLIGATION_EVIDENCE_REQUIRED', '/evidence_refs', 'WAIVED obligations require evidence.');
+    }
+    if (!obligation.human_approval_ref) {
+      return error('OBLIGATION_APPROVAL_REQUIRED', '/human_approval_ref', 'WAIVED obligations require a human approval reference.');
+    }
   }
   if (obligation.status === 'SUPERSEDED' && !obligation.successor_obligation_ref) {
     return error('OBLIGATION_SUCCESSOR_REQUIRED', '/successor_obligation_ref', 'SUPERSEDED obligations require a qualified successor.');
-  }
-  if (!obligation.resolution_ref) {
-    return error('OBLIGATION_RESOLUTION_REQUIRED', '/resolution_ref', `${obligation.status} obligations require a resolution reference.`);
   }
   return null;
 };
@@ -39,6 +46,10 @@ export const validateObligationTransition = (previous, next) => {
       return error('OBLIGATION_CREATION_OPEN_REQUIRED', '/status', 'Obligation creation must start OPEN.');
     }
     return validateOutcomeRequirements(next) ?? ok(next);
+  }
+
+  if (previous.obligation_id !== next.obligation_id) {
+    return error('OBLIGATION_ID_MISMATCH', '/obligation_id', 'Obligation transition must preserve obligation_id.');
   }
 
   if (previous.status === 'SUPERSEDED') {
@@ -68,4 +79,14 @@ export const validateObligationTransition = (previous, next) => {
     '/status',
     `Invalid obligation transition: ${previous.status} -> ${next.status}`,
   );
+};
+
+export const validateDeliveryTransition = (previous, next) => {
+  if (previous.artifact_id !== next.artifact_id) {
+    return error('DELIVERY_ID_MISMATCH', '/artifact_id', 'Delivery transition must preserve artifact_id.');
+  }
+  if (previous.primary_route !== next.primary_route) {
+    return error('PRIMARY_ROUTE_IMMUTABLE', '/primary_route', 'Durable delivery primary_route is immutable.');
+  }
+  return ok(next);
 };
