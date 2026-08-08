@@ -9,6 +9,21 @@ const vocabulary = Object.freeze(
   ),
 );
 
+const MAX_DIAGNOSTIC_VALUE_LENGTH = 120;
+
+const formatDiagnosticValue = (value) => {
+  try {
+    const serialized = JSON.stringify(value);
+    const displayValue = serialized ?? `[${typeof value}]`;
+
+    return displayValue.length > MAX_DIAGNOSTIC_VALUE_LENGTH
+      ? `${displayValue.slice(0, MAX_DIAGNOSTIC_VALUE_LENGTH)}…`
+      : displayValue;
+  } catch {
+    return `[${typeof value}]`;
+  }
+};
+
 export const loadCoreVocabulary = () => vocabulary;
 
 export const assertVocabularyValue = (kind, value, path) => {
@@ -17,7 +32,7 @@ export const assertVocabularyValue = (kind, value, path) => {
       createError(
         ERROR_CODES.VOCAB_UNKNOWN_KIND,
         path,
-        `Unknown vocabulary kind: ${JSON.stringify(kind)}`,
+        `Unknown vocabulary kind: ${formatDiagnosticValue(kind)}`,
       ),
     ]);
   }
@@ -27,7 +42,7 @@ export const assertVocabularyValue = (kind, value, path) => {
       createError(
         ERROR_CODES.VOCAB_UNKNOWN_VALUE,
         path,
-        `Unknown value for vocabulary kind ${JSON.stringify(kind)}: ${JSON.stringify(value)}`,
+        `Unknown value for vocabulary kind ${formatDiagnosticValue(kind)}: ${formatDiagnosticValue(value)}`,
       ),
     ]);
   }

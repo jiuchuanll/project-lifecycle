@@ -61,3 +61,27 @@ test('rejects unknown vocabulary kinds without throwing', () => {
     },
   );
 });
+
+test('rejects BigInt and cyclic unknown inputs without diagnostic serialization failures', () => {
+  const cyclicKind = {};
+  cyclicKind.self = cyclicKind;
+  const cyclicValue = {};
+  cyclicValue.self = cyclicValue;
+
+  const cases = [
+    { kind: 1n, value: 'PRD_DELIVERY', path: '/kind', code: 'VOCAB_UNKNOWN_KIND' },
+    { kind: 'primary_routes', value: 1n, path: '/value', code: 'VOCAB_UNKNOWN_VALUE' },
+    { kind: cyclicKind, value: 'PRD_DELIVERY', path: '/kind', code: 'VOCAB_UNKNOWN_KIND' },
+    { kind: 'primary_routes', value: cyclicValue, path: '/value', code: 'VOCAB_UNKNOWN_VALUE' },
+  ];
+
+  for (const { kind, value, path, code } of cases) {
+    assert.doesNotThrow(() => assertVocabularyValue(kind, value, path));
+    const result = assertVocabularyValue(kind, value, path);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.errors[0].code, code);
+    assert.equal(result.errors[0].path, path);
+    assert.deepEqual(Object.keys(result.errors[0]), ['code', 'path', 'message']);
+  }
+});
