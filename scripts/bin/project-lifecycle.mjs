@@ -34,14 +34,14 @@ Commands:
   } else {
     try {
       const value = JSON.parse(await readFile(file, 'utf8'));
-      let result = validateJson(kind, value);
+      let result = validateJson(kind, value, { allowUnresolvedProjectMap: kind === 'project-pointer' });
       if (result.ok && kind === 'project-pointer') {
         try {
           const resolvedProjectMap = await resolvePointerMap(file, value.governance_locator);
           result = validateJson(kind, value, { resolvedProjectMap });
         } catch (error) {
           result = fail([
-            createError(ERROR_CODES.REFERENCE_MISSING, '/governance_locator', `Unable to resolve governance locator: ${error.message}`),
+            createError(ERROR_CODES.REFERENCE_MISSING, '/governance_locator', 'Unable to resolve governance locator.'),
           ]);
         }
       }

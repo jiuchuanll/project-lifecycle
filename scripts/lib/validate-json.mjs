@@ -25,7 +25,10 @@ const isStrictScope = (parent, child) => child.every((item) => parent.includes(i
 
 const isDescendant = (domainById, ancestorId, candidateId) => {
   let current = domainById.get(candidateId);
+  const visited = new Set();
   while (current?.parent_id) {
+    if (visited.has(current.id)) return false;
+    visited.add(current.id);
     if (current.parent_id === ancestorId) return true;
     current = domainById.get(current.parent_id);
   }
@@ -118,7 +121,15 @@ const validateProjectExtensions = (value) => {
 };
 
 const validateProjectPointer = (value, options) => {
-  if (!options.resolvedProjectMap || value.project_id === options.resolvedProjectMap.project_id) return [];
+  if (options.allowUnresolvedProjectMap) return [];
+  if (!options.resolvedProjectMap) {
+    return [createError(
+      ERROR_CODES.REFERENCE_MISSING,
+      '/governance_locator',
+      'Project pointer validation requires a resolved project map.',
+    )];
+  }
+  if (value.project_id === options.resolvedProjectMap.project_id) return [];
   return [createError(
     ERROR_CODES.REFERENCE_MISSING,
     '/project_id',

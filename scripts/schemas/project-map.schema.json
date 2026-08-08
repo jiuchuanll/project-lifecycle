@@ -7,8 +7,8 @@
   "properties": {
     "schema_version": { "const": 1 },
     "project_id": { "$ref": "#/$defs/id" },
-    "identity_lineage": { "type": "array", "items": { "type": "object" } },
-    "repositories": { "type": "array", "items": { "$ref": "#/$defs/namedReference" } },
+    "identity_lineage": { "type": "array", "maxItems": 0 },
+    "repositories": { "type": "array", "maxItems": 0 },
     "constraints": { "type": "array", "items": { "$ref": "#/$defs/constraint" } },
     "domains": { "type": "array", "items": { "$ref": "#/$defs/domain" } }
   },
@@ -22,12 +22,6 @@
         "en": { "type": "string", "minLength": 1 },
         "zh-CN": { "type": "string", "minLength": 1 }
       }
-    },
-    "namedReference": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id"],
-      "properties": { "id": { "$ref": "#/$defs/id" } }
     },
     "scope": {
       "type": "object",
