@@ -129,6 +129,135 @@ test('fails when a fixture file is not listed without reading or echoing its con
   assert.equal(result.stdout.includes(privateMarker), false);
 });
 
+test('allows inventory files only beneath explicitly declared auxiliary roots', async (context) => {
+  const root = await createFixtureRoot(context);
+  await mkdir(join(root, 'knowledge', 'bootstrap'), { recursive: true });
+  await writeFile(join(root, 'knowledge', 'bootstrap', 'policy.json'), '{}\n');
+  await writeFile(join(root, 'knowledge', 'bootstrap', 'source.mjs'), 'fixture body\n');
+  await writeManifest(root, {
+    schema_version: 1,
+    auxiliary_roots: ['knowledge/bootstrap'],
+    fixtures: [],
+  });
+
+  const result = await runCli(root);
+
+  assert.equal(result.status, 0);
+  assert.deepEqual(JSON.parse(result.stdout), { ok: true, results: [], errors: [] });
+
+  await writeFile(join(root, 'unlisted.txt'), 'must remain inventoried\n');
+  const withOutsideFile = await runCli(root);
+  assert.equal(withOutsideFile.status, 1);
+  assert.deepEqual(JSON.parse(withOutsideFile.stdout).errors, [{
+    code: 'FIXTURE_UNLISTED',
+    path: 'unlisted.txt',
+  }]);
+});
+
+for (const [name, roots, expectedPath] of [
+  ['a non-array declaration', 'knowledge/bootstrap', '/auxiliary_roots'],
+  ['an empty locator', [''], '/auxiliary_roots/0'],
+  ['a parent traversal', ['../bootstrap'], '/auxiliary_roots/0'],
+  ['an absolute locator', ['/bootstrap'], '/auxiliary_roots/0'],
+  ['a Windows drive locator', ['C:/bootstrap'], '/auxiliary_roots/0'],
+  ['a backslash locator', ['knowledge\\bootstrap'], '/auxiliary_roots/0'],
+  ['a non-canonical alias', ['knowledge/./bootstrap'], '/auxiliary_roots/0'],
+  ['a trailing-slash alias', ['knowledge/bootstrap/'], '/auxiliary_roots/0'],
+  ['duplicate roots', ['knowledge/bootstrap', 'knowledge/bootstrap'], '/auxiliary_roots/1'],
+  ['roots outside code-point order', ['zeta', 'alpha'], '/auxiliary_roots/1'],
+  ['overlapping roots', ['knowledge', 'knowledge/bootstrap'], '/auxiliary_roots/1'],
+]) {
+  test(`rejects auxiliary roots with ${name}`, async (context) => {
+    await assertManifestError(context, {
+      schema_version: 1,
+      auxiliary_roots: roots,
+      fixtures: [],
+    }, expectedPath);
+  });
+}
+
+test('rejects missing, non-directory, and symlink auxiliary roots', async (context) => {
+  for (const setup of [
+    async () => 'missing',
+    async (root) => {
+      await writeFile(join(root, 'file.txt'), 'not a directory\n');
+      return 'file.txt';
+    },
+    async (root) => {
+      await mkdir(join(root, 'real'));
+      await symlink(join(root, 'real'), join(root, 'linked'));
+      return 'linked';
+    },
+  ]) {
+    const root = await createFixtureRoot(context);
+    const locator = await setup(root);
+    await writeManifest(root, {
+      schema_version: 1,
+      auxiliary_roots: [locator],
+      fixtures: [],
+    });
+
+    const result = await runCli(root);
+
+    assert.equal(result.status, 1);
+    assert.deepEqual(JSON.parse(result.stdout).errors, [{
+      code: 'FIXTURE_AUXILIARY_ROOT_INVALID',
+      path: locator,
+    }]);
+  }
+});
+
+test('rejects an auxiliary root that resolves physically outside the fixture root', async (context) => {
+  const sandbox = await mkdtemp(join(tmpdir(), 'project-lifecycle-auxiliary-link-'));
+  context.after(() => rm(sandbox, { force: true, recursive: true }));
+  const root = join(sandbox, 'fixtures');
+  const outside = join(sandbox, 'private-outside');
+  await mkdir(root);
+  await mkdir(outside);
+  await symlink(outside, join(root, 'linked-parent'));
+  await writeManifest(root, {
+    schema_version: 1,
+    auxiliary_roots: ['linked-parent'],
+    fixtures: [],
+  });
+
+  const result = await runCli(root);
+
+  assert.equal(result.status, 1);
+  assert.deepEqual(JSON.parse(result.stdout).errors, [{
+    code: 'FIXTURE_AUXILIARY_ROOT_INVALID',
+    path: 'linked-parent',
+  }]);
+  assert.equal(result.stdout.includes(outside), false);
+});
+
+test('rejects auxiliary roots that would hide a declared contract fixture', async (context) => {
+  const root = await createFixtureRoot(context);
+  await mkdir(join(root, 'auxiliary'));
+  await writeFile(
+    join(root, 'auxiliary', 'project-map.json'),
+    await readFile(join(fixtureRoot, 'contracts', 'project-map', 'valid.json')),
+  );
+  await writeManifest(root, {
+    schema_version: 1,
+    auxiliary_roots: ['auxiliary'],
+    fixtures: [{
+      path: 'auxiliary/project-map.json',
+      validator: 'json:project-map',
+      expected_code: 'OK',
+    }],
+  });
+
+  const result = await runCli(root);
+
+  assert.equal(result.status, 1);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    ok: false,
+    results: [],
+    errors: [{ code: 'FIXTURE_MANIFEST_INVALID', path: '/auxiliary_roots/0' }],
+  });
+});
+
 test('fails before validation when manifest fixture paths are duplicated', async (context) => {
   const root = await copyFixtures(context);
   const manifestPath = join(root, 'manifest.json');

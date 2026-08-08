@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 
-import { readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { readFile, realpath } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
+import { atomicWriteValidated } from '../lib/atomic-write.mjs';
 import { ERROR_CODES, createError } from '../lib/errors.mjs';
 import { validateBilingualPair } from '../lib/bilingual-pair.mjs';
 import { parseFactBlocks } from '../lib/fact-blocks.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
+import { collectEvidence } from '../knowledge/collect-evidence.mjs';
 import { validateFixtures } from '../validate-fixtures.mjs';
 
 const version = '0.1.0';
@@ -107,13 +110,82 @@ const hasStringGovernanceLocator = (value) => value !== null
   && typeof value.governance_locator === 'string'
   && value.governance_locator.length > 0;
 
+const parseNamedOptions = (args, names) => {
+  const allowed = new Set(names);
+  const values = {};
+  for (let index = 0; index < args.length; index += 2) {
+    const name = args[index];
+    const value = args[index + 1];
+    if (!allowed.has(name) || typeof value !== 'string' || value.startsWith('--')
+      || Object.hasOwn(values, name)) {
+      return null;
+    }
+    values[name] = value;
+  }
+  return Object.keys(values).length === names.length ? values : null;
+};
+
+const isInside = (base, candidate) => {
+  const fromBase = relative(base, candidate);
+  return fromBase === '' || (!fromBase.startsWith(`..${sep}`) && fromBase !== '..' && !isAbsolute(fromBase));
+};
+
 if (command === 'help') {
   emit(ok({
     version,
-    commands: ['validate-json', 'validate-pair', 'parse-facts', 'validate-fixtures'],
+    commands: ['collect-evidence', 'validate-json', 'validate-pair', 'parse-facts', 'validate-fixtures'],
   }));
 } else if (command === 'version') {
   emit(ok({ version }));
+} else if (command === 'collect-evidence') {
+  const options = parseNamedOptions(process.argv.slice(3), ['--root', '--output']);
+  if (!options) {
+    emit(cliFailure(
+      'CLI_USAGE',
+      '/arguments',
+      'Usage: collect-evidence --root <absolute-path> --output <absolute-path>.',
+    ), 2);
+  } else if (!isAbsolute(options['--root']) || !isAbsolute(options['--output'])) {
+    emit(cliFailure('CLI_PATH_INVALID', '/arguments', 'Root and output paths must be absolute.'), 2);
+  } else {
+    try {
+      const root = await realpath(options['--root']);
+      const outputParent = await realpath(dirname(options['--output']));
+      const outputName = basename(options['--output']);
+      const output = resolve(outputParent, outputName);
+      const lifecycleRoot = resolve(root, 'docs/project-lifecycle');
+      const lifecycleRoots = [lifecycleRoot];
+      try {
+        lifecycleRoots.push(await realpath(lifecycleRoot));
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+      if (lifecycleRoots.some((candidate) => isInside(candidate, output))) {
+        emit(cliFailure(
+          'CLI_OUTPUT_FORBIDDEN',
+          '/output',
+          'Evidence output must remain outside docs/project-lifecycle.',
+        ), 2);
+      } else {
+        const pack = await collectEvidence({ root });
+        const content = `${JSON.stringify(pack, null, 2)}\n`;
+        await atomicWriteValidated({
+          root: outputParent,
+          target: outputName,
+          content,
+          validate: async (candidate) => candidate === content
+            ? ok(candidate)
+            : cliFailure('CLI_WRITE_ERROR', '/output', 'Evidence output validation failed.'),
+        });
+        emit(ok({
+          entry_count: pack.entries.length,
+          content_hash: `sha256:${createHash('sha256').update(content).digest('hex')}`,
+        }));
+      }
+    } catch {
+      emit(cliFailure('CLI_COLLECTION_ERROR', '/', 'Evidence collection could not be completed.'), 2);
+    }
+  }
 } else if (command === 'validate-pair') {
   const [enPath, zhPath, mapPath] = process.argv.slice(3);
   if (!enPath || !zhPath || !mapPath) {

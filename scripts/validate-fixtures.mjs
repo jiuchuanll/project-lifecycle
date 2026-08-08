@@ -1,4 +1,4 @@
-import { readdir, readFile, realpath } from 'node:fs/promises';
+import { lstat, readdir, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, posix, relative, resolve, sep } from 'node:path';
 
 import { validateBilingualPair } from './lib/bilingual-pair.mjs';
@@ -12,7 +12,7 @@ const PAIR_VALIDATOR = 'bilingual-pair';
 const PAIR_INPUTS = ['en', 'zh-CN', 'project_map'];
 const POINTER_INPUTS = ['resolved_project_map'];
 const ENTRY_FIELDS = ['expected_code', 'inputs', 'path', 'validator'];
-const MANIFEST_FIELDS = ['fixtures', 'schema_version'];
+const MANIFEST_FIELDS = ['auxiliary_roots', 'fixtures', 'schema_version'];
 const EXPECTED_CODES = new Set([
   'OK',
   ...Object.values(ERROR_CODES),
@@ -50,6 +50,9 @@ const canonicalInputPath = (fixturePath, input) => {
   return canonicalPath(posix.join(fixturePath, input));
 };
 
+const insidePortableRoot = (root, candidate) => candidate === root
+  || candidate.startsWith(`${root}/`);
+
 const sortedManifestErrors = (errors) => errors.sort((left, right) => (
   compareCodePoints(left.path, right.path) || compareCodePoints(left.code, right.code)
 ));
@@ -61,9 +64,36 @@ const validateManifest = (manifest) => {
     if (!MANIFEST_FIELDS.includes(field)) errors.push(manifestError(`/${field}`));
   }
   if (manifest.schema_version !== 1) errors.push(manifestError('/schema_version'));
+
+  const auxiliaryRoots = [];
+  if ('auxiliary_roots' in manifest) {
+    if (!Array.isArray(manifest.auxiliary_roots)) {
+      errors.push(manifestError('/auxiliary_roots'));
+    } else {
+      for (const [index, value] of manifest.auxiliary_roots.entries()) {
+        const path = `/auxiliary_roots/${index}`;
+        const canonical = canonicalPath(value);
+        if (!canonical || canonical !== value || canonical.endsWith('/')) {
+          errors.push(manifestError(path));
+          continue;
+        }
+        const previous = auxiliaryRoots.at(-1);
+        if (auxiliaryRoots.includes(canonical)
+          || (previous && compareCodePoints(previous, canonical) > 0)
+          || auxiliaryRoots.some((root) => (
+            insidePortableRoot(root, canonical) || insidePortableRoot(canonical, root)
+          ))) {
+          errors.push(manifestError(path));
+          continue;
+        }
+        auxiliaryRoots.push(canonical);
+      }
+    }
+  }
+
   if (!Array.isArray(manifest.fixtures)) {
     errors.push(manifestError('/fixtures'));
-    return { errors: sortedManifestErrors(errors), fixtures: [] };
+    return { errors: sortedManifestErrors(errors), fixtures: [], auxiliaryRoots };
   }
 
   const fixtures = [];
@@ -139,7 +169,13 @@ const validateManifest = (manifest) => {
     });
   }
 
-  return { errors: sortedManifestErrors(errors), fixtures };
+  for (const [index, root] of auxiliaryRoots.entries()) {
+    if (fixtures.some((entry) => declaredFiles(entry).some((path) => insidePortableRoot(root, path)))) {
+      errors.push(manifestError(`/auxiliary_roots/${index}`));
+    }
+  }
+
+  return { errors: sortedManifestErrors(errors), fixtures, auxiliaryRoots };
 };
 
 const resolveListedPath = async (root, path) => {
@@ -153,16 +189,19 @@ const resolveListedPath = async (root, path) => {
   }
 };
 
-const listFixtureFiles = async (root, directory = root) => {
+const listFixtureFiles = async (root, directory = root, auxiliaryRoots = new Set()) => {
   const paths = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (entry.name === '.gitkeep') continue;
     const absolute = resolve(directory, entry.name);
+    const portable = posix.normalize(relative(root, absolute).split(sep).join('/'));
     if (entry.isDirectory()) {
-      paths.push(...await listFixtureFiles(root, absolute));
+      if (!auxiliaryRoots.has(portable)) {
+        paths.push(...await listFixtureFiles(root, absolute, auxiliaryRoots));
+      }
     } else if ((entry.isFile() || entry.isSymbolicLink())
       && absolute !== resolve(root, 'manifest.json')) {
-      paths.push(posix.normalize(relative(root, absolute).split(sep).join('/')));
+      paths.push(portable);
     }
   }
   return paths;
@@ -171,6 +210,30 @@ const listFixtureFiles = async (root, directory = root) => {
 const declaredFiles = (entry) => entry.validator.startsWith(JSON_PREFIX)
   ? [entry.path, ...Object.values(entry.inputs ?? {})]
   : Object.values(entry.inputs);
+
+const validateAuxiliaryRoots = async (root, auxiliaryRoots) => {
+  const realRoot = await realpath(root);
+  const errors = [];
+  for (const locator of auxiliaryRoots) {
+    const candidate = resolve(root, locator);
+    let stat;
+    let realCandidate;
+    try {
+      stat = await lstat(candidate);
+      realCandidate = await realpath(candidate);
+    } catch {
+      errors.push({ code: 'FIXTURE_AUXILIARY_ROOT_INVALID', path: locator });
+      continue;
+    }
+    if (!insideRoot(root, candidate)
+      || stat.isSymbolicLink()
+      || !stat.isDirectory()
+      || !insideRoot(realRoot, realCandidate)) {
+      errors.push({ code: 'FIXTURE_AUXILIARY_ROOT_INVALID', path: locator });
+    }
+  }
+  return errors;
+};
 
 const validateEntry = async (root, entry) => {
   if (entry.validator.startsWith(JSON_PREFIX)) {
@@ -213,7 +276,11 @@ const validateFixturesUnchecked = async (rootValue) => {
   if (declaration.errors.length > 0) {
     return { ok: false, results: [], errors: declaration.errors };
   }
-  const { fixtures } = declaration;
+  const { auxiliaryRoots, fixtures } = declaration;
+  const auxiliaryErrors = await validateAuxiliaryRoots(root, auxiliaryRoots);
+  if (auxiliaryErrors.length > 0) {
+    return { ok: false, results: [], errors: auxiliaryErrors };
+  }
 
   const seen = new Set();
   const duplicateErrors = [];
@@ -230,7 +297,7 @@ const validateFixturesUnchecked = async (rootValue) => {
   }
 
   const declared = new Set(fixtures.flatMap(declaredFiles));
-  const actual = await listFixtureFiles(root);
+  const actual = await listFixtureFiles(root, root, new Set(auxiliaryRoots));
   const errors = actual
     .filter((path) => !declared.has(path))
     .map((path) => ({ code: 'FIXTURE_UNLISTED', path }))

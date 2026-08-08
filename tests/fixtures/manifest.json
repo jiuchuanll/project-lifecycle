@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "auxiliary_roots": ["knowledge/bootstrap"],
   "fixtures": [
     {
       "path": "contracts/handoffs/archive-access-receipt.valid.json",

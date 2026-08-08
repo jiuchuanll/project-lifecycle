@@ -1,0 +1,40 @@
+{
+  "limits": {
+    "maxFileBytes": 4096,
+    "maxTopologyEntries": 20,
+    "maxRecentEvolutionEntries": 2
+  },
+  "allowed_entries": [
+    "project_instruction:repo:AGENTS.md",
+    "recent_evolution:repo:CHANGELOG.md#1.5.0",
+    "recent_evolution:repo:CHANGELOG.md#2.0.0",
+    "project_overview:repo:README.md",
+    "knowledge_index:repo:docs/architecture/INDEX.md",
+    "knowledge_index:repo:docs/product/INDEX.md",
+    "knowledge_index:repo:docs/test/INDEX.md",
+    "manifest:repo:package.json",
+    "declared_entry_point:repo:package.json#scripts/build",
+    "declared_entry_point:repo:package.json#scripts/start",
+    "declared_entry_point:repo:package.json#scripts/test",
+    "topology:repo:src",
+    "topology:repo:src/irrelevant",
+    "topology:repo:src/main.mjs",
+    "topology:repo:src/modules",
+    "topology:repo:src/modules/accounts",
+    "topology:repo:src/modules/billing",
+    "topology:repo:test",
+    "topology:repo:test/smoke.test-entry.mjs"
+  ],
+  "forbidden_markers": [
+    "ARCHIVE_BODY_MARKER",
+    "BUILD_OUTPUT_MARKER",
+    "DEPENDENCY_CACHE_MARKER",
+    "GENERATED_OUTPUT_MARKER",
+    "HIDDEN_RUNTIME_RECEIPT_MARKER",
+    "IRRELEVANT_SOURCE_BODY_",
+    "PRIVATE_ACCOUNTS_BODY_MARKER",
+    "PRIVATE_BILLING_BODY_MARKER",
+    "PRIVATE_SOURCE_BODY_MARKER",
+    "PRIVATE_TEST_BODY_MARKER"
+  ]
+}
