@@ -18,6 +18,14 @@ const isNonEmptyString = (value) => typeof value === 'string' && value.trim().le
 const jsonContent = (value) => `${JSON.stringify(value, null, 2)}\n`;
 const exactSet = (left, right) => JSON.stringify([...new Set(left)].sort(compareCodePoints))
   === JSON.stringify([...new Set(right)].sort(compareCodePoints));
+const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+const knowledgeBearingDomainKeys = new Set([
+  'baseline',
+  'evidence_refs',
+  'known_gaps',
+  'purpose',
+  'scope',
+]);
 const inside = (root, candidate) => {
   const path = relative(root, candidate);
   return path === '' || (!path.startsWith(`..${sep}`) && path !== '..' && !isAbsolute(path));
@@ -198,8 +206,9 @@ const validateProposalMetadata = (change, currentMap, candidateMap, impact) => {
 
 const contentHash = (source) => `sha256:${createHash('sha256').update(source).digest('hex')}`;
 
-const deriveKnowledgeCommitments = async (change, candidateMap, impact, lifecycleRoot) => {
+const deriveKnowledgeCommitments = async (change, currentMap, candidateMap, impact, lifecycleRoot) => {
   const commitments = [];
+  const contentChanges = new Map();
   const seen = new Set();
   for (const [index, candidate] of (change.knowledge_candidates ?? []).entries()) {
     const domain = candidateMap.domains.find(({ id }) => id === candidate?.domain_id);
@@ -228,6 +237,9 @@ const deriveKnowledgeCommitments = async (change, candidateMap, impact, lifecycl
         const current = parseFactBlocks(currentSource);
         if (!current.ok) throw new Error('invalid current facts');
         currentFacts = current.value;
+        // Scripts bind bytes and bilingual structure; Agent/human review owns semantic
+        // equivalence between the changed prose and the proposed map meaning.
+        parsed[language].content_changed = contentHash(currentSource) !== contentHash(localized.content);
       } catch {
         return proposalFailure('CHANGE_KNOWLEDGE_COMMITMENT_INVALID', `/knowledge_candidates/${index}/${language}`, 'Current canonical knowledge is unavailable.');
       }
@@ -248,6 +260,10 @@ const deriveKnowledgeCommitments = async (change, candidateMap, impact, lifecycl
     if (JSON.stringify(summary) !== JSON.stringify(chineseSummary)) {
       return proposalFailure('CHANGE_KNOWLEDGE_COMMITMENT_INVALID', `/knowledge_candidates/${index}/facts`, 'Bilingual fact identity, revision, and state must match.');
     }
+    contentChanges.set(
+      candidate.domain_id,
+      parsed.en.content_changed && parsed['zh-CN'].content_changed,
+    );
     commitments.push({
       domain_id: candidate.domain_id,
       en: { locator: candidate.en.locator, content_hash: contentHash(candidate.en.content) },
@@ -256,6 +272,37 @@ const deriveKnowledgeCommitments = async (change, candidateMap, impact, lifecycl
     });
   }
   commitments.sort((left, right) => compareCodePoints(left.domain_id, right.domain_id));
+  if (change.proposed_patch.target_type === 'domain') {
+    const required = currentMap.domains.filter((currentDomain) => {
+      if (currentDomain.domain_state !== 'materialized') return false;
+      const candidateDomain = candidateMap.domains.find(({ id }) => id === currentDomain.id);
+      if (!candidateDomain) return false;
+      const keys = new Set([...Object.keys(currentDomain), ...Object.keys(candidateDomain)]);
+      return [...keys].some((key) => (
+        knowledgeBearingDomainKeys.has(key) && !same(currentDomain[key], candidateDomain[key])
+      ));
+    }).map(({ id }) => id).sort(compareCodePoints);
+    if (!exactSet([...seen], required)) {
+      return proposalFailure(
+        'CHANGE_KNOWLEDGE_COMMITMENT_REQUIRED',
+        '/knowledge_candidates',
+        'Every changed materialized domain requires exactly one reviewed bilingual knowledge candidate.',
+      );
+    }
+    for (const domainId of required) {
+      const index = (change.knowledge_candidates ?? []).findIndex(({ domain_id: id }) => id === domainId);
+      const candidate = change.knowledge_candidates[index];
+      const commitment = commitments.find(({ domain_id: id }) => id === domainId);
+      if (!candidate || !commitment
+        || !contentChanges.get(domainId)) {
+        return proposalFailure(
+          'CHANGE_KNOWLEDGE_COMMITMENT_UNCHANGED',
+          `/knowledge_candidates/${index < 0 ? 0 : index}`,
+          'A semantic domain update must change both reviewed localized knowledge assets.',
+        );
+      }
+    }
+  }
   return ok(commitments);
 };
 
@@ -341,30 +388,47 @@ export async function proposeChange({ root, change }, operations = {}) {
   if (!mapValidation.ok) return mapValidation;
   const pendingValidation = validateJson('pending-changes', pending);
   if (!pendingValidation.ok) return pendingValidation;
-  const candidateValidation = validateJson('project-map', change.candidate_map);
+  const existing = pending.changes.find(({ semantic_target_key: key }) => (
+    key === change.semantic_target_key
+  ));
+  const effectiveChange = existing
+    ? { ...change, change_id: existing.change_id, created_at: existing.created_at }
+    : change;
+  const candidateValidation = validateJson('project-map', effectiveChange.candidate_map);
   if (!candidateValidation.ok) return candidateValidation;
 
   const impact = analyzeImpact({
     current_map: map,
-    candidate_map: change.candidate_map,
-    change_class: change.change_class,
-    changed_fields: change.proposed_patch.changed_fields,
-    target_id: change.proposed_patch.target_id,
-    child_dispositions: change.child_dispositions,
-    operation: change.proposed_patch.operation,
+    candidate_map: effectiveChange.candidate_map,
+    change_class: effectiveChange.change_class,
+    changed_fields: effectiveChange.proposed_patch.changed_fields,
+    target_id: effectiveChange.proposed_patch.target_id,
+    child_dispositions: effectiveChange.child_dispositions,
+    operation: effectiveChange.proposed_patch.operation,
   });
   if (!impact.ok) return impact;
 
-  const metadata = validateProposalMetadata(change, map, change.candidate_map, impact);
+  const metadata = validateProposalMetadata(effectiveChange, map, effectiveChange.candidate_map, impact);
   if (!metadata.ok) return metadata;
 
-  const markers = validateReviewedMarkers(change, map, change.candidate_map);
+  const markers = validateReviewedMarkers(effectiveChange, map, effectiveChange.candidate_map);
   if (!markers.ok) return markers;
 
-  const commitments = await deriveKnowledgeCommitments(change, change.candidate_map, impact, lifecycleRoot);
+  const commitments = await deriveKnowledgeCommitments(
+    effectiveChange,
+    map,
+    effectiveChange.candidate_map,
+    impact,
+    lifecycleRoot,
+  );
   if (!commitments.ok) return commitments;
 
-  const entry = canonicalChange(change, map, change.candidate_map, commitments.value);
+  const entry = canonicalChange(
+    effectiveChange,
+    map,
+    effectiveChange.candidate_map,
+    commitments.value,
+  );
   const next = JSON.parse(JSON.stringify(pending));
   const existingIndex = next.changes.findIndex(({ semantic_target_key: key }) => (
     key === entry.semantic_target_key

@@ -80,9 +80,19 @@ const constraintFieldForKey = (key) => ({
 
 const exactSet = (left, right) => same(uniqueSorted(left), uniqueSorted(right));
 
+const operationFields = {
+  ADD_CONSTRAINT: ['constraint_meaning', 'constraint_owner', 'constraint_scope'],
+  ADD_DOMAIN: ['boundary', 'kind', 'lifecycle', 'parentage'],
+  ADD_EXCEPTION: ['exception'],
+  ADD_RELATIONSHIP: ['relationship'],
+  MERGE_DOMAIN: ['lifecycle'],
+  REPLACE_CONSTRAINT: ['constraint_meaning', 'lifecycle'],
+};
+
 const validateOperationDiff = ({
   currentMap,
   candidateMap,
+  changeClass,
   operation,
   targetId,
   changedFields,
@@ -94,6 +104,16 @@ const validateOperationDiff = ({
   const candidateDomain = domainById(candidateMap, targetId);
   const currentConstraint = constraintById(currentMap, targetId);
   const candidateConstraint = constraintById(candidateMap, targetId);
+
+  if (changeClass === 'WORDING') {
+    const exactWording = currentConstraint || candidateConstraint
+      ? domainChanges.length === 0 && constraintChanges.length === 0
+      : exactSet(domainChanges, [targetId]) && constraintChanges.length === 0
+        && exactSet(changedKeys(currentDomain, candidateDomain), ['label']);
+    return exactWording && exactSet(changedFields, ['label'])
+      ? ok(null)
+      : impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map', 'WORDING may change only the reviewed label or paired wording content.');
+  }
 
   if (operation === 'ADD_RELATIONSHIP') {
     if (!exactSet(domainChanges, [targetId]) || constraintChanges.length > 0
@@ -109,7 +129,9 @@ const validateOperationDiff = ({
       return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/domains', 'ADD_RELATIONSHIP requires exactly one added edge.');
     }
   } else if (operation === 'ADD_DOMAIN') {
-    if (currentDomain || !candidateDomain || !exactSet(domainChanges, [targetId]) || constraintChanges.length > 0) {
+    if (currentDomain || !candidateDomain || !exactSet(domainChanges, [targetId])
+      || constraintChanges.length > 0 || candidateDomain.relationships.length > 0
+      || !exactSet(changedFields, operationFields.ADD_DOMAIN)) {
       return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/domains', 'ADD_DOMAIN may add exactly one evidenced target node.');
     }
   } else if (operation === 'UPDATE_DOMAIN') {
@@ -120,17 +142,35 @@ const validateOperationDiff = ({
     }
   } else if (operation === 'MERGE_DOMAIN') {
     const allowed = [targetId, ...childDispositions.map(({ domain_id: id }) => id)];
-    const parentFields = changedKeys(currentDomain, candidateDomain).map(domainFieldForKey);
+    const parentKeys = changedKeys(currentDomain, candidateDomain);
     if (domainChanges.some((id) => !allowed.includes(id)) || constraintChanges.length > 0
-      || parentFields.includes(undefined) || !exactSet(parentFields, changedFields)) {
+      || !exactSet(parentKeys, ['domain_state', 'successor_id'])
+      || !exactSet(changedFields, operationFields.MERGE_DOMAIN)) {
       return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/domains', 'MERGE_DOMAIN may change only the parent and reviewed children.');
     }
   } else if (operation === 'ADD_CONSTRAINT') {
     if (currentConstraint || !candidateConstraint || domainChanges.length > 0
-      || !exactSet(constraintChanges, [targetId])) {
+      || !exactSet(constraintChanges, [targetId])
+      || !exactSet(changedFields, operationFields.ADD_CONSTRAINT)) {
       return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/constraints', 'ADD_CONSTRAINT may add exactly one new identity.');
     }
-  } else if (operation === 'UPDATE_CONSTRAINT' || operation === 'ADD_EXCEPTION') {
+  } else if (operation === 'ADD_EXCEPTION') {
+    if (domainChanges.length > 0 || !exactSet(constraintChanges, [targetId])
+      || !exactSet(changedKeys(currentConstraint, candidateConstraint), ['exceptions'])
+      || !exactSet(changedFields, operationFields.ADD_EXCEPTION)) {
+      return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/constraints', 'ADD_EXCEPTION may change only the exact reviewed exception set.');
+    }
+    const currentExceptions = currentConstraint.exceptions.map((entry) => JSON.stringify(entry));
+    const candidateExceptions = candidateConstraint.exceptions.map((entry) => JSON.stringify(entry));
+    const added = candidateExceptions.filter((entry) => !currentExceptions.includes(entry));
+    const removed = currentExceptions.filter((entry) => !candidateExceptions.includes(entry));
+    const isAddition = added.length === 1 && removed.length === 0;
+    const isUpdate = added.length === 1 && removed.length === 1
+      && JSON.parse(added[0]).domain_id === JSON.parse(removed[0]).domain_id;
+    if (!isAddition && !isUpdate) {
+      return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/constraints', 'ADD_EXCEPTION requires exactly one added or updated reviewed exception.');
+    }
+  } else if (operation === 'UPDATE_CONSTRAINT') {
     const constraintKeys = changedKeys(currentConstraint, candidateConstraint);
     const actualFields = constraintKeys
       .filter((key) => key !== 'semantic_revision')
@@ -146,14 +186,15 @@ const validateOperationDiff = ({
     const allowed = [targetId, ...(candidateConstraint?.successor_ids ?? [])];
     const retiredKeys = changedKeys(currentConstraint, candidateConstraint);
     if (domainChanges.length > 0 || !exactSet(constraintChanges, allowed)
-      || retiredKeys.some((key) => !['lifecycle_state', 'retirement_reason_ref', 'successor_ids'].includes(key))) {
+      || !exactSet(retiredKeys, ['lifecycle_state', 'retirement_reason_ref', 'successor_ids'])
+      || !exactSet(changedFields, operationFields.REPLACE_CONSTRAINT)) {
       return impactFailure('CHANGE_NOT_BOUNDED', '/candidate_map/constraints', 'REPLACE_CONSTRAINT may change only the retired identity and reviewed successors.');
     }
   }
   return ok(null);
 };
 
-const validateBoundedCandidate = ({ currentMap, candidateMap, operation, targetId, changedFields, childDispositions }) => {
+const validateBoundedCandidate = ({ currentMap, candidateMap, changeClass, operation, targetId, changedFields, childDispositions }) => {
   if (!operation) return ok(null);
   for (const field of ['schema_version', 'project_id', 'identity_lineage', 'repositories']) {
     if (!same(currentMap[field], candidateMap[field])) {
@@ -185,7 +226,7 @@ const validateBoundedCandidate = ({ currentMap, candidateMap, operation, targetI
   if (unboundedConstraint) {
     return impactFailure('CHANGE_NOT_BOUNDED', `/candidate_map/constraints/${unboundedConstraint}`, 'One proposal cannot bundle an unrelated constraint mutation.');
   }
-  return validateOperationDiff({ currentMap, candidateMap, operation, targetId, changedFields, childDispositions });
+  return validateOperationDiff({ currentMap, candidateMap, changeClass, operation, targetId, changedFields, childDispositions });
 };
 
 const constraintTargets = (map, constraint) => {
@@ -274,6 +315,7 @@ const validateParentClosure = ({ currentMap, candidateMap, targetId, childDispos
   }
   for (const childId of activeChildren) {
     const disposition = dispositions.get(childId);
+    const currentChild = domainById(currentMap, childId);
     const child = domainById(candidateMap, childId);
     if (!child) {
       return impactFailure('TOPOLOGY_ORPHAN_REJECTED', `/child_dispositions/${childId}`, 'A child cannot disappear during parent closure.');
@@ -284,28 +326,44 @@ const validateParentClosure = ({ currentMap, candidateMap, targetId, childDispos
       }
       const expectedParent = disposition.target_id === childId ? null : disposition.target_id;
       const parent = domainById(candidateMap, expectedParent);
-      if (child.parent_id !== expectedParent
+      if (!exactSet(changedKeys(currentChild, child), ['parent_id'])
+        || child.parent_id !== expectedParent
         || (expectedParent && !['confirmed', 'materialized'].includes(parent?.domain_state))) {
-        return impactFailure('TOPOLOGY_DISPOSITION_MISMATCH', `/child_dispositions/${childId}`, 'Candidate parentage does not match the reviewed disposition.');
+        return impactFailure('CHANGE_NOT_BOUNDED', `/child_dispositions/${childId}`, 'REPARENT may change only the reviewed parent ID.');
       }
     } else if (disposition.disposition === 'MERGE') {
       const expectedSuccessor = disposition.target_id;
+      if (!exactSet(changedKeys(currentChild, child), ['domain_state', 'successor_id'])) {
+        return impactFailure('CHANGE_NOT_BOUNDED', `/child_dispositions/${childId}`, 'MERGE may change only lifecycle and successor fields.');
+      }
       if (child.domain_state !== 'merged'
         || !expectedSuccessor
         || child.successor_id !== expectedSuccessor
         || (candidate.successor_id && expectedSuccessor !== candidate.successor_id)) {
         return impactFailure('TOPOLOGY_DISPOSITION_MISMATCH', `/child_dispositions/${childId}`, 'Candidate merge must redirect to the reviewed parent successor.');
       }
-    } else if (disposition.disposition === 'RETIRE' && child.domain_state !== 'retired') {
-      return impactFailure('TOPOLOGY_DISPOSITION_MISMATCH', `/child_dispositions/${childId}`, 'Candidate retirement does not match the reviewed disposition.');
+    } else if (disposition.disposition === 'RETIRE') {
+      if (!exactSet(changedKeys(currentChild, child), ['domain_state', 'retirement_reason'])) {
+        return impactFailure('CHANGE_NOT_BOUNDED', `/child_dispositions/${childId}`, 'RETIRE may change only lifecycle and retirement-reason fields.');
+      }
+      if (child.domain_state !== 'retired') {
+        return impactFailure('TOPOLOGY_DISPOSITION_MISMATCH', `/child_dispositions/${childId}`, 'Candidate retirement does not match the reviewed disposition.');
+      }
     } else if (disposition.disposition === 'SPLIT') {
       const splitTarget = domainById(candidateMap, disposition.target_id);
-      if (!['merged', 'retired'].includes(child.domain_state)
+      if (child.domain_state !== 'merged'
+        || child.successor_id !== disposition.target_id
         || !['confirmed', 'materialized'].includes(splitTarget?.domain_state)
         || splitTarget.parent_id === targetId) {
         return impactFailure('TOPOLOGY_DISPOSITION_MISMATCH', `/child_dispositions/${childId}`, 'Candidate split must retire the prior child and route to a reviewed active target.');
       }
+      if (!exactSet(changedKeys(currentChild, child), ['domain_state', 'successor_id'])) {
+        return impactFailure('CHANGE_NOT_BOUNDED', `/child_dispositions/${childId}`, 'SPLIT may change only lifecycle and the reviewed successor redirect.');
+      }
     } else if (['NO_CHANGE', 'REVALIDATE', 'EXCEPTION'].includes(disposition.disposition)) {
+      if (changedKeys(currentChild, child).length > 0) {
+        return impactFailure('CHANGE_NOT_BOUNDED', `/child_dispositions/${childId}`, 'A non-mutating disposition cannot hide child changes.');
+      }
       return impactFailure('TOPOLOGY_DISPOSITION_MISMATCH', `/child_dispositions/${childId}`, 'An active child cannot remain below a closed parent.');
     }
     if (!['merged', 'retired'].includes(child.domain_state) && child.parent_id === targetId) {
@@ -337,6 +395,7 @@ export const analyzeImpact = ({
   const bounded = validateBoundedCandidate({
     currentMap,
     candidateMap,
+    changeClass,
     operation,
     targetId,
     changedFields,
@@ -407,7 +466,7 @@ export const analyzeImpact = ({
           'A new constraint ID must be unused and start at semantic revision one.',
         );
       }
-    } else if (changeClass === 'SEMANTIC') {
+    } else if (changeClass === 'SEMANTIC' && operation !== 'ADD_EXCEPTION') {
       const revision = validateSemanticRevision(currentConstraint, candidateConstraint);
       if (!revision.ok) return revision;
     } else if (changeClass === 'REPLACEMENT') {
@@ -419,10 +478,11 @@ export const analyzeImpact = ({
       ...constraintTargets(candidateMap, candidateConstraint),
     ]);
     if (changedFields.includes('exception')) {
-      const currentDomains = new Set((currentConstraint?.exceptions ?? []).map(({ domain_id: id }) => id));
+      const currentExceptions = new Map((currentConstraint?.exceptions ?? [])
+        .map((entry) => [entry.domain_id, entry]));
       const changedExceptions = (candidateConstraint?.exceptions ?? [])
-        .map(({ domain_id: id }) => id)
-        .filter((id) => !currentDomains.has(id));
+        .filter((entry) => !same(currentExceptions.get(entry.domain_id), entry))
+        .map(({ domain_id: id }) => id);
       affected = uniqueSorted([candidateConstraint?.owner_id ?? currentConstraint.owner_id, ...changedExceptions]);
       for (const exceptionId of changedExceptions) {
         const disposition = childDispositions.find(({ domain_id: id }) => id === exceptionId);

@@ -84,6 +84,7 @@ const preparedSemanticChange = async (context) => {
 test('WORDING preserves semantic revision and rejects machine-routing changes', async () => {
   const map = await readJson(new URL('../fixtures/knowledge/topology/base/docs/project-lifecycle/project-map.json', import.meta.url));
   assert.equal(analyzeImpact({ current_map: map, candidate_map: map, change_class: 'WORDING', changed_fields: ['label'], target_id: 'desktop-privacy' }).ok, true);
+  assert.equal(analyzeImpact({ current_map: map, candidate_map: map, change_class: 'WORDING', changed_fields: ['label'], target_id: 'desktop-privacy', operation: 'UPDATE_CONSTRAINT' }).ok, true);
   const candidate = clone(map);
   candidate.constraints[0].scope = 'self';
   const result = analyzeImpact({ current_map: map, candidate_map: candidate, change_class: 'WORDING', changed_fields: ['constraint_scope'], target_id: 'desktop-privacy' });
@@ -179,11 +180,11 @@ test('REPLACEMENT creates approved new identity and retains historical redirect'
   const proposal = proposalFor(candidate, {
     change_class: 'REPLACEMENT',
     kind: 'constraint_identity',
-    proposed_patch: { operation: 'REPLACE_CONSTRAINT', target_type: 'constraint', target_id: 'desktop-privacy', changed_fields: ['constraint_meaning'], new_ids: ['desktop-data-privacy'], successor_ids: ['desktop-data-privacy'] },
+    proposed_patch: { operation: 'REPLACE_CONSTRAINT', target_type: 'constraint', target_id: 'desktop-privacy', changed_fields: ['constraint_meaning', 'lifecycle'], new_ids: ['desktop-data-privacy'], successor_ids: ['desktop-data-privacy'] },
   });
   const smuggled = clone(candidate);
   smuggled.constraints.find(({ id }) => id === 'desktop-privacy').owner_id = 'wiki-workspace';
-  const bounded = analyzeImpact({ current_map: map, candidate_map: smuggled, change_class: 'REPLACEMENT', changed_fields: ['constraint_meaning'], target_id: 'desktop-privacy', operation: 'REPLACE_CONSTRAINT', child_dispositions: proposal.child_dispositions });
+  const bounded = analyzeImpact({ current_map: map, candidate_map: smuggled, change_class: 'REPLACEMENT', changed_fields: ['constraint_meaning', 'lifecycle'], target_id: 'desktop-privacy', operation: 'REPLACE_CONSTRAINT', child_dispositions: proposal.child_dispositions });
   assert.equal(bounded.ok, false);
   assert.equal(bounded.errors[0].code, 'CHANGE_NOT_BOUNDED');
   const updates = await updateConstraintSections(root, 'desktop-privacy', 'desktop-data-privacy', 1);
@@ -208,7 +209,7 @@ test('new constraint IDs and retired-ID reuse cannot become current without appr
     kind: 'constraint_identity',
     semantic_target_key: 'constraint:new-privacy',
     affected_refs: ['desktop-experience', 'inbox-workspace', 'new-privacy', 'source-workspace', 'wiki-workspace'],
-    proposed_patch: { operation: 'ADD_CONSTRAINT', target_type: 'constraint', target_id: 'new-privacy', changed_fields: ['constraint_meaning'], new_ids: ['new-privacy'], successor_ids: [] },
+    proposed_patch: { operation: 'ADD_CONSTRAINT', target_type: 'constraint', target_id: 'new-privacy', changed_fields: ['constraint_meaning', 'constraint_owner', 'constraint_scope'], new_ids: ['new-privacy'], successor_ids: [] },
   });
   const proposed = await proposeChange({ root, change: proposal });
   assert.equal(proposed.ok, true);
@@ -462,4 +463,63 @@ test('treats partial backup cleanup as pending and completed cleanup as complete
   });
   assert.equal(completeResult.ok, true);
   assert.equal(completeResult.value.cleanup_state, 'complete');
+});
+
+test('rejects label declarations for constraint add/replacement and scope-only ADD_EXCEPTION', async () => {
+  const map = await readJson(new URL('../fixtures/knowledge/topology/base/docs/project-lifecycle/project-map.json', import.meta.url));
+  const added = clone(map);
+  added.constraints.push({
+    ...clone(map.constraints[1]),
+    id: 'desktop-new-rule',
+    knowledge_refs: {
+      en: 'knowledge/desktop-experience-en.md#constraint-desktop-new-rule',
+      'zh-CN': 'knowledge/desktop-experience.md#constraint-desktop-new-rule',
+    },
+  });
+  added.constraints.sort((left, right) => left.id < right.id ? -1 : 1);
+  const addResult = analyzeImpact({ current_map: map, candidate_map: added, change_class: 'REPLACEMENT', changed_fields: ['label'], target_id: 'desktop-new-rule', operation: 'ADD_CONSTRAINT' });
+  assert.equal(addResult.ok, false);
+  assert.equal(addResult.errors[0].code, 'CHANGE_NOT_BOUNDED');
+
+  const replacement = clone(map);
+  replacement.constraints[0] = { ...replacement.constraints[0], lifecycle_state: 'retired', successor_ids: ['desktop-new-privacy'], retirement_reason_ref: 'decision:replace' };
+  replacement.constraints.push({ ...clone(map.constraints[0]), id: 'desktop-new-privacy', knowledge_refs: { en: 'knowledge/desktop-experience-en.md#constraint-desktop-new-privacy', 'zh-CN': 'knowledge/desktop-experience.md#constraint-desktop-new-privacy' } });
+  replacement.constraints.sort((left, right) => left.id < right.id ? -1 : 1);
+  const replaceResult = analyzeImpact({ current_map: map, candidate_map: replacement, change_class: 'REPLACEMENT', changed_fields: ['label'], target_id: 'desktop-privacy', operation: 'REPLACE_CONSTRAINT' });
+  assert.equal(replaceResult.ok, false);
+  assert.equal(replaceResult.errors[0].code, 'CHANGE_NOT_BOUNDED');
+
+  const exception = clone(map);
+  exception.constraints[0].scope = 'self';
+  exception.constraints[0].semantic_revision = 2;
+  const exceptionResult = analyzeImpact({ current_map: map, candidate_map: exception, change_class: 'SEMANTIC', changed_fields: ['constraint_scope'], target_id: 'desktop-privacy', operation: 'ADD_EXCEPTION', child_dispositions: [] });
+  assert.equal(exceptionResult.ok, false);
+  assert.equal(exceptionResult.errors[0].code, 'CHANGE_NOT_BOUNDED');
+});
+
+test('refreshes one semantic target with its persisted change ID and remains applyable', async (context) => {
+  const { root, candidate, updates } = await preparedSemanticChange(context);
+  const inconsistentCandidate = clone(candidate);
+  inconsistentCandidate.revalidation_required[0].reason_ref = 'change-new-caller-id';
+  const inconsistent = await proposeChange({ root, change: revalidatingProposal(inconsistentCandidate, {
+    change_id: 'change-new-caller-id',
+    created_at: '2026-08-09T12:00:00Z',
+    knowledge_candidates: updates,
+  }) });
+  assert.equal(inconsistent.ok, false);
+  assert.equal(inconsistent.errors[0].code, 'CHANGE_REVALIDATION_MISMATCH');
+  const refreshed = revalidatingProposal(candidate, {
+    change_id: 'change-new-caller-id',
+    created_at: '2026-08-09T12:00:00Z',
+    proposed_disposition: 'Refreshed review summary.',
+    knowledge_candidates: updates,
+  });
+  const refreshResult = await proposeChange({ root, change: refreshed });
+  assert.equal(refreshResult.ok, true);
+  const pending = await readJson(join(lifecycle(root), 'pending-changes.json'));
+  assert.equal(pending.changes.length, 1);
+  assert.equal(pending.changes[0].change_id, 'change-desktop-privacy');
+  assert.equal(pending.changes[0].created_at, '2026-08-08T11:00:00Z');
+  const applied = await applyApprovedChange({ root, change_id: 'change-desktop-privacy', approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: candidate, knowledge_updates: updates });
+  assert.equal(applied.ok, true);
 });
