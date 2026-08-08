@@ -1,0 +1,19 @@
+{
+  "name": "project-lifecycle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "bin": { "project-lifecycle": "./scripts/bin/project-lifecycle.mjs" },
+  "scripts": {
+    "test": "node --test",
+    "validate:fixtures": "node scripts/bin/project-lifecycle.mjs validate-fixtures tests/fixtures",
+    "check:privacy": "node scripts/check-privacy.mjs",
+    "check": "npm test && npm run validate:fixtures && npm run check:privacy"
+  },
+  "dependencies": {
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1",
+    "yaml": "2.8.1"
+  }
+}

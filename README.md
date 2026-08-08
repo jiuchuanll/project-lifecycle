@@ -1,95 +1,46 @@
-# docs-workflow Skill
+# Project Lifecycle
 
-`docs-workflow` is a standalone Codex skill for keeping product documentation routed, named, indexed, and verified consistently across product iterations.
+Project Lifecycle is a shared, platform-neutral plugin package for maintaining
+project knowledge and delivery lifecycles without moving a project's source or
+private knowledge out of its repository.
 
-It is useful when a repo has a durable product documentation tree and the agent must decide where to write PRDs, architecture notes, development guidance, batch logs, test reports, changelogs, and feedback records.
+## Skill boundary
 
-## What It Does
+The package has two complementary Skills:
 
-- Routes product docs to a canonical `docs/product/<product>/` tree.
-- Reads `INDEX.md` first and keeps it current after doc changes.
-- Separates long-lived product docs from temporary execution plans.
-- Preserves bilingual doc pairs when the host repo uses them.
-- Guides the agent toward the right supporting capabilities for each stage without dispatching tools itself.
+- `docs-workflow` governs durable product-document routing, naming, indexing,
+  and verification.
+- `run-prd-lifecycle` will route lifecycle requests between project knowledge
+  and PRD delivery work.
 
-## Repository Layout
+Host integrations remain thin entry points. Shared Skills are the authoritative
+behavioral source.
 
-```text
-skills/
-└── docs-workflow/
-    └── SKILL.md
-```
+## Status and installation
 
-The skill itself is only `skills/docs-workflow/SKILL.md`. This README is repository-level documentation for humans.
+This repository currently provides the Node.js 22+ validator package baseline
+and the `docs-workflow` Skill. The lifecycle validator commands listed by the
+CLI are introduced incrementally during Phase 1.
 
-## Install
+Install this package from its distribution channel when one is published. Until
+then, use a repository checkout for development and run `npm install` followed
+by `npm test`.
 
-Clone this repository, then copy the skill folder into one of these locations:
+## Project assets
 
-```bash
-# User-level install
-mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
-cp -R skills/docs-workflow "${CODEX_HOME:-$HOME/.codex}/skills/docs-workflow"
-
-# Or project-level install
-mkdir -p .agents/skills
-cp -R skills/docs-workflow .agents/skills/docs-workflow
-```
-
-If you install it at project level, mention it in your `AGENTS.md` or equivalent agent instructions so future agents route product-doc work through this skill.
-
-## Expected Project Structure
-
-By default, the skill assumes a product documentation tree like this:
+Project Lifecycle stores its fixed lifecycle assets at:
 
 ```text
-docs/product/<product>/
-├── INDEX.md
-├── README.md
-├── requirements/
-├── architecture/
-├── development/
-│   ├── guidance/
-│   ├── batches/
-│   └── changelog/
-├── test-reports/
-└── feedback/
+docs/project-lifecycle/
 ```
 
-You can customize the directory names and naming rules inside `SKILL.md` for your own repo.
+The path is part of the plugin contract and is not configurable per project.
 
-## Usage
+## Support matrix
 
-Ask Codex to use the skill before product documentation work, for example:
-
-```text
-Use docs-workflow to turn this feedback into a product-doc update.
-```
-
-or:
-
-```text
-Use docs-workflow before writing the test report for this stage.
-```
-
-The agent should read the relevant `INDEX.md`, decide the stage and output path, update the doc, and keep the index synchronized.
-
-## Customization Checklist
-
-- Replace `<product>` with your product folder name.
-- Adjust stage names and naming patterns.
-- Decide whether bilingual `-en` counterparts are required.
-- Update the stage routing table to match your team's tools and workflows.
-- Add repo-specific hard constraints in your project instructions, not in this shared skill, unless they are reusable.
-
-## Privacy
-
-This shared package intentionally contains no local filesystem paths, credentials, private repository URLs, personal email addresses, or account-specific instructions.
-
-Before sharing a fork or public copy, run:
-
-```bash
-rg -n "/Users|@|token|secret|password|private|github.com/.+/.+" .
-```
-
-Review any matches before publishing.
+| Surface | Current support |
+| --- | --- |
+| Node.js validator harness | Baseline (Node.js 22+) |
+| Shared `docs-workflow` Skill | Available |
+| Shared `run-prd-lifecycle` Skill | Planned |
+| Codex, Claude Code, Cursor, Kimi Code, ZCode adapters | Planned |
