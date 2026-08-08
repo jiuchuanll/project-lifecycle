@@ -20,6 +20,9 @@ const FACT_FIELDS = ['fact_id', 'revision', 'evidence_refs', 'last_verified_base
 
 const toPath = (value) => value instanceof URL ? fileURLToPath(value) : resolve(value);
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+export const relativeAssetLocator = (root, asset, pathApi = { relative, sep }) => (
+  pathApi.relative(root, asset).split(pathApi.sep).join('/')
+);
 const inside = (root, candidate) => {
   const path = relative(root, candidate);
   return path === '' || (!path.startsWith('..') && !isAbsolute(path));
@@ -179,8 +182,8 @@ export const validateBilingualPair = async (enPathValue, zhPathValue, map) => {
       errors.push(createError('PAIR_MACHINE_MISMATCH', '/frontmatter/last_verified_baseline', 'Capability baseline differs from the project map.'));
     }
     const expectedAssets = {
-      en: relative(projectRoot, enPath),
-      'zh-CN': relative(projectRoot, zhPath),
+      en: relativeAssetLocator(projectRoot, enPath),
+      'zh-CN': relativeAssetLocator(projectRoot, zhPath),
     };
     for (const language of ['en', 'zh-CN']) {
       if (domain.paired_assets?.[language] !== expectedAssets[language]) {

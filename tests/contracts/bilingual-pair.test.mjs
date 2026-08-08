@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 import { spawn } from 'node:child_process';
 import test from 'node:test';
 
-import { validateBilingualPair } from '../../scripts/lib/bilingual-pair.mjs';
+import {
+  relativeAssetLocator,
+  validateBilingualPair,
+} from '../../scripts/lib/bilingual-pair.mjs';
 
 const fixtureUrl = (name) => new URL(`../fixtures/contracts/knowledge-pairs/valid/${name}`, import.meta.url);
 const readMap = async () => JSON.parse(await readFile(fixtureUrl('project-map.json'), 'utf8'));
@@ -57,6 +60,16 @@ test('accepts an ordinary strictly valid JSON-parsed project map', async () => {
 
   assert.equal(result.ok, true);
   assert.deepEqual(result.errors, []);
+});
+
+test('canonicalizes Windows relative paths to slash-separated map locators', () => {
+  const locator = relativeAssetLocator(
+    'C:\\project',
+    'C:\\project\\knowledge\\wiki-workspace-en.md',
+    win32,
+  );
+
+  assert.equal(locator, 'knowledge/wiki-workspace-en.md');
 });
 
 test('accepts a raw map whose authoritative assets use nested knowledge locators', async (context) => {
