@@ -1,0 +1,51 @@
+{
+  "domain_id": "wiki-workspace",
+  "baseline": "baseline-2026-08-09",
+  "knowledge_state": "current",
+  "approval_ref": "approval:user-current-wiki",
+  "owner_id": "wiki-workspace",
+  "dependency_ids": ["app-shell"],
+  "authoritative_evidence_refs": ["repo:src/wiki", "test:wiki-layout"],
+  "implementation_refs": ["repo:src/wiki"],
+  "verification_refs": ["test:wiki-layout"],
+  "targets": {
+    "en": "knowledge/wiki-workspace-en.md",
+    "zh-CN": "knowledge/wiki-workspace.md"
+  },
+  "pair": {
+    "en": {
+      "title": "Wiki workspace",
+      "purpose_and_current_boundary": "Owns the user-facing Wiki workspace without owning the application shell.",
+      "facts": [{
+        "fact_id": "fact-wiki-layout",
+        "revision": 1,
+        "evidence_refs": ["repo:src/wiki", "test:wiki-layout"],
+        "statement": "The Wiki workspace uses a three-column layout.",
+        "known_limits": "Small-window behavior remains outside this verified fact."
+      }],
+      "system_and_data_relationships": "The workspace is presented inside the application shell.",
+      "implementation_and_resource_map": "The Wiki implementation entry point is listed in Frontmatter.",
+      "quality_state": "The verified layout has automated coverage.",
+      "dependencies": "The workspace depends on the application shell.",
+      "unknowns": ["Small-window behavior is not yet verified."],
+      "provenance": "The current statement is derived from the listed code and test evidence."
+    },
+    "zh-CN": {
+      "title": "Wiki 工作区",
+      "purpose_and_current_boundary": "负责面向用户的 Wiki 工作区，但不负责应用外壳。",
+      "facts": [{
+        "fact_id": "fact-wiki-layout",
+        "revision": 1,
+        "evidence_refs": ["repo:src/wiki", "test:wiki-layout"],
+        "statement": "Wiki 工作区使用三栏布局。",
+        "known_limits": "小窗口行为不在这条已验证事实的范围内。"
+      }],
+      "system_and_data_relationships": "该工作区呈现在应用外壳中。",
+      "implementation_and_resource_map": "Wiki 实现入口记录在 Frontmatter 中。",
+      "quality_state": "已验证布局具有自动化测试覆盖。",
+      "dependencies": "该工作区依赖应用外壳。",
+      "unknowns": ["小窗口行为尚未验证。"],
+      "provenance": "当前陈述来自列出的代码与测试证据。"
+    }
+  }
+}
