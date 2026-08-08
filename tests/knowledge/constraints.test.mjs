@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, readFile, readdir, rename, rm } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -46,11 +46,17 @@ const proposalFor = (candidate, overrides = {}) => ({
   child_dispositions: [
     { domain_id: 'inbox-workspace', disposition: 'NO_CHANGE', evidence_refs: ['repo:privacy-policy'], unresolved_fact_ids: [] },
     { domain_id: 'source-workspace', disposition: 'NO_CHANGE', evidence_refs: ['repo:privacy-policy'], unresolved_fact_ids: [] },
-    { domain_id: 'wiki-workspace', disposition: 'REVALIDATE', evidence_refs: ['repo:privacy-policy'], unresolved_fact_ids: ['wiki-storage-boundary'] },
+    { domain_id: 'wiki-workspace', disposition: 'REVALIDATE', evidence_refs: ['repo:privacy-policy'], unresolved_fact_ids: [] },
   ],
   candidate_map: candidate,
   ...overrides,
 });
+
+const revalidatingProposal = (candidate, overrides = {}) => {
+  const proposal = proposalFor(candidate, overrides);
+  proposal.child_dispositions[2].unresolved_fact_ids = ['wiki-storage-boundary'];
+  return proposal;
+};
 
 const updateConstraintSections = async (root, oldId, newId, revision) => {
   const updates = { domain_id: 'desktop-experience' };
@@ -62,6 +68,17 @@ const updateConstraintSections = async (root, oldId, newId, revision) => {
     updates[language] = { locator: `knowledge/${name}`, content: replaced };
   }
   return [updates];
+};
+
+const preparedSemanticChange = async (context) => {
+  const root = await setup(context);
+  const map = await readJson(join(lifecycle(root), 'project-map.json'));
+  const candidate = clone(map);
+  candidate.constraints[0].semantic_revision = 2;
+  candidate.revalidation_required = [{ domain_id: 'wiki-workspace', fact_id: 'wiki-storage-boundary', reason_ref: 'change-desktop-privacy', constraint_id: 'desktop-privacy', from_revision: 1, to_revision: 2 }];
+  const updates = await updateConstraintSections(root, 'desktop-privacy', 'desktop-privacy', 2);
+  await proposeChange({ root, change: revalidatingProposal(candidate, { knowledge_candidates: updates }) });
+  return { root, candidate, updates };
 };
 
 test('WORDING preserves semantic revision and rejects machine-routing changes', async () => {
@@ -98,9 +115,9 @@ test('approved SEMANTIC application atomically updates map, pair, indexes, trace
   const map = await readJson(join(lifecycle(root), 'project-map.json'));
   const candidate = clone(map);
   candidate.constraints[0].semantic_revision = 2;
-  candidate.revalidation_required = [{ domain_id: 'wiki-workspace', fact_id: 'wiki-storage-boundary', constraint_id: 'desktop-privacy', from_revision: 1, to_revision: 2 }];
-  await proposeChange({ root, change: proposalFor(candidate) });
+  candidate.revalidation_required = [{ domain_id: 'wiki-workspace', fact_id: 'wiki-storage-boundary', reason_ref: 'change-desktop-privacy', constraint_id: 'desktop-privacy', from_revision: 1, to_revision: 2 }];
   const updates = await updateConstraintSections(root, 'desktop-privacy', 'desktop-privacy', 2);
+  await proposeChange({ root, change: revalidatingProposal(candidate, { knowledge_candidates: updates }) });
 
   const result = await applyApprovedChange({
     root,
@@ -164,8 +181,14 @@ test('REPLACEMENT creates approved new identity and retains historical redirect'
     kind: 'constraint_identity',
     proposed_patch: { operation: 'REPLACE_CONSTRAINT', target_type: 'constraint', target_id: 'desktop-privacy', changed_fields: ['constraint_meaning'], new_ids: ['desktop-data-privacy'], successor_ids: ['desktop-data-privacy'] },
   });
-  await proposeChange({ root, change: proposal });
+  const smuggled = clone(candidate);
+  smuggled.constraints.find(({ id }) => id === 'desktop-privacy').owner_id = 'wiki-workspace';
+  const bounded = analyzeImpact({ current_map: map, candidate_map: smuggled, change_class: 'REPLACEMENT', changed_fields: ['constraint_meaning'], target_id: 'desktop-privacy', operation: 'REPLACE_CONSTRAINT', child_dispositions: proposal.child_dispositions });
+  assert.equal(bounded.ok, false);
+  assert.equal(bounded.errors[0].code, 'CHANGE_NOT_BOUNDED');
   const updates = await updateConstraintSections(root, 'desktop-privacy', 'desktop-data-privacy', 1);
+  proposal.knowledge_candidates = updates;
+  await proposeChange({ root, change: proposal });
   const result = await applyApprovedChange({ root, change_id: proposal.change_id, approval_ref: 'approval:privacy-replacement', traceability: { knowledge_diff_ref: 'diff:privacy-replacement', history_ref: 'git:replacement' }, candidate_map: candidate, knowledge_updates: updates });
 
   assert.equal(result.ok, true);
@@ -244,9 +267,9 @@ test('restores the original root after a controlled late transaction failure', a
   const map = await readJson(join(lifecycle(root), 'project-map.json'));
   const candidate = clone(map);
   candidate.constraints[0].semantic_revision = 2;
-  candidate.revalidation_required = [{ domain_id: 'wiki-workspace', fact_id: 'wiki-storage-boundary', constraint_id: 'desktop-privacy', from_revision: 1, to_revision: 2 }];
-  await proposeChange({ root, change: proposalFor(candidate) });
+  candidate.revalidation_required = [{ domain_id: 'wiki-workspace', fact_id: 'wiki-storage-boundary', reason_ref: 'change-desktop-privacy', constraint_id: 'desktop-privacy', from_revision: 1, to_revision: 2 }];
   const updates = await updateConstraintSections(root, 'desktop-privacy', 'desktop-privacy', 2);
+  await proposeChange({ root, change: revalidatingProposal(candidate, { knowledge_candidates: updates }) });
   const before = await fingerprint(root);
   const result = await applyApprovedChange({ root, change_id: 'change-desktop-privacy', approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: candidate, knowledge_updates: updates }, { afterPublish: async () => { throw new Error('controlled late failure'); } });
   assert.equal(result.ok, false);
@@ -258,9 +281,9 @@ test('restores the original when the candidate publisher moves the stage and the
   const map = await readJson(join(lifecycle(root), 'project-map.json'));
   const candidate = clone(map);
   candidate.constraints[0].semantic_revision = 2;
-  candidate.revalidation_required = [{ domain_id: 'wiki-workspace', fact_id: 'wiki-storage-boundary', constraint_id: 'desktop-privacy', from_revision: 1, to_revision: 2 }];
-  await proposeChange({ root, change: proposalFor(candidate) });
+  candidate.revalidation_required = [{ domain_id: 'wiki-workspace', fact_id: 'wiki-storage-boundary', reason_ref: 'change-desktop-privacy', constraint_id: 'desktop-privacy', from_revision: 1, to_revision: 2 }];
   const updates = await updateConstraintSections(root, 'desktop-privacy', 'desktop-privacy', 2);
+  await proposeChange({ root, change: revalidatingProposal(candidate, { knowledge_candidates: updates }) });
   const before = await fingerprint(root);
   let publishCalls = 0;
   const result = await applyApprovedChange({ root, change_id: 'change-desktop-privacy', approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: candidate, knowledge_updates: updates }, {
@@ -280,9 +303,9 @@ test('keeps a verified live candidate authoritative when backup cleanup remains 
   const map = await readJson(join(lifecycle(root), 'project-map.json'));
   const candidate = clone(map);
   candidate.constraints[0].semantic_revision = 2;
-  candidate.revalidation_required = [{ domain_id: 'wiki-workspace', fact_id: 'wiki-storage-boundary', constraint_id: 'desktop-privacy', from_revision: 1, to_revision: 2 }];
-  await proposeChange({ root, change: proposalFor(candidate) });
+  candidate.revalidation_required = [{ domain_id: 'wiki-workspace', fact_id: 'wiki-storage-boundary', reason_ref: 'change-desktop-privacy', constraint_id: 'desktop-privacy', from_revision: 1, to_revision: 2 }];
   const updates = await updateConstraintSections(root, 'desktop-privacy', 'desktop-privacy', 2);
+  await proposeChange({ root, change: revalidatingProposal(candidate, { knowledge_candidates: updates }) });
 
   const result = await applyApprovedChange({ root, change_id: 'change-desktop-privacy', approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: candidate, knowledge_updates: updates }, {
     removeBackup: async () => {},
@@ -291,4 +314,152 @@ test('keeps a verified live candidate authoritative when backup cleanup remains 
   assert.equal(result.ok, true);
   assert.equal(result.value.cleanup_state, 'pending');
   assert.equal((await readJson(join(lifecycle(root), 'project-map.json'))).constraints[0].semantic_revision, 2);
+});
+
+test('rejects unreviewed knowledge rewrites and map-only knowledge updates byte-identically', async (context) => {
+  const root = await setup(context);
+  const map = await readJson(join(lifecycle(root), 'project-map.json'));
+  const candidate = clone(map);
+  candidate.constraints[0].semantic_revision = 2;
+  const reviewed = await updateConstraintSections(root, 'desktop-privacy', 'desktop-privacy', 2);
+  const proposal = proposalFor(candidate, { knowledge_candidates: reviewed });
+  proposal.child_dispositions.forEach((item) => { item.unresolved_fact_ids = []; });
+  await proposeChange({ root, change: proposal });
+  const smuggled = clone(reviewed);
+  smuggled[0].en.content = smuggled[0].en.content.replace(
+    'Desktop shell owns the workspace frame.',
+    'Unreviewed rewrite of a current fact.',
+  );
+  const before = await fingerprint(root);
+  const changed = await applyApprovedChange({ root, change_id: proposal.change_id, approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: candidate, knowledge_updates: smuggled });
+  assert.equal(changed.ok, false);
+  assert.equal(changed.errors[0].code, 'CHANGE_KNOWLEDGE_COMMITMENT_MISMATCH');
+  assert.equal(await fingerprint(root), before);
+  const missing = await applyApprovedChange({ root, change_id: proposal.change_id, approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: candidate, knowledge_updates: [] });
+  assert.equal(missing.ok, false);
+  assert.equal(missing.errors[0].code, 'CHANGE_KNOWLEDGE_COMMITMENT_MISMATCH');
+  assert.equal(await fingerprint(root), before);
+
+  const secondRoot = await setup(context);
+  const secondMap = await readJson(join(lifecycle(secondRoot), 'project-map.json'));
+  const secondCandidate = clone(secondMap);
+  secondCandidate.constraints[0].semantic_revision = 2;
+  const mapOnly = proposalFor(secondCandidate);
+  mapOnly.child_dispositions.forEach((item) => { item.unresolved_fact_ids = []; });
+  await proposeChange({ root: secondRoot, change: mapOnly });
+  const unexpected = await updateConstraintSections(secondRoot, 'desktop-privacy', 'desktop-privacy', 2);
+  const secondBefore = await fingerprint(secondRoot);
+  const extra = await applyApprovedChange({ root: secondRoot, change_id: mapOnly.change_id, approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: secondCandidate, knowledge_updates: unexpected });
+  assert.equal(extra.ok, false);
+  assert.equal(extra.errors[0].code, 'CHANGE_KNOWLEDGE_COMMITMENT_MISMATCH');
+  assert.equal(await fingerprint(secondRoot), secondBefore);
+});
+
+test('rejects a reviewed fact rewrite without an exact revision increment', async (context) => {
+  const root = await setup(context);
+  const map = await readJson(join(lifecycle(root), 'project-map.json'));
+  const candidate = clone(map);
+  candidate.constraints[0].semantic_revision = 2;
+  const updates = await updateConstraintSections(root, 'desktop-privacy', 'desktop-privacy', 2);
+  updates[0].en.content = updates[0].en.content.replace(
+    'Desktop shell owns the workspace frame.',
+    'Changed without advancing the fact revision.',
+  );
+  const before = await fingerprint(root);
+  const result = await proposeChange({ root, change: proposalFor(candidate, { knowledge_candidates: updates }) });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'CHANGE_KNOWLEDGE_FACT_REVISION_STALE');
+  assert.equal(await fingerprint(root), before);
+});
+
+test('rejects unrelated or extra revalidation markers before pending write', async (context) => {
+  const root = await setup(context);
+  const map = await readJson(join(lifecycle(root), 'project-map.json'));
+  const candidate = clone(map);
+  candidate.constraints[0].semantic_revision = 2;
+  candidate.revalidation_required = [
+    { domain_id: 'inbox-workspace', fact_id: 'inbox-unrelated-fact', reason_ref: 'change-desktop-privacy', constraint_id: 'desktop-privacy', from_revision: 1, to_revision: 2 },
+    { domain_id: 'wiki-workspace', fact_id: 'wiki-storage-boundary', reason_ref: 'change-desktop-privacy', constraint_id: 'desktop-privacy', from_revision: 1, to_revision: 2 },
+  ];
+  const before = await fingerprint(root);
+  const result = await proposeChange({ root, change: revalidatingProposal(candidate) });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'CHANGE_REVALIDATION_MISMATCH');
+  assert.equal(await fingerprint(root), before);
+});
+
+test('reconciles first rename move-then-reject and trusted transition inspection failures', async (context) => {
+  const first = await preparedSemanticChange(context);
+  const firstBefore = await fingerprint(first.root);
+  let calls = 0;
+  const moved = await applyApprovedChange({ root: first.root, change_id: 'change-desktop-privacy', approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: first.candidate, knowledge_updates: first.updates }, {
+    rename: async (from, to) => {
+      calls += 1;
+      await rename(from, to);
+      if (calls === 1) throw new Error('first move then reject');
+    },
+  });
+  assert.equal(moved.ok, false);
+  assert.equal(await fingerprint(first.root), firstBefore);
+
+  const inspected = await preparedSemanticChange(context);
+  const inspectedBefore = await fingerprint(inspected.root);
+  const transition = await applyApprovedChange({ root: inspected.root, change_id: 'change-desktop-privacy', approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: inspected.candidate, knowledge_updates: inspected.updates }, {
+    inspectTransition: async ({ phase }) => {
+      if (phase === 'backup-moved') throw new Error('controlled inspection failure');
+      return { ok: true };
+    },
+  });
+  assert.equal(transition.ok, false);
+  assert.equal(await fingerprint(inspected.root), inspectedBefore);
+});
+
+test('preserves bounded recovery artifacts when the original backup is corrupt or restore fails', async (context) => {
+  const corrupt = await preparedSemanticChange(context);
+  let calls = 0;
+  const corrupted = await applyApprovedChange({ root: corrupt.root, change_id: 'change-desktop-privacy', approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: corrupt.candidate, knowledge_updates: corrupt.updates }, {
+    rename: async (from, to) => {
+      calls += 1;
+      await rename(from, to);
+      if (calls === 1) await writeFile(join(to, 'INDEX.md'), 'corrupt backup\n');
+    },
+  });
+  assert.equal(corrupted.ok, false);
+  assert.equal(corrupted.errors[0].code, 'CHANGE_RESTORE_FAILED');
+  const corruptArtifacts = await readdir(join(corrupt.root, 'docs'));
+  assert.equal(corruptArtifacts.some((name) => name.startsWith('.project-lifecycle-change-backup-')), true);
+  assert.equal(corruptArtifacts.some((name) => name.startsWith('.project-lifecycle-change-stage-')), true);
+
+  const restore = await preparedSemanticChange(context);
+  const failedRestore = await applyApprovedChange({ root: restore.root, change_id: 'change-desktop-privacy', approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: restore.candidate, knowledge_updates: restore.updates }, {
+    afterPublish: async () => { throw new Error('late failure'); },
+    restoreRename: async () => { throw new Error('restore denied'); },
+  });
+  assert.equal(failedRestore.ok, false);
+  assert.equal(failedRestore.errors[0].code, 'CHANGE_RESTORE_FAILED');
+  const restoreArtifacts = await readdir(join(restore.root, 'docs'));
+  assert.equal(restoreArtifacts.some((name) => name.startsWith('.project-lifecycle-change-backup-')), true);
+  assert.equal(restoreArtifacts.some((name) => name.startsWith('.project-lifecycle-change-stage-')), true);
+});
+
+test('treats partial backup cleanup as pending and completed cleanup as complete even on rejection', async (context) => {
+  const partial = await preparedSemanticChange(context);
+  const partialResult = await applyApprovedChange({ root: partial.root, change_id: 'change-desktop-privacy', approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: partial.candidate, knowledge_updates: partial.updates }, {
+    removeBackup: async (backupRoot) => {
+      await rm(join(backupRoot, 'INDEX.md'));
+      throw new Error('partial cleanup');
+    },
+  });
+  assert.equal(partialResult.ok, true);
+  assert.equal(partialResult.value.cleanup_state, 'pending');
+
+  const complete = await preparedSemanticChange(context);
+  const completeResult = await applyApprovedChange({ root: complete.root, change_id: 'change-desktop-privacy', approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: complete.candidate, knowledge_updates: complete.updates }, {
+    removeBackup: async (backupRoot) => {
+      await rm(backupRoot, { recursive: true, force: true });
+      throw new Error('deleted then rejected');
+    },
+  });
+  assert.equal(completeResult.ok, true);
+  assert.equal(completeResult.value.cleanup_state, 'complete');
 });

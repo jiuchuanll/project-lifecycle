@@ -137,13 +137,19 @@
     "revalidationMarker": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["domain_id", "fact_id", "constraint_id", "from_revision", "to_revision"],
+      "required": ["domain_id", "fact_id", "reason_ref"],
       "properties": {
         "domain_id": { "$ref": "#/$defs/id" },
         "fact_id": { "$ref": "#/$defs/id" },
+        "reason_ref": { "type": "string", "minLength": 1 },
         "constraint_id": { "$ref": "#/$defs/id" },
         "from_revision": { "type": "integer", "minimum": 1 },
         "to_revision": { "type": "integer", "minimum": 1 }
+      },
+      "dependentRequired": {
+        "constraint_id": ["from_revision", "to_revision"],
+        "from_revision": ["constraint_id", "to_revision"],
+        "to_revision": ["constraint_id", "from_revision"]
       }
     }
   }

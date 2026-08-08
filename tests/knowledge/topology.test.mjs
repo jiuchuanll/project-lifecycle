@@ -61,7 +61,7 @@ const semanticProposal = (candidate, overrides = {}) => ({
   child_dispositions: [
     { domain_id: 'inbox-workspace', disposition: 'NO_CHANGE', evidence_refs: ['repo:privacy-policy'], unresolved_fact_ids: [] },
     { domain_id: 'source-workspace', disposition: 'NO_CHANGE', evidence_refs: ['repo:privacy-policy'], unresolved_fact_ids: [] },
-    { domain_id: 'wiki-workspace', disposition: 'REVALIDATE', evidence_refs: ['repo:privacy-policy'], unresolved_fact_ids: ['wiki-storage-boundary'] },
+    { domain_id: 'wiki-workspace', disposition: 'REVALIDATE', evidence_refs: ['repo:privacy-policy'], unresolved_fact_ids: [] },
   ],
   candidate_map: candidate,
   ...overrides,
@@ -286,6 +286,8 @@ test('rejects a candidate that bundles an unrelated branch mutation', async (con
   const root = await setup(context);
   const map = await mapAt(root);
   const candidate = clone(map);
+  candidate.constraints[0].scope = 'selected_descendants';
+  candidate.constraints[0].selected_descendants = ['wiki-workspace'];
   candidate.constraints[0].semantic_revision = 2;
   candidate.domains[2].purpose.en = 'Unreviewed Source mutation';
   const before = await treeFingerprint(root);
@@ -301,6 +303,8 @@ test('rejects proposal metadata that disagrees with the reviewed candidate', asy
   const root = await setup(context);
   const map = await mapAt(root);
   const candidate = clone(map);
+  candidate.constraints[0].scope = 'selected_descendants';
+  candidate.constraints[0].selected_descendants = ['wiki-workspace'];
   candidate.constraints[0].semantic_revision = 2;
   const proposal = semanticProposal(candidate);
   proposal.proposed_patch.expected_semantic_revision = 9;
@@ -311,4 +315,140 @@ test('rejects proposal metadata that disagrees with the reviewed candidate', asy
   assert.equal(result.ok, false);
   assert.equal(result.errors[0].code, 'CHANGE_PROPOSAL_MISMATCH');
   assert.equal(await treeFingerprint(root), before);
+});
+
+test('binds ADD_RELATIONSHIP to one declared horizontal edge', async () => {
+  const map = await readJson(new URL('../fixtures/knowledge/topology/base/docs/project-lifecycle/project-map.json', import.meta.url));
+  const candidate = clone(map);
+  candidate.domains[1].relationships.push({ kind: 'depends_on', target_id: 'source-workspace' });
+  candidate.domains[1].parent_id = null;
+  const result = analyzeImpact({
+    current_map: map,
+    candidate_map: candidate,
+    change_class: 'SEMANTIC',
+    changed_fields: ['relationship'],
+    target_id: 'inbox-workspace',
+    operation: 'ADD_RELATIONSHIP',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'CHANGE_NOT_BOUNDED');
+});
+
+test('binds a relationship proposal key and affected refs to the added edge', async (context) => {
+  const root = await setup(context);
+  const map = await mapAt(root);
+  const candidate = clone(map);
+  candidate.domains[1].relationships.push({ kind: 'depends_on', target_id: 'source-workspace' });
+  const proposal = semanticProposal(candidate, {
+    change_id: 'change-inbox-source-edge',
+    kind: 'topology',
+    semantic_target_key: 'relationship:inbox-workspace:source-workspace',
+    affected_refs: ['inbox-workspace', 'source-workspace'],
+    proposed_patch: { operation: 'ADD_RELATIONSHIP', target_type: 'relationship', target_id: 'inbox-workspace', changed_fields: ['relationship'], new_ids: [], successor_ids: [] },
+    child_dispositions: [],
+  });
+  assert.equal((await proposeChange({ root, change: proposal })).ok, true);
+  assert.equal((await pendingAt(root)).changes[0].semantic_target_key, proposal.semantic_target_key);
+});
+
+test('binds ADD_DOMAIN to exactly one evidenced child without parent mutation', async () => {
+  const map = await readJson(new URL('../fixtures/knowledge/topology/base/docs/project-lifecycle/project-map.json', import.meta.url));
+  const candidate = clone(map);
+  candidate.domains.push({
+    ...clone(map.domains[1]),
+    id: 'inbox-search',
+    label: { en: 'Inbox search', 'zh-CN': '收件箱搜索' },
+    purpose: { en: 'Owns inbox search', 'zh-CN': '负责收件箱搜索' },
+    evidence_refs: ['repo:inbox-search'],
+  });
+  candidate.domains[0].purpose.en = 'Smuggled parent rewrite';
+  candidate.domains.sort((left, right) => left.id < right.id ? -1 : 1);
+  const result = analyzeImpact({
+    current_map: map,
+    candidate_map: candidate,
+    change_class: 'SEMANTIC',
+    changed_fields: ['boundary', 'parentage'],
+    target_id: 'inbox-search',
+    operation: 'ADD_DOMAIN',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'CHANGE_NOT_BOUNDED');
+});
+
+test('rejects merge dispositions that leave active children under a merged parent', async () => {
+  const map = await readJson(new URL('../fixtures/knowledge/topology/base/docs/project-lifecycle/project-map.json', import.meta.url));
+  const candidate = clone(map);
+  candidate.domains[0].domain_state = 'merged';
+  candidate.domains[0].successor_id = 'source-workspace';
+  const result = analyzeImpact({
+    current_map: map,
+    candidate_map: candidate,
+    change_class: 'SEMANTIC',
+    changed_fields: ['lifecycle'],
+    target_id: 'desktop-experience',
+    operation: 'MERGE_DOMAIN',
+    child_dispositions: map.domains.slice(1).map(({ id }) => ({
+      domain_id: id,
+      disposition: 'NO_CHANGE',
+      evidence_refs: ['decision:merge'],
+      unresolved_fact_ids: [],
+    })),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'TOPOLOGY_DISPOSITION_MISMATCH');
+});
+
+test('rejects a MERGE_DOMAIN candidate that rewrites undeclared parent fields', async () => {
+  const map = await readJson(new URL('../fixtures/knowledge/topology/base/docs/project-lifecycle/project-map.json', import.meta.url));
+  const candidate = clone(map);
+  candidate.domains[0].domain_state = 'merged';
+  candidate.domains[0].successor_id = 'source-workspace';
+  candidate.domains[0].purpose.en = 'Smuggled parent rewrite';
+  candidate.domains[1].parent_id = null;
+  candidate.domains[2].parent_id = null;
+  candidate.domains[3].parent_id = 'source-workspace';
+  candidate.domains[2].scope.includes = ['source', 'wiki'];
+  const dispositions = [
+    { domain_id: 'inbox-workspace', disposition: 'REPARENT', target_id: 'inbox-workspace', evidence_refs: ['decision:merge'], unresolved_fact_ids: [] },
+    { domain_id: 'source-workspace', disposition: 'REPARENT', target_id: 'source-workspace', evidence_refs: ['decision:merge'], unresolved_fact_ids: [] },
+    { domain_id: 'wiki-workspace', disposition: 'REPARENT', target_id: 'source-workspace', evidence_refs: ['decision:merge'], unresolved_fact_ids: [] },
+  ];
+  const result = analyzeImpact({ current_map: map, candidate_map: candidate, change_class: 'SEMANTIC', changed_fields: ['lifecycle'], target_id: 'desktop-experience', operation: 'MERGE_DOMAIN', child_dispositions: dispositions });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'CHANGE_NOT_BOUNDED');
+});
+
+test('applies an exact topology-only revalidation marker without constraint revisions', async (context) => {
+  const root = await setup(context);
+  const map = await mapAt(root);
+  const candidate = clone(map);
+  candidate.domains[0].purpose = { en: 'Owns revised desktop interaction', 'zh-CN': '负责修订后的桌面交互' };
+  candidate.revalidation_required = [{
+    domain_id: 'wiki-workspace',
+    fact_id: 'wiki-storage-boundary',
+    reason_ref: 'change-desktop-boundary',
+  }];
+  const proposal = semanticProposal(candidate, {
+    change_id: 'change-desktop-boundary',
+    kind: 'topology',
+    semantic_target_key: 'domain:desktop-experience',
+    affected_refs: ['desktop-experience', 'inbox-workspace', 'source-workspace', 'wiki-workspace'],
+    proposed_patch: { operation: 'UPDATE_DOMAIN', target_type: 'domain', target_id: 'desktop-experience', changed_fields: ['boundary'], new_ids: [], successor_ids: [] },
+    child_dispositions: [
+      { domain_id: 'inbox-workspace', disposition: 'NO_CHANGE', evidence_refs: ['decision:desktop-boundary'], unresolved_fact_ids: [] },
+      { domain_id: 'source-workspace', disposition: 'NO_CHANGE', evidence_refs: ['decision:desktop-boundary'], unresolved_fact_ids: [] },
+      { domain_id: 'wiki-workspace', disposition: 'REVALIDATE', evidence_refs: ['decision:desktop-boundary'], unresolved_fact_ids: ['wiki-storage-boundary'] },
+    ],
+  });
+  assert.equal((await proposeChange({ root, change: proposal })).ok, true);
+  const result = await applyApprovedChange({
+    root,
+    change_id: proposal.change_id,
+    approval_ref: 'approval:desktop-boundary',
+    traceability: { knowledge_diff_ref: 'diff:desktop-boundary', history_ref: 'git:desktop-boundary' },
+    candidate_map: candidate,
+    knowledge_updates: [],
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual((await mapAt(root)).revalidation_required, candidate.revalidation_required);
 });

@@ -298,6 +298,7 @@ test('accepts one bounded governed Task 4 proposal while preserving legacy pendi
       evidence_refs: ['repo:privacy-policy'],
       unresolved_fact_ids: ['wiki-storage-boundary'],
     }],
+    knowledge_commitments: [],
   };
 
   assert.equal(validateJson('pending-changes', {
@@ -332,6 +333,7 @@ test('rejects incomplete and unsorted governed Task 4 proposals', () => {
       new_ids: [],
       successor_ids: [],
     },
+    knowledge_commitments: [],
   };
 
   const result = validateJson('pending-changes', {
@@ -378,9 +380,38 @@ test('rejects duplicate child disposition IDs even when their outcomes differ', 
       { domain_id: 'wiki-workspace', disposition: 'NO_CHANGE', evidence_refs: ['repo:privacy'], unresolved_fact_ids: [] },
       { domain_id: 'wiki-workspace', disposition: 'REVALIDATE', evidence_refs: ['repo:privacy'], unresolved_fact_ids: ['wiki-storage'] },
     ],
+    knowledge_commitments: [],
   };
 
   const result = validateJson('pending-changes', { schema_version: 1, changes: [change] });
 
   assert.ok(result.errors.some(({ code, path }) => code === 'ID_DUPLICATE' && path === '/changes/0/child_dispositions/1/domain_id'));
+});
+
+test('separates legacy and governed pending entries and rejects duplicate change IDs', () => {
+  const legacy = {
+    change_id: 'change-legacy',
+    kind: 'topology',
+    trigger_refs: ['feedback:legacy'],
+    affected_refs: ['desktop-experience'],
+    proposed_disposition: 'Review topology',
+    risks: [],
+    evidence_gaps: [],
+    review_state: 'open',
+    created_at: '2026-08-08T10:00:00Z',
+  };
+  const governedFieldWithoutVersion = { ...legacy, source_refs: ['repo:source'] };
+  const discriminated = validateJson('pending-changes', {
+    schema_version: 1,
+    changes: [governedFieldWithoutVersion],
+  });
+  assert.ok(discriminated.errors.some(({ path }) => path === '/changes/0'));
+
+  const duplicated = validateJson('pending-changes', {
+    schema_version: 1,
+    changes: [legacy, { ...legacy }],
+  });
+  assert.ok(duplicated.errors.some(({ code, path }) => (
+    code === 'ID_DUPLICATE' && path === '/changes/1/change_id'
+  )));
 });

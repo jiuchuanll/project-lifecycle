@@ -1,5 +1,5 @@
 import { ERROR_CODES, createError } from './errors.mjs';
-import { codePointOrderErrors } from './deterministic-order.mjs';
+import { codePointOrderErrors, compareCodePoints } from './deterministic-order.mjs';
 import { fail, ok } from './result.mjs';
 import { getSchemaValidator } from './schema-registry.mjs';
 
@@ -173,11 +173,14 @@ const validateProjectMap = (value) => {
     if (!domainById.has(marker.domain_id)) {
       errors.push(createError(ERROR_CODES.REFERENCE_MISSING, `${path}/domain_id`, `Unknown revalidation domain ID: ${marker.domain_id}`));
     }
-    if (!constraintById.has(marker.constraint_id)) {
-      errors.push(createError(ERROR_CODES.REFERENCE_MISSING, `${path}/constraint_id`, `Unknown revalidation constraint ID: ${marker.constraint_id}`));
-    }
-    if (marker.to_revision <= marker.from_revision) {
-      errors.push(createError(ERROR_CODES.SCHEMA_INVALID, `${path}/to_revision`, 'Revalidation must advance to a later semantic revision.'));
+    if (marker.constraint_id) {
+      const constraint = constraintById.get(marker.constraint_id);
+      if (!constraint) {
+        errors.push(createError(ERROR_CODES.REFERENCE_MISSING, `${path}/constraint_id`, `Unknown revalidation constraint ID: ${marker.constraint_id}`));
+      } else if (marker.to_revision !== constraint.semantic_revision
+        || marker.to_revision <= marker.from_revision) {
+        errors.push(createError(ERROR_CODES.SCHEMA_INVALID, `${path}/to_revision`, 'Constraint revalidation must advance exactly to the current semantic revision.'));
+      }
     }
   }
 
@@ -217,7 +220,16 @@ const validateContextReceipt = (value) => {
 const validatePendingChanges = (value) => {
   const errors = [];
   const semanticTargets = new Set();
+  const changeIds = new Set();
   for (const [index, change] of value.changes.entries()) {
+    if (changeIds.has(change.change_id)) {
+      errors.push(createError(
+        ERROR_CODES.ID_DUPLICATE,
+        `/changes/${index}/change_id`,
+        `Duplicate change ID: ${change.change_id}`,
+      ));
+    }
+    changeIds.add(change.change_id);
     if (!change.semantic_target_key) continue;
     if (semanticTargets.has(change.semantic_target_key)) {
       errors.push(createError(
@@ -237,6 +249,28 @@ const validatePendingChanges = (value) => {
         ));
       }
       dispositionIds.add(disposition.domain_id);
+    }
+    const commitmentIds = new Set();
+    for (const [commitmentIndex, commitment] of (change.knowledge_commitments ?? []).entries()) {
+      if (commitmentIds.has(commitment.domain_id)) {
+        errors.push(createError(
+          ERROR_CODES.ID_DUPLICATE,
+          `/changes/${index}/knowledge_commitments/${commitmentIndex}/domain_id`,
+          `Duplicate knowledge commitment domain ID: ${commitment.domain_id}`,
+        ));
+      }
+      commitmentIds.add(commitment.domain_id);
+      const factIds = new Set();
+      for (const [factIndex, fact] of commitment.facts.entries()) {
+        if (factIds.has(fact.fact_id)) {
+          errors.push(createError(
+            ERROR_CODES.ID_DUPLICATE,
+            `/changes/${index}/knowledge_commitments/${commitmentIndex}/facts/${factIndex}/fact_id`,
+            `Duplicate committed fact ID: ${fact.fact_id}`,
+          ));
+        }
+        factIds.add(fact.fact_id);
+      }
     }
   }
   return errors;
@@ -267,7 +301,20 @@ const validateDeterministicOrder = (kind, value) => {
       }
     }
     if (value.revalidation_required) {
-      appendOrderErrors(errors, value.revalidation_required, '/revalidation_required', 'fact_id');
+      const markerKey = (marker) => `${marker.domain_id}\u0000${marker.fact_id}\u0000${marker.constraint_id ?? ''}`;
+      for (let index = 1; index < value.revalidation_required.length; index += 1) {
+        const previous = markerKey(value.revalidation_required[index - 1]);
+        const current = markerKey(value.revalidation_required[index]);
+        if (compareCodePoints(previous, current) >= 0) {
+          errors.push(createError(
+            previous === current ? ERROR_CODES.ID_DUPLICATE : ERROR_CODES.SCHEMA_INVALID,
+            `/revalidation_required/${index}/fact_id`,
+            previous === current
+              ? 'Duplicate revalidation marker identity.'
+              : 'Revalidation markers must use strict language-neutral identity order.',
+          ));
+        }
+      }
     }
     for (const [index, domain] of value.domains.entries()) {
       appendOrderErrors(errors, domain.relationships, `/domains/${index}/relationships`, 'target_id');
@@ -329,6 +376,12 @@ const validateDeterministicOrder = (kind, value) => {
         for (const [dispositionIndex, disposition] of change.child_dispositions.entries()) {
           appendOrderErrors(errors, disposition.evidence_refs, `/changes/${index}/child_dispositions/${dispositionIndex}/evidence_refs`);
           appendOrderErrors(errors, disposition.unresolved_fact_ids, `/changes/${index}/child_dispositions/${dispositionIndex}/unresolved_fact_ids`);
+        }
+      }
+      if (change.knowledge_commitments) {
+        appendOrderErrors(errors, change.knowledge_commitments, `/changes/${index}/knowledge_commitments`, 'domain_id');
+        for (const [commitmentIndex, commitment] of change.knowledge_commitments.entries()) {
+          appendOrderErrors(errors, commitment.facts, `/changes/${index}/knowledge_commitments/${commitmentIndex}/facts`, 'fact_id');
         }
       }
     }

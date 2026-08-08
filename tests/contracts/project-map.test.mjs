@@ -430,6 +430,7 @@ test('accepts governed constraint identity, history, exceptions, and scoped reva
   value.revalidation_required = [{
     domain_id: 'wiki-workspace',
     fact_id: 'wiki-storage-boundary',
+    reason_ref: 'change:desktop-privacy-v2',
     constraint_id: 'desktop-privacy',
     from_revision: 1,
     to_revision: 2,
@@ -456,6 +457,7 @@ test('rejects broken governed constraint history and revalidation references', a
   value.revalidation_required = [{
     domain_id: 'missing-domain',
     fact_id: 'wiki-storage-boundary',
+    reason_ref: 'change:broken',
     constraint_id: 'missing-constraint',
     from_revision: 2,
     to_revision: 2,
@@ -468,10 +470,53 @@ test('rejects broken governed constraint history and revalidation references', a
     '/constraints/0/successor_ids/0',
     '/revalidation_required/0/domain_id',
     '/revalidation_required/0/constraint_id',
-    '/revalidation_required/0/to_revision',
   ]) {
     assert.ok(result.errors.some((error) => error.path === path), `missing error at ${path}`);
   }
+});
+
+test('accepts topology-only revalidation and rejects stale or duplicate marker identities', async () => {
+  const topology = await fixture('valid.json');
+  topology.revalidation_required = [{
+    domain_id: 'desktop-experience',
+    fact_id: 'desktop-layout-boundary',
+    reason_ref: 'change:desktop-topology',
+  }];
+  assert.equal(validateJson('project-map', topology).ok, true);
+
+  const constrained = await fixture('valid.json');
+  constrained.constraints = [{
+    id: 'desktop-privacy',
+    scope: 'self',
+    owner_id: 'desktop-experience',
+    semantic_revision: 2,
+    lifecycle_state: 'current',
+    knowledge_refs: {
+      en: 'knowledge/desktop-experience-en.md#constraint-desktop-privacy',
+      'zh-CN': 'knowledge/desktop-experience.md#constraint-desktop-privacy',
+    },
+    exceptions: [],
+  }];
+  constrained.revalidation_required = [{
+    domain_id: 'desktop-experience',
+    fact_id: 'desktop-layout-boundary',
+    reason_ref: 'change:privacy',
+    constraint_id: 'desktop-privacy',
+    from_revision: 1,
+    to_revision: 1,
+  }];
+  const stale = validateJson('project-map', constrained);
+  assert.ok(stale.errors.some(({ path }) => path === '/revalidation_required/0/to_revision'));
+
+  constrained.revalidation_required[0].to_revision = 2;
+  constrained.revalidation_required.push({
+    ...constrained.revalidation_required[0],
+    reason_ref: 'change:privacy-copy',
+  });
+  const duplicate = validateJson('project-map', constrained);
+  assert.ok(duplicate.errors.some(({ code, path }) => (
+    code === 'ID_DUPLICATE' && path === '/revalidation_required/1/fact_id'
+  )));
 });
 
 test('rejects duplicate constraint exceptions for one domain', async () => {

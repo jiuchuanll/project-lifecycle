@@ -24,6 +24,12 @@
       "items": { "type": "string", "minLength": 1 }
     },
     "change": {
+      "oneOf": [
+        { "$ref": "#/$defs/legacyChange" },
+        { "$ref": "#/$defs/governedChange" }
+      ]
+    },
+    "legacyChange": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -59,6 +65,53 @@
         "risks": { "$ref": "#/$defs/notes" },
         "evidence_gaps": { "$ref": "#/$defs/notes" },
         "review_state": { "const": "open" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "governedChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "change_id",
+        "kind",
+        "trigger_refs",
+        "affected_refs",
+        "proposed_disposition",
+        "risks",
+        "evidence_gaps",
+        "review_state",
+        "created_at",
+        "proposal_version",
+        "semantic_target_key",
+        "source_refs",
+        "baseline",
+        "change_class",
+        "proposed_patch",
+        "child_dispositions",
+        "knowledge_commitments"
+      ],
+      "properties": {
+        "change_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "kind": {
+          "enum": [
+            "constraint_identity",
+            "constraint_scope",
+            "constraint_semantics",
+            "fact_identity",
+            "fact_ownership",
+            "material_conflict",
+            "ownership",
+            "project_identity",
+            "repository_attachment",
+            "topology"
+          ]
+        },
+        "trigger_refs": { "$ref": "#/$defs/refs" },
+        "affected_refs": { "$ref": "#/$defs/refs" },
+        "proposed_disposition": { "type": "string", "minLength": 1 },
+        "risks": { "$ref": "#/$defs/notes" },
+        "evidence_gaps": { "$ref": "#/$defs/notes" },
+        "review_state": { "const": "open" },
         "created_at": { "type": "string", "format": "date-time" },
         "proposal_version": { "const": 1 },
         "semantic_target_key": { "type": "string", "pattern": "^(constraint|domain|relationship|exception):[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)?$" },
@@ -69,17 +122,11 @@
         "child_dispositions": {
           "type": "array",
           "items": { "$ref": "#/$defs/childDisposition" }
+        },
+        "knowledge_commitments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/knowledgeCommitment" }
         }
-      },
-      "dependentRequired": {
-        "proposal_version": [
-          "semantic_target_key",
-          "source_refs",
-          "baseline",
-          "change_class",
-          "proposed_patch",
-          "child_dispositions"
-        ]
       }
     },
     "baseline": {
@@ -153,6 +200,39 @@
         "exception_ref": { "type": "string", "minLength": 1 },
         "evidence_refs": { "$ref": "#/$defs/refs" },
         "unresolved_fact_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "knowledgeCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain_id", "en", "zh-CN", "facts"],
+      "properties": {
+        "domain_id": { "$ref": "#/$defs/id" },
+        "en": { "$ref": "#/$defs/contentCommitment" },
+        "zh-CN": { "$ref": "#/$defs/contentCommitment" },
+        "facts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/factSummary" }
+        }
+      }
+    },
+    "contentCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locator", "content_hash"],
+      "properties": {
+        "locator": { "type": "string", "pattern": "^knowledge/[a-z][a-z0-9-]*(?:-en)?\\.md$" },
+        "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      }
+    },
+    "factSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fact_id", "fact_revision", "knowledge_state"],
+      "properties": {
+        "fact_id": { "$ref": "#/$defs/id" },
+        "fact_revision": { "type": "integer", "minimum": 1 },
+        "knowledge_state": { "enum": ["current", "proposed"] }
       }
     },
     "id": {

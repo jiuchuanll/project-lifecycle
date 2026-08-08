@@ -3,17 +3,22 @@ import {
   lstat,
   mkdtemp,
   readFile,
+  readdir,
+  readlink,
   realpath,
   rename,
   rm,
   rmdir,
 } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { atomicWriteValidated } from '../lib/atomic-write.mjs';
 import { validateBilingualPair } from '../lib/bilingual-pair.mjs';
 import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
+import { parseFactBlocks } from '../lib/fact-blocks.mjs';
+import { parseFrontmatter } from '../lib/markdown.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
@@ -23,6 +28,7 @@ const applicationFailure = (code, path, message) => fail([createError(code, path
 const jsonContent = (value) => `${JSON.stringify(value, null, 2)}\n`;
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
+const contentHash = (source) => `sha256:${createHash('sha256').update(source).digest('hex')}`;
 const inside = (root, candidate) => {
   const path = relative(root, candidate);
   return path === '' || (!path.startsWith(`..${sep}`) && path !== '..' && !isAbsolute(path));
@@ -165,7 +171,13 @@ const validateApplicationInput = (input) => {
 const validateDispositions = (entry, impact, currentMap, candidateMap) => {
   const ownerId = candidateMap.constraints.find(({ id }) => id === entry.proposed_patch.target_id)?.owner_id
     ?? currentMap.constraints.find(({ id }) => id === entry.proposed_patch.target_id)?.owner_id;
-  const required = impact.affected_domain_ids.filter((id) => id !== ownerId && id !== entry.proposed_patch.target_id);
+  const required = entry.proposed_patch.operation === 'MERGE_DOMAIN'
+    ? currentMap.domains
+      .filter(({ parent_id: parentId, domain_state: state }) => (
+        parentId === entry.proposed_patch.target_id && ['confirmed', 'materialized'].includes(state)
+      ))
+      .map(({ id }) => id)
+    : impact.affected_domain_ids.filter((id) => id !== ownerId && id !== entry.proposed_patch.target_id);
   const dispositions = new Map(entry.child_dispositions.map((item) => [item.domain_id, item]));
   if (required.some((id) => !dispositions.has(id))) {
     return applicationFailure('CHANGE_DISPOSITION_INCOMPLETE', '/child_dispositions', 'Every affected child requires a complete reviewed disposition.');
@@ -174,26 +186,58 @@ const validateDispositions = (entry, impact, currentMap, candidateMap) => {
 };
 
 const validateRevalidationMarkers = (entry, currentMap, candidateMap) => {
-  if (entry.change_class !== 'SEMANTIC' || entry.proposed_patch.target_type !== 'constraint') return ok(null);
-  const current = currentMap.constraints.find(({ id }) => id === entry.proposed_patch.target_id);
-  const candidate = candidateMap.constraints.find(({ id }) => id === entry.proposed_patch.target_id);
+  const isConstraint = ['constraint', 'exception'].includes(entry.proposed_patch.target_type);
+  const current = isConstraint
+    ? currentMap.constraints.find(({ id }) => id === entry.proposed_patch.target_id)
+    : null;
+  const candidate = isConstraint
+    ? candidateMap.constraints.find(({ id }) => id === entry.proposed_patch.target_id)
+    : null;
+  const hasUnresolved = entry.child_dispositions.some(({ unresolved_fact_ids: ids }) => ids.length > 0);
+  if (isConstraint && hasUnresolved
+    && (!current || !candidate || candidate.semantic_revision <= current.semantic_revision)) {
+    return applicationFailure('CHANGE_REVALIDATION_MISMATCH', '/child_dispositions', 'Constraint-linked unresolved facts require an advancing reviewed revision.');
+  }
   const expected = entry.child_dispositions.flatMap((disposition) => (
     disposition.unresolved_fact_ids.map((factId) => ({
       domain_id: disposition.domain_id,
       fact_id: factId,
-      constraint_id: entry.proposed_patch.target_id,
-      from_revision: current.semantic_revision,
-      to_revision: candidate.semantic_revision,
+      reason_ref: entry.change_id,
+      ...(isConstraint ? {
+        constraint_id: entry.proposed_patch.target_id,
+        from_revision: current.semantic_revision,
+        to_revision: candidate.semantic_revision,
+      } : {}),
     }))
   ));
-  const actual = candidateMap.revalidation_required ?? [];
-  if (expected.some((marker) => !actual.some((item) => JSON.stringify(item) === JSON.stringify(marker)))) {
-    return applicationFailure('CHANGE_REVALIDATION_MISSING', '/candidate_map/revalidation_required', 'Unresolved fact checks require compact revalidation markers.');
+  const markerKey = (marker) => `${marker.domain_id}\u0000${marker.fact_id}\u0000${marker.constraint_id ?? ''}`;
+  const retained = (currentMap.revalidation_required ?? [])
+    .filter((marker) => !expected.some((item) => markerKey(item) === markerKey(marker)));
+  const reviewed = [...retained, ...expected].sort((left, right) => compareCodePoints(markerKey(left), markerKey(right)));
+  const actual = [...(candidateMap.revalidation_required ?? [])]
+    .sort((left, right) => compareCodePoints(markerKey(left), markerKey(right)));
+  if (JSON.stringify(reviewed) !== JSON.stringify(actual)) {
+    return applicationFailure('CHANGE_REVALIDATION_MISMATCH', '/candidate_map/revalidation_required', 'Revalidation markers must exactly match reviewed unresolved facts.');
   }
   return ok(null);
 };
 
+const knowledgeSummary = (content) => {
+  const frontmatter = parseFrontmatter(content);
+  const facts = parseFactBlocks(content);
+  if (!frontmatter.ok || !facts.ok) return null;
+  return facts.value.map((fact) => ({
+    fact_id: fact.fact_id,
+    fact_revision: fact.revision,
+    knowledge_state: frontmatter.value.data.knowledge_state,
+  })).sort((left, right) => compareCodePoints(left.fact_id, right.fact_id));
+};
+
 const validateKnowledgeUpdates = (updates, map, entry) => {
+  const commitments = entry.knowledge_commitments ?? [];
+  if (updates.length !== commitments.length) {
+    return applicationFailure('CHANGE_KNOWLEDGE_COMMITMENT_MISMATCH', '/knowledge_updates', 'Knowledge updates must exactly match reviewed commitments.');
+  }
   const seen = new Set();
   for (const [index, update] of updates.entries()) {
     const domain = map.domains.find(({ id }) => id === update?.domain_id);
@@ -201,11 +245,20 @@ const validateKnowledgeUpdates = (updates, map, entry) => {
       return applicationFailure('CHANGE_KNOWLEDGE_UPDATE_INVALID', `/knowledge_updates/${index}`, 'Each update must target one materialized canonical owner.');
     }
     seen.add(update.domain_id);
+    const commitment = commitments.find(({ domain_id: id }) => id === update.domain_id);
+    if (!commitment) {
+      return applicationFailure('CHANGE_KNOWLEDGE_COMMITMENT_MISMATCH', `/knowledge_updates/${index}`, 'Unreviewed knowledge domain update is forbidden.');
+    }
     for (const language of ['en', 'zh-CN']) {
       if (!isRecord(update[language])
         || update[language].locator !== domain.paired_assets[language]
         || !isNonEmptyString(update[language].content)) {
         return applicationFailure('CHANGE_KNOWLEDGE_UPDATE_INVALID', `/knowledge_updates/${index}/${language}`, 'Both canonical localized updates are required.');
+      }
+      if (commitment[language].locator !== update[language].locator
+        || commitment[language].content_hash !== contentHash(update[language].content)
+        || JSON.stringify(commitment.facts) !== JSON.stringify(knowledgeSummary(update[language].content))) {
+        return applicationFailure('CHANGE_KNOWLEDGE_COMMITMENT_MISMATCH', `/knowledge_updates/${index}/${language}`, 'Knowledge content, facts, state, and locator must match the reviewed commitment.');
       }
     }
   }
@@ -213,7 +266,7 @@ const validateKnowledgeUpdates = (updates, map, entry) => {
     const constraint = map.constraints.find(({ id }) => id === entry.proposed_patch.target_id)
       ?? map.constraints.find(({ successor_ids: successors }) => successors?.includes(entry.proposed_patch.target_id));
     const ownerId = constraint?.owner_id;
-    if (!ownerId || !seen.has(ownerId)) {
+    if (commitments.length > 0 && (!ownerId || !seen.has(ownerId))) {
       return applicationFailure('CHANGE_KNOWLEDGE_UPDATE_INVALID', '/knowledge_updates', 'Constraint changes require their owning bilingual sections.');
     }
   }
@@ -227,9 +280,148 @@ const cleanupOwned = async (projectRoot, path) => {
   await rm(path, { recursive: true, force: true });
 };
 
+const directoryFingerprint = async (root) => {
+  const entries = [];
+  const visit = async (directory, prefix = '') => {
+    const children = await readdir(directory, { withFileTypes: true });
+    children.sort((left, right) => compareCodePoints(left.name, right.name));
+    for (const child of children) {
+      const path = join(directory, child.name);
+      const locator = prefix ? `${prefix}/${child.name}` : child.name;
+      const state = await lstat(path);
+      if (state.isDirectory() && !state.isSymbolicLink()) {
+        entries.push({ locator: `${locator}/`, type: 'directory' });
+        await visit(path, locator);
+      } else if (state.isFile()) {
+        entries.push({ locator, type: 'file', hash: createHash('sha256').update(await readFile(path)).digest('hex') });
+      } else if (state.isSymbolicLink()) {
+        entries.push({ locator, type: 'symlink', target: await readlink(path) });
+      } else {
+        throw new Error('Unsupported lifecycle filesystem entry.');
+      }
+    }
+  };
+  const state = await lstat(root);
+  if (!state.isDirectory() || state.isSymbolicLink()) throw new Error('Regular lifecycle root required.');
+  await visit(root);
+  return JSON.stringify(entries);
+};
+
+const fingerprintMatches = async (path, expected) => {
+  try { return await directoryFingerprint(path) === expected; } catch { return false; }
+};
+
+const boundedDirectory = async (projectRoot, path) => {
+  try {
+    const state = await lstat(path);
+    const physical = await realpath(path);
+    return state.isDirectory() && !state.isSymbolicLink() && inside(projectRoot, physical);
+  } catch {
+    return false;
+  }
+};
+
+const inspectTransitionState = async ({
+  phase,
+  projectRoot,
+  lifecycleRoot,
+  stageRoot,
+  backupRoot,
+  originalFingerprint,
+  expectedCandidate,
+}) => {
+  if (phase === 'backup-moved') {
+    const [live, stageBounded, backupBounded, backupOriginal] = await Promise.all([
+      fileState(lifecycleRoot),
+      boundedDirectory(projectRoot, stageRoot),
+      boundedDirectory(projectRoot, backupRoot),
+      fingerprintMatches(backupRoot, originalFingerprint),
+    ]);
+    return { ok: live === null && stageBounded && backupBounded && backupOriginal };
+  }
+  if (phase === 'candidate-moved') {
+    const [stage, liveBounded, backupBounded, backupOriginal, liveCandidate] = await Promise.all([
+      fileState(stageRoot),
+      boundedDirectory(projectRoot, lifecycleRoot),
+      boundedDirectory(projectRoot, backupRoot),
+      fingerprintMatches(backupRoot, originalFingerprint),
+      validateCandidateRoot({ lifecycleRoot, ...expectedCandidate }),
+    ]);
+    return { ok: stage === null && liveBounded && backupBounded && backupOriginal && liveCandidate.ok };
+  }
+  return { ok: false };
+};
+
+const recoveryArtifactLabels = async ({ lifecycleRoot, stageRoot, backupRoot }) => {
+  const labels = [];
+  for (const [label, path] of [['backup', backupRoot], ['live', lifecycleRoot], ['stage', stageRoot]]) {
+    if (!path) continue;
+    try { if (await fileState(path)) labels.push(label); } catch { labels.push(label); }
+  }
+  return labels;
+};
+
+const restoreFailure = async (paths) => {
+  const labels = await recoveryArtifactLabels(paths);
+  return applicationFailure(
+    'CHANGE_RESTORE_FAILED',
+    '/recovery',
+    `Recovery required; preserved artifacts: ${labels.length > 0 ? labels.join(', ') : 'unknown'}.`,
+  );
+};
+
+const reconcileOriginal = async ({
+  projectRoot,
+  lifecycleRoot,
+  stageRoot,
+  backupRoot,
+  originalFingerprint,
+  expectedCandidate,
+  restoreRename,
+}) => {
+  try {
+    if (await fingerprintMatches(lifecycleRoot, originalFingerprint)) {
+      await cleanupOwned(projectRoot, stageRoot);
+      return { ok: true };
+    }
+    if (!backupRoot || !await fingerprintMatches(backupRoot, originalFingerprint)
+      || !await boundedDirectory(projectRoot, backupRoot)) {
+      return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
+    }
+    const live = await fileState(lifecycleRoot);
+    if (live) {
+      const liveCandidate = await validateCandidateRoot({ lifecycleRoot, ...expectedCandidate });
+      if (!liveCandidate.ok || await fileState(stageRoot)) {
+        return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
+      }
+      await rename(lifecycleRoot, stageRoot);
+      const preservedCandidate = await validateCandidateRoot({ lifecycleRoot: stageRoot, ...expectedCandidate });
+      if (await fileState(lifecycleRoot) || !preservedCandidate.ok) {
+        return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
+      }
+    }
+    try {
+      await restoreRename(backupRoot, lifecycleRoot);
+    } catch {
+      if (!await fingerprintMatches(lifecycleRoot, originalFingerprint) || await fileState(backupRoot)) {
+        return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
+      }
+    }
+    if (!await fingerprintMatches(lifecycleRoot, originalFingerprint) || await fileState(backupRoot)) {
+      return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
+    }
+    await cleanupOwned(projectRoot, stageRoot);
+    return { ok: true };
+  } catch {
+    return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
+  }
+};
+
 /**
  * Applies one human-approved candidate through a root visibility swap.
  * Trust precondition: Project Lifecycle is the sole writer for the lifecycle root.
+ * The caller/host owns approval and traceability authority; this function binds
+ * supplied references to the reviewed candidate but does not verify an external authority.
  */
 export async function applyApprovedChange(input, operations = {}) {
   const inputValidation = validateApplicationInput(input);
@@ -240,6 +432,7 @@ export async function applyApprovedChange(input, operations = {}) {
   let pending;
   let englishIndexSource;
   let chineseIndexSource;
+  let originalFingerprint;
   try {
     roots = await resolveRoots(input.root);
     [currentMap, pending, englishIndexSource, chineseIndexSource] = await Promise.all([
@@ -248,6 +441,7 @@ export async function applyApprovedChange(input, operations = {}) {
       readFile(join(roots.lifecycleRoot, 'INDEX-en.md'), 'utf8'),
       readFile(join(roots.lifecycleRoot, 'INDEX.md'), 'utf8'),
     ]);
+    originalFingerprint = await directoryFingerprint(roots.lifecycleRoot);
   } catch (error) {
     return applicationFailure(error?.code === 'PATH_SYMLINK_ESCAPE' ? error.code : 'CHANGE_ROOT_INVALID', '/', 'A complete bounded lifecycle root is required.');
   }
@@ -301,12 +495,17 @@ export async function applyApprovedChange(input, operations = {}) {
   const write = operations.atomicWriteValidated ?? atomicWriteValidated;
   const publish = operations.rename ?? rename;
   const afterPublish = operations.afterPublish ?? (async () => {});
+  const inspectTransition = operations.inspectTransition ?? inspectTransitionState;
+  const restoreRename = operations.restoreRename ?? rename;
   const removeBackup = operations.removeBackup
     ?? ((path) => cleanupOwned(roots.projectRoot, path));
   let stageRoot;
   let backupRoot;
-  let backupMoved = false;
-  let candidateMoved = false;
+  const expectedCandidate = {
+    expectedMap: input.candidate_map,
+    expectedPending: candidatePending,
+    expectedIndexes: indexes,
+  };
   try {
     stageRoot = await mkdtemp(join(roots.docsRoot, '.project-lifecycle-change-stage-'));
     await cp(roots.lifecycleRoot, stageRoot, { recursive: true, force: false });
@@ -341,43 +540,33 @@ export async function applyApprovedChange(input, operations = {}) {
     await write({ root: stageRoot, target: 'INDEX-en.md', content: indexes.en, validate: async (source) => validateIndex(source, indexes.en, input.candidate_map) });
     await write({ root: stageRoot, target: 'INDEX.md', content: indexes['zh-CN'], validate: async (source) => validateIndex(source, indexes['zh-CN'], input.candidate_map) });
     const staged = await validateCandidateRoot({ lifecycleRoot: stageRoot, expectedMap: input.candidate_map, expectedPending: candidatePending, expectedIndexes: indexes });
-    if (!staged.ok) return staged;
+    if (!staged.ok) throw Object.assign(new Error('Staged candidate validation failed.'), { result: staged });
 
     backupRoot = await mkdtemp(join(roots.docsRoot, '.project-lifecycle-change-backup-'));
     await rmdir(backupRoot);
-    try {
-      await publish(roots.lifecycleRoot, backupRoot);
-      backupMoved = true;
-    } catch (error) {
-      const [liveState, backupState, stageState] = await Promise.all([
-        fileState(roots.lifecycleRoot),
-        fileState(backupRoot),
-        fileState(stageRoot),
-      ]);
-      if (liveState === null && backupState?.isDirectory() && stageState?.isDirectory()) {
-        backupMoved = true;
-      }
-      throw error;
-    }
-    if (await fileState(roots.lifecycleRoot)
-      || !(await fileState(backupRoot))?.isDirectory()
-      || !(await fileState(stageRoot))?.isDirectory()) {
-      throw new Error('Original publication postcondition failed.');
-    }
-    try {
-      await publish(stageRoot, roots.lifecycleRoot);
-      candidateMoved = true;
-    } catch (error) {
-      const [stageState, liveState] = await Promise.all([
-        fileState(stageRoot),
-        fileState(roots.lifecycleRoot),
-      ]);
-      if (stageState === null && liveState?.isDirectory()) {
-        const movedCandidate = await validateCandidateRoot({ lifecycleRoot: roots.lifecycleRoot, expectedMap: input.candidate_map, expectedPending: candidatePending, expectedIndexes: indexes });
-        if (movedCandidate.ok) candidateMoved = true;
-      }
-      throw error;
-    }
+    await publish(roots.lifecycleRoot, backupRoot);
+    const backupTransition = await inspectTransition({
+      phase: 'backup-moved',
+      projectRoot: roots.projectRoot,
+      lifecycleRoot: roots.lifecycleRoot,
+      stageRoot,
+      backupRoot,
+      originalFingerprint,
+      expectedCandidate,
+    });
+    if (backupTransition?.ok !== true) throw new Error('Original publication transition failed.');
+
+    await publish(stageRoot, roots.lifecycleRoot);
+    const candidateTransition = await inspectTransition({
+      phase: 'candidate-moved',
+      projectRoot: roots.projectRoot,
+      lifecycleRoot: roots.lifecycleRoot,
+      stageRoot,
+      backupRoot,
+      originalFingerprint,
+      expectedCandidate,
+    });
+    if (candidateTransition?.ok !== true) throw new Error('Candidate publication transition failed.');
     const live = await validateCandidateRoot({ lifecycleRoot: roots.lifecycleRoot, expectedMap: input.candidate_map, expectedPending: candidatePending, expectedIndexes: indexes });
     if (!live.ok) throw Object.assign(new Error('Published candidate validation failed.'), { result: live });
     await afterPublish({ lifecycleRoot: roots.lifecycleRoot });
@@ -408,18 +597,16 @@ export async function applyApprovedChange(input, operations = {}) {
       traceability: input.traceability,
     });
   } catch (error) {
-    try {
-      if (candidateMoved && await fileState(roots.lifecycleRoot)) {
-        if (await fileState(stageRoot)) await cleanupOwned(roots.projectRoot, stageRoot);
-        await rename(roots.lifecycleRoot, stageRoot);
-      }
-      if (backupMoved && await fileState(backupRoot)) await rename(backupRoot, roots.lifecycleRoot);
-      await cleanupOwned(roots.projectRoot, stageRoot);
-    } catch {
-      return applicationFailure('CHANGE_RESTORE_FAILED', '/recovery', 'Recovery artifacts were preserved for manual inspection.');
-    }
+    const recovery = await reconcileOriginal({
+      projectRoot: roots.projectRoot,
+      lifecycleRoot: roots.lifecycleRoot,
+      stageRoot,
+      backupRoot,
+      originalFingerprint,
+      expectedCandidate,
+      restoreRename,
+    });
+    if (!recovery.ok) return recovery.result;
     return error?.result ?? applicationFailure('CHANGE_WRITE_FAILED', '/', 'Approved change could not be applied.');
-  } finally {
-    if (!backupMoved) await cleanupOwned(roots.projectRoot, stageRoot).catch(() => {});
   }
 }
