@@ -1,0 +1,14 @@
+{
+  "primary_routes": ["KNOWLEDGE_UPDATE", "NON_PRD_DELIVERY", "OUTSIDE_PLUGIN", "PRD_DELIVERY"],
+  "route_stops": ["NEEDS_USER"],
+  "secondary_obligation_kinds": ["CONFLICT_RESOLUTION_REQUIRED", "CROSS_DOMAIN_COORDINATION_REQUIRED", "DEPENDENCY_RESOLUTION_REQUIRED", "KNOWLEDGE_CHANGE_HANDOFF_REQUIRED", "KNOWLEDGE_READINESS_REQUIRED", "MULTI_REPOSITORY_COORDINATION_REQUIRED"],
+  "obligation_statuses": ["OPEN", "RESOLVED", "SUPERSEDED", "WAIVED"],
+  "domain_states": ["confirmed", "materialized", "merged", "retired"],
+  "knowledge_states": ["current", "in-progress", "proposed", "superseded"],
+  "node_kinds": ["capability", "domain", "project_module"],
+  "relationship_kinds": ["coordinates_with", "depends_on", "governed_by"],
+  "constraint_scopes": ["descendants", "selected_descendants", "self"],
+  "constraint_change_classes": ["REPLACEMENT", "SEMANTIC", "WORDING"],
+  "delivery_retention_tiers": ["active", "archive", "closed-summary"],
+  "archive_reasons": ["AUDIT", "EXPLICIT_ID", "HISTORICAL_COMPARISON", "INCIDENT", "REGRESSION"]
+}
