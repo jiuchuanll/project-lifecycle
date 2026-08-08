@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "diff_id": "knowledge-diff-copy-fix",
+  "owner_delivery_id": "delivery-copy-fix",
+  "knowledge_baseline": "knowledge-revision-42",
+  "operations": [],
+  "domain_changes": [],
+  "entry_points": [
+    "client/desktop/src/wiki/WikiWorkspace.kt"
+  ],
+  "evidence_refs": [
+    "test-report-copy-fix"
+  ],
+  "remaining_limits": [],
+  "outcome": "NO_CHANGE"
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "receipt_id": "archive-receipt-layout-regression",
+  "task_ref": "task-layout-regression",
+  "reason": "REGRESSION",
+  "question": "Which accepted layout behavior changed?",
+  "insufficiency_reason": "Current knowledge and the closed summary do not include the former acceptance evidence.",
+  "artifact_ids": [
+    "prd-wiki-layout-v1"
+  ],
+  "scope": {
+    "domain_ids": [
+      "wiki-workspace"
+    ]
+  },
+  "returned_artifacts": []
+}

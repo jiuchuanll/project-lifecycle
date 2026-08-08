@@ -120,6 +120,44 @@ const validateProjectExtensions = (value) => {
   return errors;
 };
 
+const validateContextReceipt = (value) => {
+  const errors = [];
+  const selectedIds = new Set();
+
+  for (const [index, selection] of value.selected_context.entries()) {
+    const path = `/selected_context/${index}/id`;
+    if (selectedIds.has(selection.id)) {
+      errors.push(createError(ERROR_CODES.ID_DUPLICATE, path, `Duplicate selected context ID: ${selection.id}`));
+    } else {
+      selectedIds.add(selection.id);
+    }
+    if (index > 0 && value.selected_context[index - 1].id > selection.id) {
+      errors.push(createError(ERROR_CODES.SCHEMA_INVALID, path, 'Selected context entries must be sorted by ID.'));
+    }
+  }
+
+  return errors;
+};
+
+const validateDeliveryFrontmatter = (value) => {
+  const errors = [];
+  const obligationIds = new Set();
+
+  for (const [index, obligation] of value.obligations.entries()) {
+    if (obligationIds.has(obligation.obligation_id)) {
+      errors.push(createError(
+        ERROR_CODES.ID_DUPLICATE,
+        `/obligations/${index}/obligation_id`,
+        `Duplicate obligation ID: ${obligation.obligation_id}`,
+      ));
+    } else {
+      obligationIds.add(obligation.obligation_id);
+    }
+  }
+
+  return errors;
+};
+
 const validateProjectPointer = (value, options) => {
   if (!options.resolvedProjectMap) {
     return [createError(
@@ -147,6 +185,12 @@ export const validateJson = (kind, value, options = {}) => {
     ? validateProjectMap(value)
     : kind === 'project-extensions'
       ? validateProjectExtensions(value)
-      : validateProjectPointer(value, options);
+      : kind === 'context-receipt'
+        ? validateContextReceipt(value)
+        : kind === 'delivery-frontmatter'
+          ? validateDeliveryFrontmatter(value)
+          : kind === 'project-pointer'
+            ? validateProjectPointer(value, options)
+            : [];
   return errors.length === 0 ? ok(value) : fail(errors);
 };
