@@ -14,15 +14,31 @@ const runPrivacy = (root, cwd = repositoryRoot) => spawnSync(
   { cwd, encoding: 'utf8' },
 );
 
-test('reports redacted categories and line numbers for tracked private material', async (context) => {
+const createGitRoot = async (context) => {
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-privacy-'));
   context.after(() => rm(root, { force: true, recursive: true }));
   execFileSync('git', ['init', '--quiet'], { cwd: root });
+  return root;
+};
+
+test('reports redacted categories and line numbers for tracked private material', async (context) => {
+  const root = await createGitRoot(context);
 
   const absolutePath = ['', 'Users', 'example'].join('/');
   const secretAssignment = ['token', 'secret'].join('=');
   const privateLocator = ['github.com', 'private-owner', 'private-repo'].join('/');
-  const privateSource = `${absolutePath}\n${secretAssignment}\n${privateLocator}\n`;
+  const quotedToken = ['token', '"secret"'].join('=');
+  const quotedApiKey = ['api_key', "'secret'"].join(': ');
+  const jsonToken = ['"token"', '"secret"'].join(': ');
+  const privateSource = [
+    absolutePath,
+    secretAssignment,
+    privateLocator,
+    quotedToken,
+    quotedApiKey,
+    jsonToken,
+    '',
+  ].join('\n');
 
   await mkdir(join(root, 'docs'), { recursive: true });
   await mkdir(join(root, 'node_modules'), { recursive: true });
@@ -49,10 +65,55 @@ test('reports redacted categories and line numbers for tracked private material'
     { code: 'PRIVACY_ABSOLUTE_PATH', path: 'docs/bad.txt', line: 1 },
     { code: 'PRIVACY_SECRET_PATTERN', path: 'docs/bad.txt', line: 2 },
     { code: 'PRIVACY_PRIVATE_LOCATOR', path: 'docs/bad.txt', line: 3 },
+    { code: 'PRIVACY_SECRET_PATTERN', path: 'docs/bad.txt', line: 4 },
+    { code: 'PRIVACY_SECRET_PATTERN', path: 'docs/bad.txt', line: 5 },
+    { code: 'PRIVACY_SECRET_PATTERN', path: 'docs/bad.txt', line: 6 },
   ]);
-  assert.equal(result.stdout.includes(absolutePath), false);
+  for (const privateValue of [
+    absolutePath,
+    secretAssignment,
+    privateLocator,
+    quotedToken,
+    quotedApiKey,
+    jsonToken,
+  ]) {
+    assert.equal(result.stdout.includes(privateValue), false);
+  }
+});
+
+test('scans a tracked basename beginning with two dots inside the explicit root', async (context) => {
+  const root = await createGitRoot(context);
+  const secretAssignment = ['token', 'secret'].join('=');
+  await writeFile(join(root, '..credentials'), `${secretAssignment}\n`);
+  execFileSync('git', ['add', '--force', '--', '..credentials'], { cwd: root });
+
+  const result = runPrivacy(root);
+
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr, '');
+  assert.deepEqual(JSON.parse(result.stdout).findings, [{
+    code: 'PRIVACY_SECRET_PATTERN',
+    path: '..credentials',
+    line: 1,
+  }]);
   assert.equal(result.stdout.includes(secretAssignment), false);
-  assert.equal(result.stdout.includes(privateLocator), false);
+});
+
+test('sorts privacy findings by locale-independent code-point order', async (context) => {
+  const root = await createGitRoot(context);
+  const secretAssignment = ['token', 'secret'].join('=');
+  const paths = ['a.txt', 'é.txt', '_punct.txt', 'B.txt', '😀.txt', '�.txt'];
+  for (const path of paths) await writeFile(join(root, path), `${secretAssignment}\n`);
+  execFileSync('git', ['add', '--force', '--', ...paths], { cwd: root });
+
+  const result = runPrivacy(root);
+
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr, '');
+  assert.deepEqual(
+    JSON.parse(result.stdout).findings.map(({ path }) => path),
+    ['B.txt', '_punct.txt', 'a.txt', 'é.txt', '�.txt', '😀.txt'],
+  );
 });
 
 test('passes the tracked repository scan while ignoring untracked test material', async () => {

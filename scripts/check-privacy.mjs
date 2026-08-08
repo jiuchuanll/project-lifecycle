@@ -1,9 +1,18 @@
 import { execFile } from 'node:child_process';
 import { lstat, readFile } from 'node:fs/promises';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const compareCodePoints = (left, right) => {
+  const leftPoints = [...left].map((character) => character.codePointAt(0));
+  const rightPoints = [...right].map((character) => character.codePointAt(0));
+  const length = Math.min(leftPoints.length, rightPoints.length);
+  for (let index = 0; index < length; index += 1) {
+    if (leftPoints[index] !== rightPoints[index]) return leftPoints[index] - rightPoints[index];
+  }
+  return leftPoints.length - rightPoints.length;
+};
 
 const rules = [
   {
@@ -12,7 +21,7 @@ const rules = [
   },
   {
     code: 'PRIVACY_SECRET_PATTERN',
-    pattern: /(?:^|[^A-Za-z0-9_])(?:token|api[_-]?key|password|secret)\s*[:=]\s*[^\s"'`,;]+/i,
+    pattern: /(?:^|[^A-Za-z0-9_])["']?(?:token|api[_-]?key|password|secret)["']?\s*[:=]\s*["']?[^\s"'`,;]+["']?/i,
   },
   {
     code: 'PRIVACY_PRIVATE_LOCATOR',
@@ -26,7 +35,7 @@ const excluded = (path) => path.split('/').some((segment) => (
 
 const insideRoot = (root, candidate) => {
   const path = relative(root, candidate);
-  return path === '' || (!path.startsWith('..') && !isAbsolute(path));
+  return path === '' || (path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path));
 };
 
 const trackedFiles = async (root) => {
@@ -34,7 +43,7 @@ const trackedFiles = async (root) => {
     encoding: 'utf8',
     maxBuffer: 16 * 1024 * 1024,
   });
-  return stdout.split('\0').filter(Boolean).sort();
+  return stdout.split('\0').filter(Boolean).sort(compareCodePoints);
 };
 
 export const checkPrivacy = async (rootValue) => {
@@ -58,9 +67,9 @@ export const checkPrivacy = async (rootValue) => {
     }
   }
 
-  findings.sort((left, right) => left.path.localeCompare(right.path)
+  findings.sort((left, right) => compareCodePoints(left.path, right.path)
     || left.line - right.line
-    || left.code.localeCompare(right.code));
+    || compareCodePoints(left.code, right.code));
   return { ok: findings.length === 0, scanned_files: scannedFiles, findings };
 };
 
