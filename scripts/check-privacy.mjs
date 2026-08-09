@@ -3,8 +3,11 @@ import { lstat, readFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 
+import { buildBundle } from './lib/bundle-build.mjs';
+
 const execFileAsync = promisify(execFile);
 const canonicalRepository = ['https://github', '.com/jiuchuan', 'll/project-lifecycle'].join('');
+const generatedBundlePath = 'dist/project-lifecycle.mjs';
 const compareCodePoints = (left, right) => {
   const leftPoints = [...left].map((character) => character.codePointAt(0));
   const rightPoints = [...right].map((character) => character.codePointAt(0));
@@ -51,8 +54,14 @@ export const checkPrivacy = async (rootValue) => {
   const root = resolve(rootValue);
   const findings = [];
   let scannedFiles = 0;
+  const files = await trackedFiles(root);
+  let expectedBundle = null;
+  if (files.includes(generatedBundlePath)) {
+    const built = await buildBundle({ repositoryRoot: root, write: false });
+    expectedBundle = built.outputFiles?.find(({ path }) => path.endsWith(generatedBundlePath))?.contents ?? null;
+  }
 
-  for (const path of await trackedFiles(root)) {
+  for (const path of files) {
     if (excluded(path)) continue;
     const absolute = resolve(root, path);
     if (!insideRoot(root, absolute)) continue;
@@ -61,6 +70,12 @@ export const checkPrivacy = async (rootValue) => {
     const content = await readFile(absolute);
     if (content.includes(0)) continue;
     scannedFiles += 1;
+    if (path === generatedBundlePath) {
+      if (expectedBundle === null || !content.equals(expectedBundle)) {
+        findings.push({ code: 'PRIVACY_GENERATED_ARTIFACT_MISMATCH', path, line: 1 });
+      }
+      continue;
+    }
     for (const [index, line] of content.toString('utf8').split(/\r?\n/).entries()) {
       const scannedLine = line.replaceAll(canonicalRepository, '');
       for (const { code, pattern } of rules) {

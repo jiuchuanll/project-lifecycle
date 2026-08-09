@@ -3,9 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
-  "bin": { "project-lifecycle": "./scripts/bin/project-lifecycle.mjs" },
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "project-lifecycle": "./bin/project-lifecycle"
+  },
   "scripts": {
+    "build": "node scripts/build-bundle.mjs",
+    "check:bundle": "npm run build && node --test tests/harnesses/bundle.test.mjs",
     "test": "node --test",
     "test:delivery": "node --test tests/delivery/*.test.mjs",
     "test:governance": "node --test tests/governance/*.test.mjs",
@@ -17,5 +23,8 @@
     "ajv": "8.17.1",
     "ajv-formats": "3.0.1",
     "yaml": "2.8.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.9"
   }
 }
