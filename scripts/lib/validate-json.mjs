@@ -230,6 +230,25 @@ const validatePendingChanges = (value) => {
       ));
     }
     changeIds.add(change.change_id);
+    const obligationIds = new Set();
+    for (const [obligationIndex, obligation] of (change.obligations ?? []).entries()) {
+      const validation = validateJson('obligation-instance', obligation);
+      if (!validation.ok) {
+        errors.push(...validation.errors.map((entry) => createError(
+          entry.code,
+          `/changes/${index}/obligations/${obligationIndex}${entry.path === '/' ? '' : entry.path}`,
+          'Invalid pending-change obligation instance.',
+        )));
+      }
+      if (obligationIds.has(obligation.obligation_id)) {
+        errors.push(createError(
+          ERROR_CODES.ID_DUPLICATE,
+          `/changes/${index}/obligations/${obligationIndex}/obligation_id`,
+          `Duplicate obligation ID: ${obligation.obligation_id}`,
+        ));
+      }
+      obligationIds.add(obligation.obligation_id);
+    }
     if (!change.semantic_target_key) continue;
     if (semanticTargets.has(change.semantic_target_key)) {
       errors.push(createError(
@@ -395,6 +414,14 @@ const validateDeterministicOrder = (kind, value) => {
         appendOrderErrors(errors, change.evidence_refs, `/changes/${index}/evidence_refs`);
         for (const [operationIndex, operation] of change.operations.entries()) {
           appendOrderErrors(errors, operation.evidence_refs, `/changes/${index}/operations/${operationIndex}/evidence_refs`);
+        }
+      }
+      if (change.obligations) {
+        appendOrderErrors(errors, change.obligations, `/changes/${index}/obligations`, 'obligation_id');
+        for (const [obligationIndex, obligation] of change.obligations.entries()) {
+          for (const field of ['trigger_refs', 'scope_refs', 'responsible_refs', 'evidence_refs']) {
+            appendOrderErrors(errors, obligation[field], `/changes/${index}/obligations/${obligationIndex}/${field}`);
+          }
         }
       }
     }

@@ -93,7 +93,8 @@
         "risks": { "$ref": "#/$defs/boundedNotes" },
         "evidence_gaps": { "$ref": "#/$defs/boundedNotes" },
         "review_state": { "const": "open" },
-        "opened_at": { "type": "string", "format": "date-time" }
+        "opened_at": { "type": "string", "format": "date-time" },
+        "obligations": { "$ref": "#/$defs/obligations" }
       }
     },
     "absorptionOperation": {
@@ -160,7 +161,8 @@
         "risks": { "$ref": "#/$defs/notes" },
         "evidence_gaps": { "$ref": "#/$defs/notes" },
         "review_state": { "const": "open" },
-        "created_at": { "type": "string", "format": "date-time" }
+        "created_at": { "type": "string", "format": "date-time" },
+        "obligations": { "$ref": "#/$defs/obligations" }
       }
     },
     "governedChange": {
@@ -221,8 +223,14 @@
         "knowledge_commitments": {
           "type": "array",
           "items": { "$ref": "#/$defs/knowledgeCommitment" }
-        }
+        },
+        "obligations": { "$ref": "#/$defs/obligations" }
       }
+    },
+    "obligations": {
+      "type": "array",
+      "maxItems": 50,
+      "items": { "type": "object" }
     },
     "baseline": {
       "type": "object",
