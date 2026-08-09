@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "auxiliary_roots": ["delivery/assets", "delivery/routing", "knowledge/absorption", "knowledge/archive", "knowledge/bootstrap", "knowledge/materialization", "knowledge/topology"],
+  "auxiliary_roots": ["delivery/assets", "delivery/context-receipt", "delivery/routing", "knowledge/absorption", "knowledge/archive", "knowledge/bootstrap", "knowledge/materialization", "knowledge/topology"],
   "fixtures": [
     {
       "path": "contracts/handoffs/archive-access-receipt.valid.json",
