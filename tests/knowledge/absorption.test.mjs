@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { cp, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, readdir, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -155,6 +155,17 @@ test('applies a disjoint accepted ADD and atomically advances pair, owner, map, 
     ['desktop-theme-fact', 1],
   ]);
   assert.match(await readFile(join(lifecycle(root), 'INDEX-en.md'), 'utf8'), /baseline-2/);
+});
+
+test('accepted knowledge absorption preserves unrelated relative symlinks during root publication', async (context) => {
+  const root = await setup(context);
+  await writeFile(join(lifecycle(root), 'unrelated-target.md'), 'unrelated\n');
+  await symlink('unrelated-target.md', join(lifecycle(root), 'unrelated-link.md'));
+
+  const result = await applyKnowledgeDiff(await accepted(root, 'ADD', addBlock));
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(await readlink(join(lifecycle(root), 'unrelated-link.md')), 'unrelated-target.md');
 });
 
 test('applies accepted same-subject REWRITE with the same fact ID and exactly one revision increment', async (context) => {

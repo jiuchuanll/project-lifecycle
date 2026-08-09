@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, readdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -129,6 +129,20 @@ test('materializes an explicit PRD as one validated bilingual pair under the fix
   assert.match(zh, /限定的中文结果/);
 });
 
+test('rejects a lifecycle root symlink before writing outside the project', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-delivery-project-'));
+  const outside = await mkdtemp(join(tmpdir(), 'project-lifecycle-delivery-outside-'));
+  await mkdir(join(root, 'docs'), { recursive: true });
+  await mkdir(join(outside, 'delivery'), { recursive: true });
+  await symlink(outside, join(root, 'docs', 'project-lifecycle'));
+
+  const result = await materializeAsset(request(root));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'ASSET_PATH_INVALID');
+  assert.deepEqual(await readdir(join(outside, 'delivery')), []);
+});
+
 test('accepts a bounded human-readable materialization reason', () => {
   const result = validateMaterializationRequest(request('/tmp/example', {
     reason: 'Create the smallest PRD owner for the accepted Wiki layout request.',
@@ -199,4 +213,28 @@ test('removes the first new language when the paired write fails', async () => {
   assert.equal(result.ok, false);
   assert.equal(result.errors[0].code, 'ASSET_WRITE_FAILED');
   assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
+});
+
+test('reports rollback failure instead of leaving a silently inconsistent feedback pair', async () => {
+  const root = await rootFor();
+  const frontmatter = baseFrontmatter({
+    artifact_id: 'feedback-wiki-density',
+    artifact_kind: 'feedback',
+  });
+  assert.equal((await materializeAsset(request(root, { frontmatter, body: feedbackBody() }))).ok, true);
+
+  let writes = 0;
+  const result = await materializeAsset(request(root, {
+    frontmatter,
+    body: feedbackBody({ coverage: 'Covered by PRD.' }),
+  }), {
+    atomicWriteValidated: async (options) => {
+      writes += 1;
+      if (writes >= 2) throw new Error('injected second-language or rollback failure');
+      return atomicWriteValidated(options);
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'ASSET_ROLLBACK_FAILED');
 });

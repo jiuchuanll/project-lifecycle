@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, readdir, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -179,6 +179,24 @@ test('approved SEMANTIC application atomically updates map, pair, indexes, trace
   assert.match(await readFile(join(lifecycle(root), 'INDEX-en.md'), 'utf8'), /desktop-experience/);
   assert.match(await readFile(join(lifecycle(root), 'INDEX-en.md'), 'utf8'), /Sample app/);
   assert.match(await readFile(join(lifecycle(root), 'INDEX.md'), 'utf8'), /示例应用/);
+});
+
+test('approved change preserves unrelated relative symlinks during root publication', async (context) => {
+  const { root, candidate, updates } = await preparedSemanticChange(context);
+  await writeFile(join(lifecycle(root), 'unrelated-target.md'), 'unrelated\n');
+  await symlink('unrelated-target.md', join(lifecycle(root), 'unrelated-link.md'));
+
+  const result = await applyApprovedChange({
+    root,
+    change_id: 'change-desktop-privacy',
+    approval_ref: 'approval:desktop-privacy-v2',
+    traceability: { knowledge_diff_ref: 'knowledge-diff:desktop-privacy-v2', history_ref: 'git:candidate-commit' },
+    candidate_map: candidate,
+    knowledge_updates: updates,
+  });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(await readlink(join(lifecycle(root), 'unrelated-link.md')), 'unrelated-target.md');
 });
 
 test('SEMANTIC application requires approval and complete child dispositions', async (context) => {

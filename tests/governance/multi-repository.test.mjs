@@ -268,54 +268,71 @@ test('pins three repositories and prepares one reviewed governance PR without co
   }
 
   const githubHost = ['github', 'com'].join('.');
+  const governanceCandidateRevision = 'e'.repeat(40);
+  const frontendBodyRoot = join(state.frontend.root, '.project-lifecycle/runtime/publication');
+  const backendBodyRoot = join(state.backend.root, '.project-lifecycle/runtime/publication');
+  const governanceBodyRoot = join(state.governance.root, '.project-lifecycle/runtime/publication');
+  await Promise.all([frontendBodyRoot, backendBodyRoot, governanceBodyRoot].map((path) => mkdir(path, { recursive: true })));
+  const governanceBodyFile = join(governanceBodyRoot, 'wiki-governance-pr.md');
+  await writeFile(governanceBodyFile, 'Reviewed Wiki governance candidate.\n');
   const runner = createFakeProcessRunner([
+    { ok: true, code: 0, stdout: `https://${githubHost}/example/wiki-frontend.git\n`, stderr: '' },
+    { ok: true, code: 0, stdout: `${uiCandidate.revision}\n`, stderr: '' },
     { ok: true, code: 0, stdout: '', stderr: '' },
+    { ok: true, code: 0, stdout: `https://${githubHost}/example/wiki-backend.git\n`, stderr: '' },
+    { ok: true, code: 0, stdout: `${serviceCandidate.revision}\n`, stderr: '' },
     { ok: true, code: 0, stdout: '', stderr: '' },
+    { ok: true, code: 0, stdout: `https://${githubHost}/example/wiki-governance.git\n`, stderr: '' },
+    { ok: true, code: 0, stdout: `${governanceCandidateRevision}\n`, stderr: '' },
     { ok: true, code: 0, stdout: '', stderr: '' },
     { ok: true, code: 0, stdout: `https://${githubHost}/example/wiki-governance/pull/9\n`, stderr: '' },
+    { ok: true, code: 0, stdout: `${JSON.stringify({ headRefOid: governanceCandidateRevision })}\n`, stderr: '' },
   ]);
-  const frontendRemote = createGitHubAdapter({ owner: 'example', repo: 'wiki-frontend', acceptedBranch: 'main', runner });
-  const backendRemote = createGitHubAdapter({ owner: 'example', repo: 'wiki-backend', acceptedBranch: 'main', runner });
-  const governanceRemote = createGitHubAdapter({ owner: 'example', repo: 'wiki-governance', acceptedBranch: 'main', runner });
+  const frontendRemote = createGitHubAdapter({ owner: 'example', repo: 'wiki-frontend', acceptedBranch: 'main', runner, repositoryRoot: state.frontend.root, bodyRoot: frontendBodyRoot });
+  const backendRemote = createGitHubAdapter({ owner: 'example', repo: 'wiki-backend', acceptedBranch: 'main', runner, repositoryRoot: state.backend.root, bodyRoot: backendBodyRoot });
+  const governanceRemote = createGitHubAdapter({ owner: 'example', repo: 'wiki-governance', acceptedBranch: 'main', runner, repositoryRoot: state.governance.root, bodyRoot: governanceBodyRoot });
   const leaseEvents = [];
   const result = await publishReviewedCandidate({
     adapter: governanceRemote,
     lease: {
       acquire: async () => { leaseEvents.push('acquire'); return { ok: true, value: null, errors: [] }; },
+      renew: async () => { leaseEvents.push('renew'); return { ok: true, value: null, errors: [] }; },
       release: async () => { leaseEvents.push('release'); return { ok: true, value: null, errors: [] }; },
     },
     ownerId: 'phase-four-publication',
     expectedGovernanceRevision: state.governanceRevision,
     candidateBranch: 'codex/wiki-governance-pin',
-    validationResult: { ok: true, evidence_ref: 'validation:phase-four' },
-    humanGate: { required: true, resolved: true, approval_ref: 'approval:phase-four' },
+    validationResult: { ok: true, evidence_ref: 'validation:phase-four', candidate_revision: governanceCandidateRevision },
+    humanGate: { required: true, resolved: true, approval_ref: 'approval:phase-four', candidate_revision: governanceCandidateRevision },
     refreshAcceptedRevision: async () => state.governanceRevision,
     reconcileCandidate: async () => ({
       ok: true,
-      value: { atomic_set: { expected_governance_revision: state.governanceRevision } },
+      value: { atomic_set: { expected_governance_revision: state.governanceRevision, candidate_revision: governanceCandidateRevision } },
       errors: [],
     }),
     validateAtomicSet: async () => ({ ok: true, value: null, errors: [] }),
-    shardCandidate: {
-      branch: 'codex/wiki-shards',
-      adapter: {
-        pushCandidate: async () => {
-          const first = await frontendRemote.pushCandidate('codex/wiki-interface-unit');
-          return first.ok ? backendRemote.pushCandidate('codex/wiki-service-unit') : first;
-        },
+    shardCandidate: { candidates: [
+      {
+        branch: 'codex/wiki-interface-unit',
+        candidate_revision: uiCandidate.revision,
+        adapter: frontendRemote,
       },
-    },
+      {
+        branch: 'codex/wiki-service-unit',
+        candidate_revision: serviceCandidate.revision,
+        adapter: backendRemote,
+      },
+    ] },
     title: 'Wiki multi-repository candidate',
-    bodyFile: '/private/tmp/wiki-governance-pr.md',
+    bodyFile: governanceBodyFile,
   });
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.value.current_truth_changed, false);
-  assert.deepEqual(leaseEvents, ['acquire', 'release']);
-  assert.deepEqual(runner.calls.map(({ command, args }) => [command, ...args.slice(0, 3)]), [
-    ['git', 'push', 'origin', 'codex/wiki-interface-unit'],
-    ['git', 'push', 'origin', 'codex/wiki-service-unit'],
-    ['git', 'push', 'origin', 'codex/wiki-governance-pin'],
-    ['gh', 'pr', 'create', '--repo'],
+  assert.deepEqual(leaseEvents, ['acquire', 'renew', 'renew', 'renew', 'release']);
+  assert.deepEqual(runner.calls.filter(({ args }) => args[0] === 'push').map(({ args }) => args[2]), [
+    `${uiCandidate.revision}:refs/heads/codex/wiki-interface-unit`,
+    `${serviceCandidate.revision}:refs/heads/codex/wiki-service-unit`,
+    `${governanceCandidateRevision}:refs/heads/codex/wiki-governance-pin`,
   ]);
   assert.equal(runner.calls.some(({ args }) => args.includes('merge') || args.at(-1) === 'main'), false);
 });
@@ -408,10 +425,12 @@ test('expired leases, concurrent accepted advances, and failed shard pushes publ
   const events = [];
   const publicationLease = {
     acquire: async () => { events.push('lease:acquire'); return { ok: true, value: null, errors: [] }; },
+    renew: async () => { events.push('lease:renew'); return { ok: true, value: null, errors: [] }; },
     release: async () => { events.push('lease:release'); return { ok: true, value: null, errors: [] }; },
   };
+  const candidateRevision = 'c'.repeat(40);
   const governanceAdapter = {
-    pushCandidate: async () => { events.push('push:governance'); return { ok: true, value: null, errors: [] }; },
+    pushCandidate: async () => { events.push('push:governance'); return { ok: true, value: { revision: candidateRevision }, errors: [] }; },
     createDraftPullRequest: async () => { events.push('pr:create'); return { ok: true, value: { number: 1 }, errors: [] }; },
   };
   const baseInput = {
@@ -420,11 +439,11 @@ test('expired leases, concurrent accepted advances, and failed shard pushes publ
     ownerId: 'publication-owner',
     expectedGovernanceRevision: state.governanceRevision,
     candidateBranch: 'codex/governance-candidate',
-    validationResult: { ok: true, evidence_ref: 'validation:phase-four' },
-    humanGate: { required: true, resolved: true, approval_ref: 'approval:phase-four' },
+    validationResult: { ok: true, evidence_ref: 'validation:phase-four', candidate_revision: candidateRevision },
+    humanGate: { required: true, resolved: true, approval_ref: 'approval:phase-four', candidate_revision: candidateRevision },
     reconcileCandidate: async () => ({
       ok: true,
-      value: { atomic_set: { expected_governance_revision: state.governanceRevision } },
+      value: { atomic_set: { expected_governance_revision: state.governanceRevision, candidate_revision: candidateRevision } },
       errors: [],
     }),
     validateAtomicSet: async () => ({ ok: true, value: null, errors: [] }),
@@ -444,11 +463,12 @@ test('expired leases, concurrent accepted advances, and failed shard pushes publ
     refreshAcceptedRevision: async () => state.governanceRevision,
     shardCandidate: {
       branch: 'codex/backend-delayed',
+      candidate_revision: 'd'.repeat(40),
       adapter: { pushCandidate: async () => { events.push('push:shard'); return { ok: false, errors: [] }; } },
     },
   });
   assert.equal(failedShard.errors[0].code, 'PUBLICATION_SHARD_INCOMPLETE');
-  assert.deepEqual(events, ['lease:acquire', 'push:shard', 'lease:release']);
+  assert.deepEqual(events, ['lease:acquire', 'lease:renew', 'push:shard', 'lease:release']);
   assert.equal(events.includes('push:governance'), false);
   assert.equal(events.includes('pr:create'), false);
 });

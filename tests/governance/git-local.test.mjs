@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -38,6 +38,24 @@ test('exports the exact portable asynchronous versioned-storage interface', asyn
   ]);
   for (const method of Object.values(storage)) assert.equal(method.constructor.name, 'AsyncFunction');
   assert.equal(typeof createProcessRunner().runProcess, 'function');
+});
+
+test('bounds every local Git subprocess with the repository root and a timeout', async () => {
+  const { root, second } = await repository();
+  const calls = [];
+  const storage = createGitLocalStorage({
+    repositoryRoot: root,
+    runner: {
+      runProcess: async (command, args, options) => {
+        calls.push({ command, args, options });
+        return { ok: true, code: 0, stdout: `${second}\n`, stderr: '' };
+      },
+    },
+  });
+
+  assert.equal((await storage.resolveRevision('HEAD')).ok, true);
+  assert.equal(calls[0].options.cwd, await realpath(root));
+  assert.equal(calls[0].options.timeoutMs, 30_000);
 });
 
 test('pins immutable reads and listings after the accepted branch advances', async () => {

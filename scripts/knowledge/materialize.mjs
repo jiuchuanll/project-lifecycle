@@ -933,7 +933,7 @@ export async function materializeCapability(input, operations = {}) {
   try {
     stagingRoot = await mkdtemp(join(docsRoot, '.project-lifecycle-materialize-stage-'));
     await verifyOwnedTransactionDirectory(projectRoot, stagingRoot);
-    await cp(lifecycleRoot, stagingRoot, { recursive: true, force: false });
+    await cp(lifecycleRoot, stagingRoot, { recursive: true, force: false, verbatimSymlinks: true });
     await writeArtifact({
       root: stagingRoot,
       target: input.targets.en,

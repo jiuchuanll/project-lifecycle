@@ -771,7 +771,7 @@ const publishCandidate = async ({ roots, originalFingerprint, map, pending, inde
   const expectedCandidate = { expectedMap: map, expectedPending: pending, expectedIndexes: indexes };
   try {
     stageRoot = await mkdtemp(join(roots.docsRoot, '.project-lifecycle-absorption-stage-'));
-    await cp(roots.lifecycleRoot, stageRoot, { recursive: true, force: false });
+    await cp(roots.lifecycleRoot, stageRoot, { recursive: true, force: false, verbatimSymlinks: true });
     for (const update of updates) {
       for (const language of LANGUAGES) {
         await write({

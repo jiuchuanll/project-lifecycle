@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { lstat, readFile, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,6 +65,7 @@ test('builds a deterministic private candidate with the complete explicit releas
     'support-matrix.json',
     'targeted-regression.json',
   ]) assert.ok(names.includes(`${prefix}${required}`), `missing ${required}`);
+  assert.equal(names.some((name) => name.endsWith('/.DS_Store')), false);
   assert.equal(names.some((name) => /(?:^|\/)(?:node_modules|\.git|legacy|tests|scripts)(?:\/|$)/u.test(name)), false);
   assert.equal(names.some((name) => name.includes('docs-workflow/SKILL.md')), false);
   for (const content of archive.value.values()) {
@@ -96,4 +97,37 @@ test('fails closed for dirty release trees and filename-version drift', async ()
   });
   assert.equal(mismatch.ok, false);
   assert.equal(mismatch.errors[0].code, 'RELEASE_VERSION_MISMATCH');
+});
+
+test('rejects a release version that is not one safe path component', async () => {
+  const result = await buildReleasePackage({
+    repositoryRoot,
+    outputDirectory: join(tmpdir(), 'unused-release-output'),
+    filenameVersion: 'x/../../../victim',
+    allowDirty: true,
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'RELEASE_VERSION_INVALID');
+});
+
+test('refuses to follow an existing release output symlink', async (context) => {
+  const outputDirectory = await mkdtemp(join(tmpdir(), 'project-lifecycle-release-output-'));
+  context.after(() => rm(outputDirectory, { recursive: true, force: true }));
+  const sentinel = join(outputDirectory, 'sentinel.txt');
+  const archivePath = join(outputDirectory, 'project-lifecycle-0.1.0.zip');
+  await writeFile(sentinel, 'sentinel\n');
+  await symlink(sentinel, archivePath);
+
+  const result = await buildReleasePackage({
+    repositoryRoot,
+    outputDirectory,
+    allowDirty: true,
+    requireTracked: false,
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'RELEASE_OUTPUT_INVALID');
+  assert.equal((await lstat(archivePath)).isSymbolicLink(), true);
+  assert.equal(await readFile(sentinel, 'utf8'), 'sentinel\n');
 });

@@ -493,7 +493,7 @@ export async function applyApprovedChange(input, operations = {}) {
   };
   try {
     stageRoot = await mkdtemp(join(roots.docsRoot, '.project-lifecycle-change-stage-'));
-    await cp(roots.lifecycleRoot, stageRoot, { recursive: true, force: false });
+    await cp(roots.lifecycleRoot, stageRoot, { recursive: true, force: false, verbatimSymlinks: true });
     for (const update of input.knowledge_updates) {
       for (const language of ['en', 'zh-CN']) {
         await write({

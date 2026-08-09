@@ -248,6 +248,17 @@ test('materializes exactly one bilingual pair, map update, and regenerated paire
   assert.equal(chineseDocument.includes('批准依据：`approval:user-current-wiki`'), true);
 });
 
+test('preserves an unrelated relative symlink during a successful root swap', async (context) => {
+  const { root, lifecycleRoot } = await createProject(context);
+  await writeFile(join(lifecycleRoot, 'unrelated-target.md'), 'unrelated\n');
+  await symlink('unrelated-target.md', join(lifecycleRoot, 'unrelated-link.md'));
+
+  const result = await materializeCapability(await validInput(root));
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(await readlink(join(lifecycleRoot, 'unrelated-link.md')), 'unrelated-target.md');
+});
+
 test('keeps a valid proposed pair proposed without requiring approval', async (context) => {
   const { root, lifecycleRoot } = await createProject(context);
   const input = await validInput(root);

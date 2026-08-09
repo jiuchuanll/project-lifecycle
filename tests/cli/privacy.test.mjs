@@ -99,6 +99,24 @@ test('scans a tracked basename beginning with two dots inside the explicit root'
   assert.equal(result.stdout.includes(secretAssignment), false);
 });
 
+test('detects prefixed credentials in a tracked NUL-bearing file', async (context) => {
+  const root = await createGitRoot(context);
+  const credential = [
+    ['GITHUB', 'TOKEN'].join('_'),
+    ['ghp', 'private'].join('_'),
+  ].join('=');
+  await writeFile(join(root, 'credential.bin'), Buffer.from(`prefix\0${credential}\n`));
+  execFileSync('git', ['add', '--force', '--', 'credential.bin'], { cwd: root });
+
+  const result = runPrivacy(root);
+
+  assert.equal(result.status, 1);
+  assert.deepEqual(JSON.parse(result.stdout).findings, [{
+    code: 'PRIVACY_SECRET_PATTERN', path: 'credential.bin', line: 1,
+  }]);
+  assert.equal(result.stdout.includes(credential), false);
+});
+
 test('allows only the declared canonical plugin repository locator', async (context) => {
   const root = await createGitRoot(context);
   const host = ['github', 'com'].join('.');

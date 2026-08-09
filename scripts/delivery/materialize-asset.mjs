@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile, unlink } from 'node:fs/promises';
-import { isAbsolute, join } from 'node:path';
+import { lstat, readFile, realpath, unlink } from 'node:fs/promises';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
 import { stringify as stringifyYaml } from 'yaml';
@@ -22,6 +22,29 @@ const boundedText = (value) => typeof value === 'string'
   && value.trim().length > 0
   && value.length <= 500
   && !/[\p{Cc}\p{Cf}]/u.test(value);
+
+const inside = (root, candidate) => {
+  const path = relative(root, candidate);
+  return path === '' || (path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path));
+};
+
+const requireRegularDirectory = async (path, rootReal = null) => {
+  const state = await lstat(path);
+  if (!state.isDirectory() || state.isSymbolicLink()) throw new Error('Unsafe delivery directory.');
+  const physical = await realpath(path);
+  if (rootReal !== null && !inside(rootReal, physical)) throw new Error('Delivery directory escapes project root.');
+  return physical;
+};
+
+const resolveLifecycleRoot = async (root) => {
+  const projectRoot = await requireRegularDirectory(root);
+  const docsRoot = await requireRegularDirectory(join(root, 'docs'), projectRoot);
+  const lifecycleRoot = await requireRegularDirectory(join(root, 'docs', 'project-lifecycle'), projectRoot);
+  if (!inside(docsRoot, lifecycleRoot)) throw new Error('Lifecycle root escapes docs root.');
+  const deliveryRoot = await requireRegularDirectory(join(root, 'docs', 'project-lifecycle', 'delivery'), lifecycleRoot);
+  if (!inside(lifecycleRoot, deliveryRoot)) throw new Error('Delivery root escapes lifecycle root.');
+  return lifecycleRoot;
+};
 
 const headingLevels = (source) => [...source.matchAll(/^(#{1,6})[ \t]+\S.*$/gm)]
   .map((match) => match[1].length);
@@ -147,8 +170,15 @@ const existingFile = async (path) => {
 };
 
 const rollbackFirstWrite = async ({ write, lifecycleRoot, locator, original }) => {
+  const path = join(lifecycleRoot, locator);
   if (original === null) {
-    await unlink(join(lifecycleRoot, locator)).catch(() => {});
+    await unlink(path);
+    try {
+      await lstat(path);
+      throw new Error('New delivery file still exists after rollback.');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
     return;
   }
   await write({
@@ -159,7 +189,8 @@ const rollbackFirstWrite = async ({ write, lifecycleRoot, locator, original }) =
       const parsed = splitDocument(source);
       return parsed ? ok(source) : failure('DELIVERY_DOCUMENT_INVALID', '/', 'Original delivery document could not be restored.');
     },
-  }).catch(() => {});
+  });
+  if (await readFile(path, 'utf8') !== original) throw new Error('Original delivery file was not restored.');
 };
 
 export async function materializeAsset(input = {}, operations = {}) {
@@ -169,7 +200,12 @@ export async function materializeAsset(input = {}, operations = {}) {
     return failure('ASSET_ROOT_INVALID', '/root', 'Delivery materialization requires an absolute project root.');
   }
 
-  const lifecycleRoot = join(input.root, 'docs', 'project-lifecycle');
+  let lifecycleRoot;
+  try {
+    lifecycleRoot = await resolveLifecycleRoot(input.root);
+  } catch {
+    return failure('ASSET_PATH_INVALID', '/root', 'Delivery targets must be regular files beneath the fixed lifecycle root.');
+  }
   const id = input.frontmatter.artifact_id;
   const locators = { en: `delivery/${id}-en.md`, 'zh-CN': `delivery/${id}.md` };
   const paths = Object.fromEntries(Object.entries(locators).map(([language, locator]) => [language, join(lifecycleRoot, locator)]));
@@ -231,12 +267,16 @@ export async function materializeAsset(input = {}, operations = {}) {
         validate: (source) => validateRendered(source, input.frontmatter, bodies['zh-CN']),
       });
     } catch (error) {
-      await rollbackFirstWrite({
-        write,
-        lifecycleRoot,
-        locator: locators.en,
-        original: existing.en,
-      });
+      try {
+        await rollbackFirstWrite({
+          write,
+          lifecycleRoot,
+          locator: locators.en,
+          original: existing.en,
+        });
+      } catch {
+        return failure('ASSET_ROLLBACK_FAILED', '/delivery', 'Delivery pair rollback failed; manual recovery is required.');
+      }
       throw error;
     }
   } catch {

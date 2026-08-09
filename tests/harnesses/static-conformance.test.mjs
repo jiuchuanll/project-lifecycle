@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -126,4 +126,120 @@ test('redacts owned fixture paths before retaining raw native output', async (co
   const raw = await readFile(join(traceRoot, 'codex', 'smoke-project', '1.raw.json'), 'utf8');
   assert.doesNotMatch(raw, new RegExp(fixtureRoot.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
   assert.match(raw, /<native-fixture>/u);
+});
+
+test('rejects trace path traversal before creating a raw output outside the trace root', async (context) => {
+  const traceRoot = await mkdtemp(join(tmpdir(), 'project-lifecycle-trace-'));
+  context.after(() => rm(traceRoot, { recursive: true, force: true }));
+  const escapedName = `${basename(traceRoot)}-outside`;
+  const escaped = join(traceRoot, '..', escapedName, '1.raw.json');
+  const runner = {
+    resolveExecutable: async () => '/opt/fake-host',
+    runProcess: async () => ({ ok: true, code: 0, stdout: 'safe', stderr: '' }),
+  };
+
+  const result = await runNativeScenario({
+    host: 'codex', executable: 'fake-host', fixtureRoot, runner,
+    version: '1.0.0', scenarioId: `../../${escapedName}`, runNumber: 1,
+    fixtureHash: `sha256:${'b'.repeat(64)}`, knowledgeBaseline: 'baseline:smoke',
+    pluginCommit: 'a'.repeat(40), prompt: 'Inspect the bounded smoke fixture.',
+    buildArgs: (prompt) => ['run', '--prompt', prompt], allowedContextIds: ['smoke-domain'],
+    traceRoot, model: { identity: 'test-model', revision: 'model-revision-1' },
+    parameters: { temperature: 0 }, clock: () => '2026-08-09T00:00:00.000Z',
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(await lstat(escaped).then(() => true).catch(() => false), false);
+});
+
+test('rejects an existing symlinked host directory before writing a trace outside its root', async (context) => {
+  const traceRoot = await mkdtemp(join(tmpdir(), 'project-lifecycle-trace-'));
+  const outside = await mkdtemp(join(tmpdir(), 'project-lifecycle-trace-outside-'));
+  context.after(() => Promise.all([
+    rm(traceRoot, { recursive: true, force: true }),
+    rm(outside, { recursive: true, force: true }),
+  ]));
+  await symlink(outside, join(traceRoot, 'codex'));
+  const result = await runNativeScenario({
+    host: 'codex', executable: 'fake-host', fixtureRoot, runner: {
+      resolveExecutable: async () => '/opt/fake-host',
+      runProcess: async () => ({ ok: true, code: 0, stdout: 'safe', stderr: '' }),
+    },
+    version: '1.0.0', scenarioId: 'smoke-project', runNumber: 1,
+    fixtureHash: `sha256:${'b'.repeat(64)}`, knowledgeBaseline: 'baseline:smoke',
+    pluginCommit: 'a'.repeat(40), prompt: 'Inspect the bounded smoke fixture.',
+    buildArgs: (prompt) => ['run', '--prompt', prompt], allowedContextIds: ['smoke-domain'],
+    traceRoot, model: { identity: 'test-model', revision: 'model-revision-1' },
+    parameters: { temperature: 0 }, clock: () => '2026-08-09T00:00:00.000Z',
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(await lstat(join(outside, 'smoke-project')).then(() => true).catch(() => false), false);
+});
+
+test('redacts common credential forms before retaining native raw output', async (context) => {
+  const traceRoot = await mkdtemp(join(tmpdir(), 'project-lifecycle-trace-'));
+  context.after(() => rm(traceRoot, { recursive: true, force: true }));
+  const assignment = (name, value) => [name.join('_'), value.join('-')].join('=');
+  const quotedSecret = ['quoted', 'private'].join('-');
+  const quotedSecretWithSpaces = ['correct', 'horse', 'battery', 'staple'].join(' ');
+  const secrets = [
+    assignment(['OPENAI', 'API', 'KEY'], ['sk', 'private']),
+    assignment(['GITHUB', 'TOKEN'], ['ghp', 'private']),
+    assignment(['AWS', 'SECRET', 'ACCESS', 'KEY'], ['aws', 'private']),
+    ['-----BEGIN ', 'PRIVATE KEY', '-----private-----END ', 'PRIVATE KEY', '-----'].join(''),
+    `"${['OPENAI', 'API', 'KEY'].join('_')}":"${quotedSecret}"`,
+    `${['DATABASE', 'PASSWORD'].join('_')}="${quotedSecretWithSpaces}"`,
+  ];
+  const runner = {
+    resolveExecutable: async () => '/opt/fake-host',
+    runProcess: async () => ({ ok: true, code: 0, stdout: secrets.join('\n'), stderr: '' }),
+  };
+  const result = await runNativeScenario({
+    host: 'codex', executable: 'fake-host', fixtureRoot, runner,
+    version: '1.0.0', scenarioId: 'smoke-project', runNumber: 1,
+    fixtureHash: `sha256:${'b'.repeat(64)}`, knowledgeBaseline: 'baseline:smoke',
+    pluginCommit: 'a'.repeat(40), prompt: 'Inspect the bounded smoke fixture.',
+    buildArgs: (prompt) => ['run', '--prompt', prompt], allowedContextIds: ['smoke-domain'],
+    traceRoot, model: { identity: 'test-model', revision: 'model-revision-1' },
+    parameters: { temperature: 0 }, clock: (() => {
+      const values = ['2026-08-09T00:00:00.000Z', '2026-08-09T00:01:00.000Z'];
+      return () => values.shift();
+    })(),
+  });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  const raw = await readFile(join(traceRoot, 'codex', 'smoke-project', '1.raw.json'), 'utf8');
+  for (const secret of secrets) assert.equal(raw.includes(secret), false);
+  assert.equal(raw.includes(quotedSecret), false);
+  assert.equal(raw.includes(quotedSecretWithSpaces), false);
+  assert.equal(raw.includes('horse battery staple'), false);
+  assert.match(raw, /<redacted-secret>/u);
+});
+
+test('replaces an existing raw trace with private file permissions', async (context) => {
+  const traceRoot = await mkdtemp(join(tmpdir(), 'project-lifecycle-trace-'));
+  context.after(() => rm(traceRoot, { recursive: true, force: true }));
+  const directory = join(traceRoot, 'codex', 'smoke-project');
+  const rawPath = join(directory, '1.raw.json');
+  await mkdir(directory, { recursive: true });
+  await writeFile(rawPath, 'old trace\n', { mode: 0o644 });
+  const result = await runNativeScenario({
+    host: 'codex', executable: 'fake-host', fixtureRoot, runner: {
+      resolveExecutable: async () => '/opt/fake-host',
+      runProcess: async () => ({ ok: true, code: 0, stdout: 'safe', stderr: '' }),
+    },
+    version: '1.0.0', scenarioId: 'smoke-project', runNumber: 1,
+    fixtureHash: `sha256:${'b'.repeat(64)}`, knowledgeBaseline: 'baseline:smoke',
+    pluginCommit: 'a'.repeat(40), prompt: 'Inspect the bounded smoke fixture.',
+    buildArgs: (prompt) => ['run', '--prompt', prompt], allowedContextIds: ['smoke-domain'],
+    traceRoot, model: { identity: 'test-model', revision: 'model-revision-1' },
+    parameters: { temperature: 0 }, clock: (() => {
+      const values = ['2026-08-09T00:00:00.000Z', '2026-08-09T00:01:00.000Z'];
+      return () => values.shift();
+    })(),
+  });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal((await lstat(rawPath)).mode & 0o777, 0o600);
 });

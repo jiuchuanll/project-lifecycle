@@ -10,6 +10,7 @@ import { createVersionedStorage } from './versioned-storage.mjs';
 const HASH = /^[0-9a-f]{40,64}$/u;
 const BRANCH = /^codex\/[a-z0-9][a-z0-9._/-]*$/u;
 const FULL_REF = /^refs\/(heads|tags)\/[a-z0-9][a-z0-9._/-]*$/u;
+const PROCESS_TIMEOUT_MS = 30_000;
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const inside = (root, candidate) => {
   const fromRoot = relative(root, candidate);
@@ -35,7 +36,7 @@ export const createGitLocalStorage = ({ repositoryRoot, runner = createProcessRu
       return null;
     }
   })();
-  const git = async (args, cwd) => runProcess('git', args, { cwd });
+  const git = async (args, cwd) => runProcess('git', args, { cwd, timeoutMs: PROCESS_TIMEOUT_MS });
   const rootOrFailure = async () => {
     const root = await rootPromise;
     return root ? ok(root) : failure('GIT_ROOT_INVALID', '/repositoryRoot', 'Repository root must be one absolute regular directory.');

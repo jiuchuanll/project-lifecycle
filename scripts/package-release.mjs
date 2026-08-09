@@ -30,6 +30,7 @@ const RELEASE_FILES = Object.freeze([
 ]);
 const RELEASE_DIRECTORIES = Object.freeze(['integrations', 'skills']);
 const MAX_RELEASE_FILES = 500;
+const SAFE_VERSION = /^(?!.*\.\.)(?!.*[.-]$)[0-9A-Za-z][0-9A-Za-z.-]{0,63}$/u;
 
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const cleanCell = (value) => String(value ?? '—').replaceAll('|', '\\|').replace(/[\r\n]/gu, ' ');
@@ -141,6 +142,7 @@ const listDirectory = async (repositoryRoot, locator) => {
   const visit = async (directory, prefix) => {
     const handle = await opendir(directory);
     for await (const entry of handle) {
+      if (entry.name === '.DS_Store') continue;
       if (entry.isSymbolicLink()) throw new Error('RELEASE_SYMLINK');
       const child = `${prefix}/${entry.name}`;
       if (entry.isDirectory()) await visit(join(directory, entry.name), child);
@@ -199,6 +201,9 @@ export const buildReleasePackage = async (options = {}) => {
     }
     const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8'));
     const version = options.filenameVersion ?? packageJson.version;
+    if (!SAFE_VERSION.test(packageJson.version ?? '') || !SAFE_VERSION.test(version ?? '')) {
+      return failure('RELEASE_VERSION_INVALID', '/version', 'Release version must be one bounded path-safe component.');
+    }
     if (version !== packageJson.version) {
       return failure('RELEASE_VERSION_MISMATCH', '/version', 'Archive filename version must equal package.json.');
     }
@@ -223,6 +228,16 @@ export const buildReleasePackage = async (options = {}) => {
     await mkdir(outputDirectory, { recursive: true });
     const archivePath = join(outputDirectory, `project-lifecycle-${version}.zip`);
     const checksumPath = `${archivePath}.sha256`;
+    for (const path of [archivePath, checksumPath]) {
+      try {
+        const state = await lstat(path);
+        if (!state.isFile() || state.isSymbolicLink()) {
+          return failure('RELEASE_OUTPUT_INVALID', '/output_directory', 'Release outputs must be regular files or absent.');
+        }
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+    }
     await writeFile(archivePath, archive);
     await writeFile(checksumPath, `${sha256}  project-lifecycle-${version}.zip\n`, 'utf8');
     const supported = HOST_ORDER.every((host) => matrix.hosts?.[host]?.status === 'SUPPORTED');
