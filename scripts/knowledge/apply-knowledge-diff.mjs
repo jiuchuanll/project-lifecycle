@@ -517,15 +517,68 @@ const footprintForPending = (change, map) => {
     relationships: new Set(change.relationship_refs),
     topology: new Set(change.topology_target_ids),
   };
-  const affected = new Set(change.affected_refs ?? []);
-  return {
-    domains: new Set([...affected].filter((ref) => ref.startsWith('domain:')).map((ref) => ref.slice(7))),
-    facts: new Set([...affected].filter((ref) => ref.startsWith('fact:')).map((ref) => ref.slice(5))),
-    owners: new Set([...affected].filter((ref) => ref.startsWith('owner:')).map((ref) => ref.slice(6))),
-    constraints: new Set([...affected].filter((ref) => ref.startsWith('constraint:'))),
-    relationships: new Set(change.source_refs ?? []),
-    topology: new Set(change.proposed_patch?.target_type === 'domain' ? [change.proposed_patch.target_id] : []),
+  const footprint = {
+    domains: new Set(),
+    facts: new Set(),
+    owners: new Set(),
+    constraints: new Set(),
+    relationships: new Set(),
+    topology: new Set(),
   };
+  const domainIds = new Set(map.domains.map(({ id }) => id));
+  const constraintIds = new Set(map.constraints.map(({ id }) => id));
+  const addRawId = (id) => {
+    // Legacy and governed Task 4 records use raw IDs in affected_refs. Treat an
+    // untyped raw ID conservatively as a possible fact, then enrich it from the
+    // accepted map so ownership/topology and constraint conflicts cannot hide.
+    footprint.facts.add(id);
+    if (domainIds.has(id)) {
+      footprint.domains.add(id);
+      footprint.owners.add(id);
+      footprint.topology.add(id);
+    }
+    if (constraintIds.has(id)) footprint.constraints.add(`constraint:${id}`);
+  };
+  const addRef = (ref) => {
+    const separator = ref.indexOf(':');
+    if (separator === -1) {
+      addRawId(ref);
+      return;
+    }
+    const kind = ref.slice(0, separator);
+    const id = ref.slice(separator + 1);
+    if (kind === 'domain') footprint.domains.add(id);
+    else if (kind === 'fact') footprint.facts.add(id);
+    else if (kind === 'owner') footprint.owners.add(id);
+    else if (kind === 'constraint') footprint.constraints.add(ref);
+    else if (kind === 'relationship') footprint.relationships.add(ref);
+    else if (kind === 'topology') footprint.topology.add(id);
+  };
+
+  for (const ref of change.affected_refs ?? []) addRef(ref);
+  if (change.semantic_target_key) addRef(change.semantic_target_key);
+
+  const patch = change.proposed_patch;
+  if (patch?.target_type === 'domain') {
+    footprint.domains.add(patch.target_id);
+    footprint.topology.add(patch.target_id);
+  } else if (patch?.target_type === 'constraint' || patch?.target_type === 'exception') {
+    footprint.constraints.add(`constraint:${patch.target_id}`);
+  } else if (patch?.target_type === 'relationship') {
+    footprint.relationships.add(change.semantic_target_key ?? `relationship:${patch.target_id}`);
+  }
+
+  for (const disposition of change.child_dispositions ?? []) {
+    footprint.domains.add(disposition.domain_id);
+    footprint.topology.add(disposition.domain_id);
+    for (const factId of disposition.unresolved_fact_ids ?? []) footprint.facts.add(factId);
+  }
+  for (const commitment of change.knowledge_commitments ?? []) {
+    footprint.domains.add(commitment.domain_id);
+    footprint.owners.add(commitment.domain_id);
+    for (const fact of commitment.facts ?? []) footprint.facts.add(fact.fact_id);
+  }
+  return footprint;
 };
 
 const footprintsOverlap = (left, right) => ['domains', 'facts', 'owners', 'constraints', 'relationships', 'topology']

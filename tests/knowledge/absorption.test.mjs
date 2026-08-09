@@ -381,6 +381,67 @@ test('blocks a disjoint ADD when an open pending record overlaps its owner domai
   assert.equal((await readJson(join(lifecycle(root), 'project-map.json'))).knowledge_baseline, 'baseline-1');
 });
 
+for (const [label, pendingChange] of [
+  ['legacy raw affected IDs', {
+    change_id: 'review-desktop-ownership-raw',
+    kind: 'ownership',
+    trigger_refs: ['feedback:desktop-owner'],
+    affected_refs: ['desktop-experience'],
+    proposed_disposition: 'Review owner.',
+    risks: [],
+    evidence_gaps: [],
+    review_state: 'open',
+    created_at: '2026-08-09T00:00:00.000Z',
+  }],
+  ['governed raw IDs and child facts', {
+    change_id: 'review-desktop-privacy-raw',
+    kind: 'constraint_semantics',
+    trigger_refs: ['feedback:desktop-privacy'],
+    affected_refs: ['desktop-experience', 'desktop-privacy'],
+    proposed_disposition: 'Review privacy propagation.',
+    risks: [],
+    evidence_gaps: [],
+    review_state: 'open',
+    created_at: '2026-08-09T00:00:00.000Z',
+    proposal_version: 1,
+    semantic_target_key: 'constraint:desktop-privacy',
+    source_refs: ['repo:privacy-policy'],
+    baseline: { map_hash: `sha256:${'a'.repeat(64)}` },
+    change_class: 'SEMANTIC',
+    proposed_patch: {
+      operation: 'UPDATE_CONSTRAINT',
+      target_type: 'constraint',
+      target_id: 'desktop-privacy',
+      changed_fields: ['constraint_scope'],
+      candidate_map_hash: `sha256:${'b'.repeat(64)}`,
+      expected_semantic_revision: 2,
+      new_ids: [],
+      successor_ids: [],
+    },
+    child_dispositions: [{
+      domain_id: 'desktop-experience',
+      disposition: 'REVALIDATE',
+      evidence_refs: ['repo:privacy-policy'],
+      unresolved_fact_ids: ['desktop-theme-fact'],
+    }],
+    knowledge_commitments: [],
+  }],
+]) {
+  test(`blocks ADD overlap from ${label}`, async (context) => {
+    const root = await setup(context);
+    const pendingPath = join(lifecycle(root), 'pending-changes.json');
+    const pending = await readJson(pendingPath);
+    pending.changes.push(pendingChange);
+    await writeFile(pendingPath, `${JSON.stringify(pending, null, 2)}\n`);
+
+    const result = await applyKnowledgeDiff(await accepted(root, 'ADD', addBlock));
+
+    assert.equal(result.ok, true);
+    assert.equal(result.value.status, 'pending-review');
+    assert.equal((await readJson(join(lifecycle(root), 'project-map.json'))).knowledge_baseline, 'baseline-1');
+  });
+}
+
 test('blocks current mutation while the project map requires overlapping fact revalidation', async (context) => {
   const root = await setup(context);
   const mapPath = join(lifecycle(root), 'project-map.json');
