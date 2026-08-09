@@ -19,7 +19,11 @@ const ID = /^[a-z][a-z0-9-]*$/u;
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
-const sameReturned = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+const sameReturned = (left, right) => left.length === right.length
+  && left.every((entry, index) => (
+    entry.artifact_id === right[index]?.artifact_id
+    && entry.content_hash === right[index]?.content_hash
+  ));
 
 const validateReuseRecord = (value) => {
   if (!record(value) || !isSafeReference(value.task_ref)
@@ -27,6 +31,7 @@ const validateReuseRecord = (value) => {
     || !Number.isInteger(value.receipt_revision) || value.receipt_revision < 1
     || !record(value.scope) || !Array.isArray(value.scope.domain_ids)
     || value.scope.domain_ids.length < 1 || value.scope.domain_ids.length > 8
+    || Object.keys(value.scope).some((key) => key !== 'domain_ids')
     || !Array.isArray(value.returned_artifacts) || value.returned_artifacts.length > 20
     || Object.keys(value).some((key) => ![
       'task_ref', 'receipt_id', 'receipt_revision', 'scope', 'returned_artifacts',
@@ -54,7 +59,8 @@ const receiptTextValid = (value) => typeof value === 'string'
 const validateReceiptBoundary = (receipt) => {
   const validation = validateJson('archive-access-receipt', receipt);
   if (!validation.ok) return failure('ARCHIVE_RECEIPT_INVALID', '/receipt', 'Archive access requires the bounded shared receipt contract.');
-  if (!receiptTextValid(receipt.question) || !receiptTextValid(receipt.insufficiency_reason)
+  if (!isSafeReference(receipt.task_ref)
+    || !receiptTextValid(receipt.question) || !receiptTextValid(receipt.insufficiency_reason)
     || (receipt.approval_ref !== undefined && !isSafeReference(receipt.approval_ref))) {
     return failure('ARCHIVE_RECEIPT_INVALID', '/receipt', 'Archive receipt reasons and confirmations must be bounded non-empty references.');
   }

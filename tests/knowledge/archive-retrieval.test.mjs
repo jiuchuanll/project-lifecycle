@@ -414,3 +414,54 @@ test('rejects forged reuse state and exact receipt-return mismatches before read
     assert.deepEqual(reads, []);
   });
 });
+
+test('rejects unsafe task references and unknown reuse scope fields before reading', async () => {
+  await withProject(async (root) => {
+    const catalog = (await catalogFor(root)).value;
+    const reads = [];
+    const unsafeTask = await resolveArchiveArtifacts(
+      archiveRequest(root, catalog, {
+        receipt: receipt({ task_ref: 'https://user:secret@example.com/task' }),
+      }),
+      { onRead: (entry) => reads.push(entry) },
+    );
+    assert.equal(unsafeTask.ok, false);
+
+    const first = await resolveArchiveArtifacts(archiveRequest(root, catalog));
+    const unknownScope = {
+      ...first.value.reuse_record,
+      scope: { ...first.value.reuse_record.scope, recursive: true },
+    };
+    const invalidReuse = await resolveArchiveArtifacts(
+      archiveRequest(root, catalog, {
+        receipt: receipt({ returned_artifacts: first.value.reuse_record.returned_artifacts }),
+        previous_record: unknownScope,
+      }),
+      { onRead: (entry) => reads.push(entry) },
+    );
+    assert.equal(invalidReuse.ok, false);
+    assert.deepEqual(reads, []);
+  });
+});
+
+test('matches task-local returned hashes semantically across object key order', async () => {
+  await withProject(async (root) => {
+    const catalog = (await catalogFor(root)).value;
+    const first = await resolveArchiveArtifacts(archiveRequest(root, catalog));
+    const reordered = first.value.reuse_record.returned_artifacts.map(({ artifact_id: artifactId, content_hash: contentHash }) => ({
+      content_hash: contentHash,
+      artifact_id: artifactId,
+    }));
+    const reads = [];
+    const repeated = await resolveArchiveArtifacts(
+      archiveRequest(root, catalog, {
+        receipt: receipt({ returned_artifacts: reordered }),
+        previous_record: first.value.reuse_record,
+      }),
+      { onRead: (entry) => reads.push(entry) },
+    );
+    assert.equal(repeated.ok, true);
+    assert.deepEqual(reads, []);
+    assert.equal(repeated.value.artifacts[0].reused, true);
+  });
+});
