@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "plugin_version": "0.1.0",
+  "hosts": {
+    "claude": { "status": "NOT_TESTED", "observed_version": null, "evidence_refs": [] },
+    "codex": { "status": "NOT_TESTED", "observed_version": null, "evidence_refs": [] },
+    "cursor": { "status": "NOT_TESTED", "observed_version": null, "evidence_refs": [] },
+    "kimi": { "status": "NOT_TESTED", "observed_version": null, "evidence_refs": [] },
+    "zcode": { "status": "NOT_TESTED", "observed_version": null, "evidence_refs": [] }
+  }
+}

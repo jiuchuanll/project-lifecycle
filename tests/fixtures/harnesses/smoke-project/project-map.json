@@ -1,0 +1,5 @@
+{
+  "project_id": "smoke-project",
+  "domain_ids": ["smoke-domain"],
+  "knowledge_baseline": "baseline:smoke"
+}

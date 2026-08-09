@@ -7,6 +7,8 @@ description: "Run bounded Feedback, PRD, non-PRD delivery, architecture, develop
 
 Own the delivery-evolution line. Classify the intake before creating durable delivery state. Use the smallest durable owner and the smallest justified artifact set; do not manufacture a full document matrix for every request.
 
+Use the fixed project-owned root `docs/project-lifecycle/` for durable delivery and handoff assets. Never create a host-specific duplicate knowledge or delivery tree.
+
 This Skill owns Feedback, PRD and non-PRD delivery assets, architecture and guidance deltas, execution and test evidence, acceptance, closure, the runtime Context Receipt, and the candidate Knowledge Diff. `maintain-project-knowledge` owns accepted knowledge selection and accepted knowledge writeback.
 
 ## Reference Routing

@@ -12,6 +12,8 @@
   "scripts": {
     "build": "node scripts/build-bundle.mjs",
     "check:bundle": "npm run build && node --test tests/harnesses/bundle.test.mjs",
+    "conformance:native": "node scripts/harnesses/run-native.mjs",
+    "conformance:static": "node scripts/harnesses/static-conformance.mjs",
     "test": "node --test",
     "test:delivery": "node --test tests/delivery/*.test.mjs",
     "test:governance": "node --test tests/governance/*.test.mjs",
