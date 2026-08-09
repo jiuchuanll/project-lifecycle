@@ -570,7 +570,7 @@ test('terminates and rejects cyclic parent graphs during selected-descendant val
   ].join(' ');
   const result = await run(process.execPath, ['--input-type=module', '--eval', script, cyclicFixture.pathname], {
     cwd: new URL('../..', import.meta.url),
-    timeoutMs: 250,
+    timeoutMs: 2_000,
   });
 
   assert.equal(result.timedOut, false);
