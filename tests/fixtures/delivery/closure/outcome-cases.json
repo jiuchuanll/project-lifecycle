@@ -1,0 +1,6 @@
+[
+  { "name": "accepted", "status": "ACCEPTED", "verification_status": "PASSED", "expected": "OK" },
+  { "name": "rejected", "status": "REJECTED", "verification_status": "FAILED", "expected": "OK" },
+  { "name": "cancelled", "status": "CANCELLED", "verification_status": "NOT_RUN", "expected": "OK" },
+  { "name": "abandoned", "status": "ABANDONED", "verification_status": "NOT_RUN", "expected": "OK" }
+]
