@@ -12,12 +12,26 @@ export const createProcessRunner = () => Object.freeze({
       let stdout = '';
       let stderr = '';
       let overflow = false;
+      let settled = false;
+      let timedOut = false;
       const child = spawn(command, args, {
         cwd: options.cwd,
         env: options.env,
         shell: false,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        resolve(result);
+      };
+      const timeout = Number.isInteger(options.timeoutMs) && options.timeoutMs > 0
+        ? setTimeout(() => {
+          timedOut = true;
+          child.kill('SIGKILL');
+        }, options.timeoutMs)
+        : null;
       const append = (current, chunk) => {
         if (Buffer.byteLength(current) + chunk.length > MAX_OUTPUT_BYTES) {
           overflow = true;
@@ -28,13 +42,13 @@ export const createProcessRunner = () => Object.freeze({
       };
       child.stdout.on('data', (chunk) => { stdout = append(stdout, chunk); });
       child.stderr.on('data', (chunk) => { stderr = append(stderr, chunk); });
-      child.on('error', () => resolve({ ok: false, code: null, stdout: '', stderr: '', error: 'PROCESS_START_FAILED' }));
-      child.on('close', (code) => resolve({
-        ok: code === 0 && !overflow,
+      child.on('error', () => finish({ ok: false, code: null, stdout: '', stderr: '', error: 'PROCESS_START_FAILED' }));
+      child.on('close', (code) => finish({
+        ok: code === 0 && !overflow && !timedOut,
         code,
         stdout,
         stderr,
-        ...(overflow ? { error: 'PROCESS_OUTPUT_LIMIT' } : {}),
+        ...(timedOut ? { error: 'PROCESS_TIMEOUT' } : overflow ? { error: 'PROCESS_OUTPUT_LIMIT' } : {}),
       }));
     });
   },

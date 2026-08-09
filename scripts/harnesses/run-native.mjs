@@ -10,6 +10,10 @@ import { validateTrace } from './trace.mjs';
 
 const failure = () => fail([createError('NATIVE_RUN_INVALID', '/', 'Native harness input or output is invalid.')]);
 const forbidden = /(?:^|[-_])(danger|bypass|skip[-_]?approval)(?:$|[-_])/iu;
+const redactOwnedPaths = (value, roots) => roots
+  .filter((root) => typeof root === 'string' && root.length > 0)
+  .sort((left, right) => right.length - left.length)
+  .reduce((result, root) => result.replaceAll(root, '<native-fixture>'), String(value ?? ''));
 
 export async function runNativeScenario(input = {}) {
   const { host, executable, fixtureRoot, runner } = input;
@@ -35,8 +39,11 @@ export async function runNativeScenario(input = {}) {
     const traceDirectory = join(input.traceRoot, host, input.scenarioId);
     await mkdir(traceDirectory, { recursive: true });
     const rawOutputLocator = `traces/${host}/${input.scenarioId}/${input.runNumber}.raw.json`;
+    const ownedRoots = [fixtureRoot, fixtureCopy, workingRoot];
     await writeFile(join(traceDirectory, `${input.runNumber}.raw.json`), `${JSON.stringify({
-      stdout: processResult.stdout ?? '', stderr: processResult.stderr ?? '', exit_code: processResult.code ?? null,
+      stdout: redactOwnedPaths(processResult.stdout, ownedRoots),
+      stderr: redactOwnedPaths(processResult.stderr, ownedRoots),
+      exit_code: processResult.code ?? null,
     })}\n`);
     const candidate = {
       run_id: `${host}-${input.scenarioId}-${input.runNumber}`,
@@ -54,6 +61,7 @@ export async function runNativeScenario(input = {}) {
       result: processResult.ok ? 'NEEDS_REVIEW' : 'FAIL',
       raw_output_locator: rawOutputLocator,
       invariant_evaluation: { status: 'PENDING', evidence_refs: [] },
+      semantic_review: { status: 'PENDING', reviewer_ref: null, reason_ref: null, evidence_refs: [] },
     };
     const trace = validateTrace(candidate);
     if (!trace.ok) return trace;

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +28,9 @@ const validTrace = () => ({
   result: 'PASS',
   raw_output_locator: 'traces/codex/smoke-project/1.raw.txt',
   invariant_evaluation: { status: 'PASS', evidence_refs: ['trace:smoke'] },
+  semantic_review: {
+    status: 'PASS', reviewer_ref: 'reviewer:human', reason_ref: 'review:smoke', evidence_refs: ['trace:smoke'],
+  },
 });
 
 test('passes static package conformance without host-local Skill copies', async () => {
@@ -96,4 +99,31 @@ test('reports a missing native executable honestly without creating support evid
   assert.equal(result.ok, true);
   assert.deepEqual(result.value, { status: 'UNAVAILABLE', host: 'zcode', trace: null });
   assert.equal(runner.calls.length, 0);
+});
+
+test('redacts owned fixture paths before retaining raw native output', async (context) => {
+  const traceRoot = await mkdtemp(join(tmpdir(), 'project-lifecycle-trace-'));
+  context.after(() => rm(traceRoot, { recursive: true, force: true }));
+  const runner = {
+    resolveExecutable: async () => '/opt/fake-host',
+    runProcess: async (_command, _args, options) => ({
+      ok: true, code: 0, stdout: `copied=${options.cwd}`, stderr: `source=${fixtureRoot}`,
+    }),
+  };
+  const result = await runNativeScenario({
+    host: 'codex', executable: 'fake-host', fixtureRoot, runner,
+    version: '1.0.0', scenarioId: 'smoke-project', runNumber: 1,
+    fixtureHash: `sha256:${'b'.repeat(64)}`, knowledgeBaseline: 'baseline:smoke',
+    pluginCommit: 'a'.repeat(40), prompt: 'Inspect the bounded smoke fixture.',
+    buildArgs: (prompt) => ['run', '--prompt', prompt], allowedContextIds: ['smoke-domain'],
+    traceRoot, model: { identity: 'test-model', revision: 'model-revision-1' },
+    parameters: { temperature: 0 }, clock: (() => {
+      const values = ['2026-08-09T00:00:00.000Z', '2026-08-09T00:01:00.000Z'];
+      return () => values.shift();
+    })(),
+  });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  const raw = await readFile(join(traceRoot, 'codex', 'smoke-project', '1.raw.json'), 'utf8');
+  assert.doesNotMatch(raw, new RegExp(fixtureRoot.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
+  assert.match(raw, /<native-fixture>/u);
 });

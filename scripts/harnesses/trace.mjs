@@ -13,7 +13,7 @@ export function validateTrace(value) {
   const keys = [
     'allowed_context_ids', 'ended_at', 'fixture_hash', 'host', 'invariant_evaluation',
     'knowledge_baseline', 'model', 'parameters', 'plugin', 'raw_output_locator', 'result',
-    'run_id', 'run_number', 'scenario_id', 'started_at',
+    'run_id', 'run_number', 'scenario_id', 'semantic_review', 'started_at',
   ];
   if (!exactKeys(value, keys)) return failure('/');
   if (!isSafeReference(value.run_id) || !isSafeReference(value.scenario_id)
@@ -35,7 +35,19 @@ export function validateTrace(value) {
     || !record(value.invariant_evaluation)
     || !['PASS', 'FAIL', 'PENDING'].includes(value.invariant_evaluation.status)
     || !Array.isArray(value.invariant_evaluation.evidence_refs)
-    || value.invariant_evaluation.evidence_refs.some((ref) => !isSafeReference(ref))) {
+    || value.invariant_evaluation.evidence_refs.some((ref) => !isSafeReference(ref))
+    || !exactKeys(value.semantic_review, ['evidence_refs', 'reason_ref', 'reviewer_ref', 'status'])
+    || !['FAIL', 'NEEDS_REVISION', 'PASS', 'PENDING'].includes(value.semantic_review.status)
+    || !Array.isArray(value.semantic_review.evidence_refs)
+    || value.semantic_review.evidence_refs.some((ref) => !isSafeReference(ref))
+    || (value.semantic_review.status === 'PENDING'
+      ? value.semantic_review.reviewer_ref !== null || value.semantic_review.reason_ref !== null
+        || value.semantic_review.evidence_refs.length !== 0
+      : !isSafeReference(value.semantic_review.reviewer_ref)
+        || !isSafeReference(value.semantic_review.reason_ref)
+        || value.semantic_review.evidence_refs.length === 0)
+    || (value.result === 'PASS' && (value.invariant_evaluation.status !== 'PASS'
+      || value.semantic_review.status !== 'PASS'))) {
     return failure('/');
   }
   return ok(Object.freeze(structuredClone(value)));
