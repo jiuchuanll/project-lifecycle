@@ -43,6 +43,7 @@ const validateProjectMap = (value) => {
   const domainById = new Map();
   const constraintById = new Map();
   const lineagePredecessors = new Set();
+  const repositoryAssetOwners = new Map();
 
   for (const entry of entries) {
     if (entriesById.has(entry.id)) {
@@ -72,6 +73,14 @@ const validateProjectMap = (value) => {
       const path = `/repositories/${index}/domain_ids/${domainIndex}`;
       if (!knownDomainIds.has(domainId)) {
         errors.push(createError(ERROR_CODES.REFERENCE_MISSING, path, `Unknown repository domain ID: ${domainId}`));
+      }
+    }
+    for (const [assetIndex, locator] of repository.knowledge_asset_locators.entries()) {
+      const path = `/repositories/${index}/knowledge_asset_locators/${assetIndex}`;
+      if (repositoryAssetOwners.has(locator)) {
+        errors.push(createError(ERROR_CODES.ID_DUPLICATE, path, `Knowledge asset already belongs to: ${repositoryAssetOwners.get(locator)}`));
+      } else {
+        repositoryAssetOwners.set(locator, repository.id);
       }
     }
   }

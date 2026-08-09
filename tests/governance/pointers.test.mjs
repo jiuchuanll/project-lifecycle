@@ -203,7 +203,11 @@ test('creates sorted reviewed repository registrations while locking stable repo
       ...baseMap(),
       repositories: [{ ...fixture.repository, id: 'existing-repository' }],
     },
-    registration: { ...fixture.repository, id: 'backend-repository' },
+    registration: {
+      ...fixture.repository,
+      id: 'backend-repository',
+      knowledge_asset_locators: ['knowledge/backend-en.md', 'knowledge/backend.md'],
+    },
     approvalRef: 'approval:repository-registration',
   });
   assert.equal(sharedDomain.ok, true);
@@ -219,6 +223,14 @@ test('creates sorted reviewed repository registrations while locking stable repo
   });
   assert.equal(conflict.ok, false);
   assert.equal(conflict.errors[0].code, 'REPOSITORY_ID_CONFLICT');
+
+  const assetConflict = registerRepository({
+    projectMap: { ...baseMap(), repositories: [fixture.repository] },
+    registration: { ...fixture.repository, id: 'duplicate-asset-repository' },
+    approvalRef: 'approval:repository-registration',
+  });
+  assert.equal(assetConflict.ok, false);
+  assert.equal(assetConflict.errors[0].code, 'REPOSITORY_ASSET_OWNERSHIP_CONFLICT');
 });
 
 test('validates strict non-empty lineage, repository, and migration pointer contracts', () => {

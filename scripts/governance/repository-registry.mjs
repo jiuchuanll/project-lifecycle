@@ -40,6 +40,10 @@ export function registerRepository({ projectMap, registration, approvalRef } = {
       ? ok({ status: 'already_registered', review_required: false, candidate_map: clone(projectMap) })
       : failure('REPOSITORY_ID_CONFLICT', '/registration/id', 'Repository ID already identifies different metadata.');
   }
+  const claimedAssets = new Set(projectMap.repositories.flatMap(({ knowledge_asset_locators: locators }) => locators));
+  if (registration.knowledge_asset_locators.some((locator) => claimedAssets.has(locator))) {
+    return failure('REPOSITORY_ASSET_OWNERSHIP_CONFLICT', '/registration/knowledge_asset_locators', 'Each knowledge asset locator has one canonical repository owner.');
+  }
   const candidate = clone(projectMap);
   candidate.repositories.push(clone(registration));
   candidate.repositories.sort((left, right) => compareCodePoints(left.id, right.id));
