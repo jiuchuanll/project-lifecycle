@@ -26,6 +26,7 @@ const RELEASE_FILES = Object.freeze([
   ['docs/migrations/knowledgevault-agent-app.md', 'docs/migrations/knowledgevault-agent-app.md'],
   ['references/harness-tool-contract.md', 'references/harness-tool-contract.md'],
   ['tests/harnesses/support-matrix.json', 'support-matrix.json'],
+  ['tests/harnesses/targeted-regression.json', 'targeted-regression.json'],
 ]);
 const RELEASE_DIRECTORIES = Object.freeze(['integrations', 'skills']);
 const MAX_RELEASE_FILES = 500;

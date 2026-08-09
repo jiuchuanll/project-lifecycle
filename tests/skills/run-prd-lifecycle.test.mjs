@@ -119,3 +119,23 @@ test('keeps handoff authority narrow between the two Skills', async () => {
   assert.match(body, /cannot apply current project knowledge/i);
   assert.match(body, /maintain-project-knowledge.*accepted knowledge writeback/is);
 });
+
+test('exposes the closed native decision contract before reference routing', async () => {
+  const { body } = await loadSkill();
+  const decision = body.match(/<!-- lifecycle-decision-contract\n([\s\S]*?)\n-->/)?.[1];
+
+  assert.ok(decision, 'root Skill must expose the native decision contract');
+  assert.deepEqual(parseYaml(decision), {
+    primary_routes: ['KNOWLEDGE_UPDATE', 'NON_PRD_DELIVERY', 'OUTSIDE_PLUGIN', 'PRD_DELIVERY'],
+    temporary_stop: 'NEEDS_USER',
+    route_selection: {
+      accepted_knowledge_only: 'KNOWLEDGE_UPDATE',
+      feedback_prd_or_product_delivery: 'PRD_DELIVERY',
+      engineering_repair_migration_or_operations_without_prd: 'NON_PRD_DELIVERY',
+      no_durable_lifecycle_effect: 'OUTSIDE_PLUGIN',
+    },
+    selected_solution_id: 'required-before-durable-write',
+    intent_materialized_without_acceptance: false,
+  });
+  assert.ok(body.indexOf('<!-- lifecycle-decision-contract') < body.indexOf('## Reference Routing'));
+});

@@ -11,6 +11,28 @@ Use the fixed project-owned root `docs/project-lifecycle/` for durable delivery 
 
 This Skill owns Feedback, PRD and non-PRD delivery assets, architecture and guidance deltas, execution and test evidence, acceptance, closure, the runtime Context Receipt, and the candidate Knowledge Diff. `maintain-project-knowledge` owns accepted knowledge selection and accepted knowledge writeback.
 
+## Native Decision Contract
+
+Keep this contract in working context before consulting a deeper routing reference.
+
+<!-- lifecycle-decision-contract
+primary_routes:
+  - KNOWLEDGE_UPDATE
+  - NON_PRD_DELIVERY
+  - OUTSIDE_PLUGIN
+  - PRD_DELIVERY
+temporary_stop: NEEDS_USER
+route_selection:
+  accepted_knowledge_only: KNOWLEDGE_UPDATE
+  feedback_prd_or_product_delivery: PRD_DELIVERY
+  engineering_repair_migration_or_operations_without_prd: NON_PRD_DELIVERY
+  no_durable_lifecycle_effect: OUTSIDE_PLUGIN
+selected_solution_id: required-before-durable-write
+intent_materialized_without_acceptance: false
+-->
+
+Return exactly one listed primary route, or return no route with the temporary `NEEDS_USER` stop. Never substitute a lifecycle state, scenario family, workflow type, document kind, or newly invented label for a primary route. Before any durable write, select one non-null solution ID from the presented acceptable range; if current evidence cannot support one, stop instead of writing. Creating a Feedback, PRD, non-PRD owner, architecture asset, or knowledge candidate records intent and scope only—it is not implementation or acceptance and must not be reported as materialized intent.
+
 ## Reference Routing
 
 Load only the reference needed for the current state or unresolved decision. Load `intake-routing.md` only for a new intake or a material main-flow correction. For an existing durable owner, read its Frontmatter and current Context Receipt before consulting intake routing again.

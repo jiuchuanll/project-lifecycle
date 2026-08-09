@@ -167,14 +167,25 @@ test('defines only the narrow knowledge-selection handoff to PRD Lifecycle', asy
   assert.deepEqual(Object.keys(parsedHandoff.applicable_constraints[0]), ['id', 'version_ref']);
 });
 
-test('does not duplicate the closed route or obligation vocabularies', async () => {
+test('keeps the native decision contract at the root without duplicating obligation vocabularies', async () => {
   const { body } = await loadSkill();
+  const decision = body.match(/<!-- lifecycle-decision-contract\n([\s\S]*?)\n-->/)?.[1];
+
+  assert.ok(decision, 'root Skill must expose the native decision contract');
+  assert.deepEqual(parseYaml(decision), {
+    primary_routes: ['KNOWLEDGE_UPDATE', 'NON_PRD_DELIVERY', 'OUTSIDE_PLUGIN', 'PRD_DELIVERY'],
+    temporary_stop: 'NEEDS_USER',
+    route_selection: {
+      accepted_knowledge_only: 'KNOWLEDGE_UPDATE',
+      feedback_prd_or_product_delivery: 'PRD_DELIVERY',
+      engineering_repair_migration_or_operations_without_prd: 'NON_PRD_DELIVERY',
+      no_durable_lifecycle_effect: 'OUTSIDE_PLUGIN',
+    },
+    selected_solution_id: 'required-before-durable-write',
+    intent_materialized_without_acceptance: false,
+  });
 
   for (const value of [
-    'KNOWLEDGE_UPDATE',
-    'NON_PRD_DELIVERY',
-    'OUTSIDE_PLUGIN',
-    'PRD_DELIVERY',
     'KNOWLEDGE_READINESS_REQUIRED',
     'KNOWLEDGE_CHANGE_HANDOFF_REQUIRED',
     'CROSS_DOMAIN_COORDINATION_REQUIRED',

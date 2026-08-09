@@ -29,10 +29,10 @@ the README diverges from that retained evidence.
 
 | Host | Status | Observed version | Evidence |
 | --- | --- | --- | --- |
-| codex | FAILED | 0.147.0-alpha.6.5 | invariant-failures:codex:8, trace-set:codex:ae5b5ad |
+| codex | FAILED | 0.147.0-alpha.6.5 | invariant-failures:codex:8, targeted-regression:codex:4of4, trace-set:codex:ae5b5ad |
 | claude | NOT_TESTED | — | availability:claude:unavailable |
 | cursor | NOT_TESTED | — | availability:cursor:unavailable |
-| kimi | FAILED | 0.29.2 | invariant-failures:kimi:15, trace-set:kimi:ae5b5ad |
+| kimi | FAILED | 0.29.2 | invariant-failures:kimi:15, targeted-regression:kimi:6of6, trace-set:kimi:ae5b5ad |
 | zcode | NOT_TESTED | — | availability:zcode:unavailable |
 
 `FAILED` means the tested native host violated one or more closed Gold
@@ -68,8 +68,10 @@ knowledge is absorbed through explicit diffs rather than by copying PRD prose.
 ## Known limitations
 
 - Native conformance currently fails on Codex and Kimi because generated routes
-  frequently leave the closed route vocabulary; one Kimi run also omitted a
-  required selected solution.
+  in the complete retained run set frequently left the closed route vocabulary;
+  one Kimi run also omitted a required selected solution. A later bounded
+  remediation regression passed Codex 4/4 and Kimi 6/6 affected scenario
+  families, but does not replace the complete support gate.
 - Claude Code, Cursor, and ZCode have no retained native run evidence.
 - External approval authentication and hostile concurrent filesystem mutation
   remain host responsibilities under the documented sole-writer boundary.

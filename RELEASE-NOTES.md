@@ -19,6 +19,12 @@ KnowledgeVault migration recipe.
 - Structural passes remain pending semantic review; they are not promoted to
   host support claims.
 
+After exposing the closed route vocabulary, compact route meanings, required
+solution selection, and intent-versus-acceptance boundary in both root Skills,
+a bounded remediation regression passed the latest Codex result for 4/4
+affected scenario families and Kimi for 6/6. This evidence is retained in
+`targeted-regression.json`; its declared support effect is `none`.
+
 ## Release blocker
 
 A first-release tag requires all five target hosts to be `SUPPORTED` for exact

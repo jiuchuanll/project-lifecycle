@@ -9,6 +9,28 @@ Construct and maintain the accepted project-knowledge line. Keep it separate fro
 
 Use the fixed project-owned root `docs/project-lifecycle/`. If neither its authoritative `project-map.json` nor a resolvable compact project pointer exists, bootstrap from bounded project evidence; do not search the user's machine for another knowledge base. Do not use this Skill for an ephemeral action with no durable knowledge effect or to recreate the delivery lifecycle.
 
+## Native Decision Contract
+
+Keep this contract in working context even when no routing reference is loaded. For work this Skill owns, the normal route is `KNOWLEDGE_UPDATE`; use another value only when handing the request to its actual owner.
+
+<!-- lifecycle-decision-contract
+primary_routes:
+  - KNOWLEDGE_UPDATE
+  - NON_PRD_DELIVERY
+  - OUTSIDE_PLUGIN
+  - PRD_DELIVERY
+temporary_stop: NEEDS_USER
+route_selection:
+  accepted_knowledge_only: KNOWLEDGE_UPDATE
+  feedback_prd_or_product_delivery: PRD_DELIVERY
+  engineering_repair_migration_or_operations_without_prd: NON_PRD_DELIVERY
+  no_durable_lifecycle_effect: OUTSIDE_PLUGIN
+selected_solution_id: required-before-durable-write
+intent_materialized_without_acceptance: false
+-->
+
+Return exactly one listed primary route, or return no route with the temporary `NEEDS_USER` stop. Never substitute a lifecycle state, scenario family, workflow type, document kind, or newly invented label for a primary route. Before any durable write, select one non-null solution ID from the presented acceptable range; if current evidence cannot support one, stop instead of writing. Creating a project map, knowledge candidate, Feedback, PRD, or other durable owner records intent and scope only—it is not implementation or acceptance and must not be reported as materialized intent.
+
 ## Reference Routing
 
 Load only the one reference needed for the current decision. Load another reference later only when the state or unresolved question changes; never preload the set.

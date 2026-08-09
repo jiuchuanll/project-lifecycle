@@ -63,6 +63,7 @@ test('builds a deterministic private candidate with the complete explicit releas
     'RELEASE-NOTES.md',
     'docs/migrations/knowledgevault-agent-app.md',
     'support-matrix.json',
+    'targeted-regression.json',
   ]) assert.ok(names.includes(`${prefix}${required}`), `missing ${required}`);
   assert.equal(names.some((name) => /(?:^|\/)(?:node_modules|\.git|legacy|tests|scripts)(?:\/|$)/u.test(name)), false);
   assert.equal(names.some((name) => name.includes('docs-workflow/SKILL.md')), false);
