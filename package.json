@@ -8,6 +8,7 @@
   "scripts": {
     "test": "node --test",
     "test:delivery": "node --test tests/delivery/*.test.mjs",
+    "test:governance": "node --test tests/governance/*.test.mjs",
     "validate:fixtures": "node scripts/bin/project-lifecycle.mjs validate-fixtures tests/fixtures",
     "check:privacy": "node scripts/check-privacy.mjs",
     "check": "npm test && npm run validate:fixtures && npm run check:privacy"

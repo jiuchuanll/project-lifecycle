@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "auxiliary_roots": ["delivery/assets", "delivery/closure", "delivery/context-receipt", "delivery/parallel", "delivery/routing", "governance/baselines", "governance/pointers", "governance/reconcile", "knowledge/absorption", "knowledge/archive", "knowledge/bootstrap", "knowledge/materialization", "knowledge/topology"],
+  "auxiliary_roots": ["delivery/assets", "delivery/closure", "delivery/context-receipt", "delivery/parallel", "delivery/routing", "governance/baselines", "governance/multi-repository", "governance/pointers", "governance/reconcile", "knowledge/absorption", "knowledge/archive", "knowledge/bootstrap", "knowledge/materialization", "knowledge/topology"],
   "fixtures": [
     {
       "path": "contracts/handoffs/archive-access-receipt.valid.json",
