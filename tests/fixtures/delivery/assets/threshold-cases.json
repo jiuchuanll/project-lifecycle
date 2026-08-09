@@ -1,0 +1,12 @@
+[
+  { "name": "explicit-prd", "artifact_kind": "prd", "primary_route": "PRD_DELIVERY", "creation_origin": "explicit_user", "expected": "OK" },
+  { "name": "inferred-prd-without-confirmation", "artifact_kind": "prd", "primary_route": "PRD_DELIVERY", "creation_origin": "agent_inferred", "expected": "PRD_APPROVAL_REQUIRED" },
+  { "name": "active-prd-continuation", "artifact_kind": "prd", "primary_route": "PRD_DELIVERY", "creation_origin": "explicit_user", "canonical_purpose_satisfied": true, "expected": "ASSET_REDUNDANT" },
+  { "name": "no-prd-technical-fix", "artifact_kind": "non-prd-delivery", "primary_route": "NON_PRD_DELIVERY", "expected": "OK" },
+  { "name": "knowledge-only-correction", "artifact_kind": "prd", "primary_route": "KNOWLEDGE_UPDATE", "creation_origin": "explicit_user", "expected": "ROUTE_ASSET_MISMATCH" },
+  { "name": "ephemeral-experiment", "artifact_kind": "non-prd-delivery", "primary_route": "OUTSIDE_PLUGIN", "expected": "ROUTE_ASSET_MISMATCH" },
+  { "name": "architecture-changing-prd", "artifact_kind": "architecture", "primary_route": "PRD_DELIVERY", "changed_contract_ref": "contract:wiki-navigation-v2", "expected": "OK" },
+  { "name": "guidance-free-pure-wiring", "artifact_kind": "guidance", "primary_route": "NON_PRD_DELIVERY", "canonical_purpose_satisfied": true, "expected": "ASSET_REDUNDANT" },
+  { "name": "evidence-only-test-update", "artifact_kind": "test-report", "primary_route": "PRD_DELIVERY", "expected": "OK" },
+  { "name": "post-completion-bounded-repair", "artifact_kind": "non-prd-delivery", "primary_route": "NON_PRD_DELIVERY", "expected": "OK" }
+]
