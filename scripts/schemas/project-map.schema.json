@@ -9,8 +9,8 @@
     "project_id": { "$ref": "#/$defs/id" },
     "knowledge_baseline": { "type": "string", "minLength": 1 },
     "project_identity": { "$ref": "#/$defs/projectIdentity" },
-    "identity_lineage": { "type": "array", "maxItems": 0 },
-    "repositories": { "type": "array", "maxItems": 0 },
+    "identity_lineage": { "type": "array", "items": { "$ref": "#/$defs/identityLineage" } },
+    "repositories": { "type": "array", "items": { "$ref": "#/$defs/repository" } },
     "constraints": { "type": "array", "items": { "$ref": "#/$defs/constraint" } },
     "domains": { "type": "array", "items": { "$ref": "#/$defs/domain" } },
     "revalidation_required": {
@@ -37,6 +37,33 @@
         "label": { "$ref": "#/$defs/localizedText" },
         "purpose": { "$ref": "#/$defs/localizedText" },
         "calibration_ref": { "type": "string", "minLength": 1 }
+      }
+    },
+    "identityLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["predecessor_project_id", "relationship", "successor_project_ids", "effective_baseline", "approval_ref"],
+      "properties": {
+        "predecessor_project_id": { "$ref": "#/$defs/id" },
+        "relationship": { "enum": ["SUCCESSOR", "SPLIT", "MERGE"] },
+        "successor_project_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+        "effective_baseline": { "type": "string", "minLength": 1 },
+        "approval_ref": { "type": "string", "minLength": 1 },
+        "history_locator": { "type": "string", "minLength": 1 }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "purpose", "portable_locator", "integration_ref", "domain_ids", "knowledge_asset_locators", "accepted_revision"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "purpose": { "$ref": "#/$defs/localizedText" },
+        "portable_locator": { "type": "string", "minLength": 1 },
+        "integration_ref": { "type": "string", "minLength": 1 },
+        "domain_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+        "knowledge_asset_locators": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "accepted_revision": { "type": "string", "minLength": 1 }
       }
     },
     "scope": {

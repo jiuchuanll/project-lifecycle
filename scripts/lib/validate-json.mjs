@@ -42,12 +42,37 @@ const validateProjectMap = (value) => {
   const entriesById = new Map();
   const domainById = new Map();
   const constraintById = new Map();
+  const lineagePredecessors = new Set();
 
   for (const entry of entries) {
     if (entriesById.has(entry.id)) {
       errors.push(createError(ERROR_CODES.ID_DUPLICATE, `${entry.path}/id`, `Duplicate ID: ${entry.id}`));
     } else {
       entriesById.set(entry.id, entry);
+    }
+  }
+
+  for (const [index, lineage] of value.identity_lineage.entries()) {
+    const path = `/identity_lineage/${index}`;
+    if (lineagePredecessors.has(lineage.predecessor_project_id)) {
+      errors.push(createError(ERROR_CODES.ID_DUPLICATE, `${path}/predecessor_project_id`, 'Project identity predecessors must be unique.'));
+    }
+    lineagePredecessors.add(lineage.predecessor_project_id);
+    if (lineage.predecessor_project_id === value.project_id
+      || (lineage.relationship === 'SUCCESSOR' && lineage.successor_project_ids.length !== 1)
+      || (lineage.relationship === 'SPLIT' && lineage.successor_project_ids.length < 2)
+      || (lineage.relationship === 'MERGE' && lineage.successor_project_ids.length !== 1)) {
+      errors.push(createError(ERROR_CODES.SCHEMA_INVALID, `${path}/successor_project_ids`, 'Identity lineage must describe one closed predecessor and the exact relationship cardinality.'));
+    }
+  }
+
+  const knownDomainIds = new Set(value.domains.map(({ id }) => id));
+  for (const [index, repository] of value.repositories.entries()) {
+    for (const [domainIndex, domainId] of repository.domain_ids.entries()) {
+      const path = `/repositories/${index}/domain_ids/${domainIndex}`;
+      if (!knownDomainIds.has(domainId)) {
+        errors.push(createError(ERROR_CODES.REFERENCE_MISSING, path, `Unknown repository domain ID: ${domainId}`));
+      }
     }
   }
 
@@ -306,6 +331,8 @@ const validateDeterministicOrder = (kind, value) => {
   const errors = [];
 
   if (kind === 'project-map') {
+    appendOrderErrors(errors, value.identity_lineage, '/identity_lineage', 'predecessor_project_id');
+    appendOrderErrors(errors, value.repositories, '/repositories', 'id');
     appendOrderErrors(errors, value.constraints, '/constraints', 'id');
     appendOrderErrors(errors, value.domains, '/domains', 'id');
     for (const [index, constraint] of value.constraints.entries()) {
@@ -318,6 +345,13 @@ const validateDeterministicOrder = (kind, value) => {
       if (constraint.exceptions) {
         appendOrderErrors(errors, constraint.exceptions, `/constraints/${index}/exceptions`, 'domain_id');
       }
+    }
+    for (const [index, lineage] of value.identity_lineage.entries()) {
+      appendOrderErrors(errors, lineage.successor_project_ids, `/identity_lineage/${index}/successor_project_ids`);
+    }
+    for (const [index, repository] of value.repositories.entries()) {
+      appendOrderErrors(errors, repository.domain_ids, `/repositories/${index}/domain_ids`);
+      appendOrderErrors(errors, repository.knowledge_asset_locators, `/repositories/${index}/knowledge_asset_locators`);
     }
     if (value.revalidation_required) {
       const markerKey = (marker) => `${marker.domain_id}\u0000${marker.fact_id}\u0000${marker.constraint_id ?? ''}`;

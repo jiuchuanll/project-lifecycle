@@ -1,0 +1,32 @@
+{
+  "unique_successor": [{
+    "predecessor_project_id": "sample-app-v1",
+    "relationship": "SUCCESSOR",
+    "successor_project_ids": ["sample-app"],
+    "effective_baseline": "baseline:identity-v2",
+    "approval_ref": "approval:identity-v2"
+  }],
+  "split": [{
+    "predecessor_project_id": "sample-app-v1",
+    "relationship": "SPLIT",
+    "successor_project_ids": ["sample-app", "sample-app-enterprise"],
+    "effective_baseline": "baseline:identity-split",
+    "approval_ref": "approval:identity-split"
+  }],
+  "merge": [{
+    "predecessor_project_id": "sample-app-v1",
+    "relationship": "MERGE",
+    "successor_project_ids": ["sample-app"],
+    "effective_baseline": "baseline:identity-merge",
+    "approval_ref": "approval:identity-merge"
+  }],
+  "repository": {
+    "id": "sample-repository",
+    "purpose": { "en": "Owns the sample frontend.", "zh-CN": "负责示例前端。" },
+    "portable_locator": "github:example/sample-frontend",
+    "integration_ref": "refs/heads/main",
+    "domain_ids": ["desktop-experience"],
+    "knowledge_asset_locators": ["knowledge/desktop-experience-en.md", "knowledge/desktop-experience.md"],
+    "accepted_revision": "revision:frontend-7"
+  }
+}

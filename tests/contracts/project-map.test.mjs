@@ -70,8 +70,8 @@ for (const [name, code, path] of [
   ['duplicate-domain-id.json', 'ID_DUPLICATE', '/domains/1/id'],
   ['generic-related-to.json', 'SCHEMA_INVALID', '/domains/0/relationships/0/kind'],
   ['unknown-field.json', 'SCHEMA_INVALID', '/unexpected'],
-  ['non-empty-identity-lineage.json', 'SCHEMA_INVALID', '/identity_lineage'],
-  ['non-empty-repositories.json', 'SCHEMA_INVALID', '/repositories'],
+  ['non-empty-identity-lineage.json', 'SCHEMA_INVALID', '/identity_lineage/0/unexpected'],
+  ['non-empty-repositories.json', 'SCHEMA_INVALID', '/repositories/0/purpose'],
 ]) {
   test(`rejects ${name} at its contract path`, async () => {
     const result = validateJson('project-map', await fixture(name));
