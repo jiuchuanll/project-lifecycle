@@ -9,6 +9,7 @@ const operations = [
   'RUN_COMMAND', 'RUN_VALIDATOR', 'SEARCH_FILES', 'WRITE_FILE',
 ];
 const read = (path) => readFile(new URL(path, root), 'utf8');
+const supportMatrix = JSON.parse(await read('tests/harnesses/support-matrix.json'));
 
 test('defines the eight host-neutral harness operations exactly once', async () => {
   const contract = await read('references/harness-tool-contract.md');
@@ -37,7 +38,11 @@ test('keeps install guides native, version-pinned, and honest about support', as
   for (const host of hosts) {
     const guide = await read(`integrations/${host}/README.md`);
     assert.match(guide, /0\.1\.0/u, host);
-    assert.match(guide, /NOT_TESTED/u, host);
+    assert.match(
+      guide,
+      new RegExp(`Evidence status: \`${supportMatrix.hosts[host].status}\``),
+      `${host} guide must match the retained support matrix`,
+    );
     assert.match(guide, /maintain-project-knowledge/u, host);
     assert.match(guide, /run-prd-lifecycle/u, host);
     assert.match(guide, /bin\/project-lifecycle/u, host);

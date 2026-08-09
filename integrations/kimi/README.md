@@ -1,6 +1,6 @@
 # Kimi Code installation
 
-Candidate version: `0.1.0`. Evidence status: `NOT_TESTED` until the native matrix is complete.
+Candidate version: `0.1.0`. Evidence status: `FAILED` for Kimi Code `0.29.2`; see the root support matrix for retained evidence and the bounded regression result.
 
 ```text
 /plugins install https://github.com/jiuchuanll/project-lifecycle

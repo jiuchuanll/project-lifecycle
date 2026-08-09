@@ -1,6 +1,6 @@
 # Codex installation
 
-Candidate version: `0.1.0`. Evidence status: `NOT_TESTED` until the native matrix is complete.
+Candidate version: `0.1.0`. Evidence status: `FAILED` for Codex `0.147.0-alpha.6.5`; see the root support matrix for retained evidence and the bounded regression result.
 
 ```text
 codex plugin marketplace add https://github.com/jiuchuanll/project-lifecycle
