@@ -1,0 +1,20 @@
+{
+  "project_id": "wiki-suite",
+  "legacy_project_id": "wiki-suite-v0",
+  "common_domain_id": "common-contract",
+  "frontend_domain_id": "wiki-interface",
+  "backend_domain_id": "wiki-service",
+  "shared_constraint_id": "shared-wiki-contract",
+  "frontend_fact_id": "wiki-layout",
+  "backend_fact_id": "wiki-query-service",
+  "prd": {
+    "id": "prd-wiki-refinement",
+    "shared_contract_revision": "contract-revision-2",
+    "delivery_units": ["wiki-interface-unit", "wiki-service-unit"]
+  },
+  "bodies": {
+    "common": "COMMON CONTRACT BODY MUST STAY IN GOVERNANCE",
+    "frontend": "UI FACT BODY MUST STAY IN FRONTEND",
+    "backend": "SERVICE FACT BODY MUST STAY IN BACKEND"
+  }
+}

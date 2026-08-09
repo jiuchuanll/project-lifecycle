@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "knowledge-diff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "diff_id",
+    "owner_delivery_id",
+    "knowledge_baseline",
+    "operations",
+    "domain_changes",
+    "entry_points",
+    "evidence_refs",
+    "remaining_limits",
+    "outcome"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "diff_id": { "$ref": "#/$defs/id" },
+    "owner_delivery_id": { "$ref": "#/$defs/id" },
+    "knowledge_baseline": { "$ref": "#/$defs/ref" },
+    "operations": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/operation" }
+    },
+    "domain_changes": {
+      "type": "array",
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/domainChange" }
+    },
+    "entry_points": { "$ref": "#/$defs/refs" },
+    "evidence_refs": { "$ref": "#/$defs/refs" },
+    "remaining_limits": {
+      "type": "array",
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 1000 }
+    },
+    "outcome": { "enum": ["CHANGE", "NO_CHANGE"] }
+  },
+  "allOf": [
+    {
+      "if": { "type": "object", "properties": { "outcome": { "const": "NO_CHANGE" } }, "required": ["outcome"] },
+      "then": {
+        "type": "object",
+        "properties": {
+          "operations": { "type": "array", "maxItems": 0 },
+          "domain_changes": { "type": "array", "maxItems": 0 },
+          "evidence_refs": { "type": "array", "minItems": 1 }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "outcome": { "const": "CHANGE" } }, "required": ["outcome"] },
+      "then": {
+        "type": "object",
+        "anyOf": [
+          { "type": "object", "properties": { "operations": { "type": "array", "minItems": 1 } } },
+          { "type": "object", "properties": { "domain_changes": { "type": "array", "minItems": 1 } } }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "ref": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "refs": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/ref" }
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "fact_id", "owner_domain_id", "evidence_refs"],
+      "properties": {
+        "kind": { "enum": ["ADD", "REWRITE", "SUPERSEDE"] },
+        "fact_id": { "$ref": "#/$defs/id" },
+        "owner_domain_id": { "$ref": "#/$defs/id" },
+        "successor_fact_id": { "$ref": "#/$defs/id" },
+        "evidence_refs": { "$ref": "#/$defs/refs" }
+      },
+      "allOf": [
+        {
+          "if": { "type": "object", "properties": { "kind": { "const": "SUPERSEDE" } }, "required": ["kind"] },
+          "then": {
+            "type": "object",
+            "required": ["successor_fact_id"],
+            "properties": { "successor_fact_id": { "$ref": "#/$defs/id" } }
+          }
+        }
+      ]
+    },
+    "domainChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain_id", "change", "evidence_refs"],
+      "properties": {
+        "domain_id": { "$ref": "#/$defs/id" },
+        "change": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "relationship_refs": { "$ref": "#/$defs/refs" },
+        "evidence_refs": { "$ref": "#/$defs/refs" }
+      }
+    }
+  }
+}

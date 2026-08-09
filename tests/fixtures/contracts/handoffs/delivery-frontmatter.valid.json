@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "artifact_id": "prd-wiki-layout-v2",
+  "artifact_kind": "prd",
+  "primary_route": "PRD_DELIVERY",
+  "project_id_at_creation": "knowledge-vault-agent-app",
+  "current_project_id": "knowledge-vault-agent-app",
+  "domain_ids": [
+    "wiki-workspace"
+  ],
+  "knowledge_baseline": "knowledge-revision-42",
+  "relationships": {
+    "feedback_ids": [
+      "feedback-wiki-density"
+    ],
+    "prd_ids": [],
+    "legacy_artifact_refs": [
+      "legacy-prd-wiki-layout"
+    ]
+  },
+  "retention_tier": "active",
+  "reclassified_from_refs": [],
+  "obligations": [
+    {
+      "obligation_id": "layout-dependency",
+      "kind": "DEPENDENCY_RESOLUTION_REQUIRED",
+      "status": "OPEN",
+      "trigger_refs": [
+        "feedback-wiki-density"
+      ],
+      "scope_refs": [
+        "wiki-workspace"
+      ],
+      "responsible_refs": [
+        "prd-desktop-shell"
+      ],
+      "required_before": "acceptance",
+      "evidence_refs": []
+    }
+  ]
+}

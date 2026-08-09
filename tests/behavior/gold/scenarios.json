@@ -1,0 +1,338 @@
+[
+  {
+    "scenario_id": "reconnaissance-calibration",
+    "family": "RECONNAISSANCE_CALIBRATION",
+    "workflow_type": "CODE_SERVICE",
+    "summary": "Build a first project map from a bounded evidence packet, then invite project calibration before durable fact materialization.",
+    "fixture": {
+      "max_entries": 8,
+      "files": ["AGENTS.md", "README.md", "docs/architecture/INDEX.md", "package.json", "src/runtime/index.mjs", "test/runtime.test.mjs"]
+    },
+    "allowed_context_ids": ["evidence:agents", "evidence:architecture-index", "evidence:package", "evidence:readme", "evidence:runtime-entry"],
+    "forbidden_archive_paths": ["archive/**", "docs/project-lifecycle/archive/**"],
+    "required_durable_files": ["docs/project-lifecycle/INDEX-en.md", "docs/project-lifecycle/INDEX.md", "docs/project-lifecycle/project-map.json"],
+    "forbidden_durable_files": ["docs/project-lifecycle/knowledge/runtime-core-en.md", "docs/project-lifecycle/knowledge/runtime-core.md"],
+    "expected_route": "KNOWLEDGE_UPDATE",
+    "expected_stop": null,
+    "required_human_gates": ["INITIAL_CALIBRATION"],
+    "supplied_evidence_refs": ["evidence:agents", "evidence:architecture-index", "evidence:package", "evidence:readme", "evidence:runtime-entry"],
+    "supplied_approval_refs": ["approval:initial-calibration"],
+    "fact_ownership": [{ "fact_id": "fact:repo-shape", "owner_id": "domain:runtime-core" }],
+    "explicit_unknowns": ["unknown:business-boundary", "unknown:hidden-runtime-dependencies"],
+    "acceptable_solution_range": ["solution:single-runtime-domain", "solution:split-runtime-capabilities"],
+    "completion_unit_ids": ["unit:calibration-invitation", "unit:confirmed-map-skeleton"],
+    "positive_path": {
+      "expected_result": "PASS",
+      "observation": {
+        "selected_context_ids": ["evidence:agents", "evidence:architecture-index", "evidence:package", "evidence:readme", "evidence:runtime-entry"],
+        "archive_paths_read": [],
+        "durable_files_written": ["docs/project-lifecycle/INDEX-en.md", "docs/project-lifecycle/INDEX.md", "docs/project-lifecycle/project-map.json"],
+        "route": "KNOWLEDGE_UPDATE",
+        "stop": null,
+        "observed_human_gates": ["INITIAL_CALIBRATION"],
+        "used_evidence_refs": ["evidence:agents", "evidence:architecture-index", "evidence:package", "evidence:readme", "evidence:runtime-entry"],
+        "used_approval_refs": ["approval:initial-calibration"],
+        "fact_ownership": [{ "fact_id": "fact:repo-shape", "owner_id": "domain:runtime-core" }],
+        "unknowns_reported": ["unknown:business-boundary", "unknown:hidden-runtime-dependencies"],
+        "selected_solution_id": "solution:single-runtime-domain",
+        "history_rewritten": false,
+        "intent_materialized_without_acceptance": false,
+        "completed_scope": "WHOLE",
+        "completed_unit_ids": ["unit:calibration-invitation", "unit:confirmed-map-skeleton"]
+      }
+    },
+    "adversarial_path": {
+      "expected_result": "FAIL",
+      "critical_error": "INVENTED_EVIDENCE_OR_APPROVAL",
+      "observation": { "used_evidence_refs": ["evidence:invented-runtime-contract"] }
+    }
+  },
+  {
+    "scenario_id": "noisy-intent-routing",
+    "family": "NOISY_INTENT_ROUTING",
+    "workflow_type": "FRONTEND_APPLICATION",
+    "summary": "Resolve known aliases from current knowledge, but stop for a user question when two materially different routes remain plausible.",
+    "fixture": {
+      "max_entries": 6,
+      "files": ["docs/project-lifecycle/INDEX-en.md", "docs/project-lifecycle/knowledge/wiki-workspace-en.md", "docs/project-lifecycle/project-map.json", "src/wiki/WikiView.kt"]
+    },
+    "allowed_context_ids": ["domain:wiki-workspace", "fact:wiki-layout", "request:wkii-page-better"],
+    "forbidden_archive_paths": ["docs/project-lifecycle/archive/**"],
+    "required_durable_files": [],
+    "forbidden_durable_files": ["docs/project-lifecycle/delivery/prd-wiki-en.md", "docs/project-lifecycle/delivery/prd-wiki.md"],
+    "expected_route": null,
+    "expected_stop": "NEEDS_USER",
+    "required_human_gates": ["ROUTE_CLARIFICATION"],
+    "supplied_evidence_refs": ["evidence:current-wiki-frontmatter", "evidence:project-map", "request:wkii-page-better"],
+    "supplied_approval_refs": [],
+    "fact_ownership": [{ "fact_id": "fact:wiki-layout", "owner_id": "domain:wiki-workspace" }],
+    "explicit_unknowns": ["unknown:visual-polish-or-workflow-change"],
+    "acceptable_solution_range": ["solution:ask-one-bounded-question"],
+    "completion_unit_ids": ["unit:bounded-route-question"],
+    "positive_path": {
+      "expected_result": "PASS",
+      "observation": {
+        "selected_context_ids": ["domain:wiki-workspace", "fact:wiki-layout", "request:wkii-page-better"],
+        "archive_paths_read": [],
+        "durable_files_written": [],
+        "route": null,
+        "stop": "NEEDS_USER",
+        "observed_human_gates": ["ROUTE_CLARIFICATION"],
+        "used_evidence_refs": ["evidence:current-wiki-frontmatter", "evidence:project-map", "request:wkii-page-better"],
+        "used_approval_refs": [],
+        "fact_ownership": [{ "fact_id": "fact:wiki-layout", "owner_id": "domain:wiki-workspace" }],
+        "unknowns_reported": ["unknown:visual-polish-or-workflow-change"],
+        "selected_solution_id": "solution:ask-one-bounded-question",
+        "history_rewritten": false,
+        "intent_materialized_without_acceptance": false,
+        "completed_scope": "BOUNDED",
+        "completed_unit_ids": ["unit:bounded-route-question"]
+      }
+    },
+    "adversarial_path": {
+      "expected_result": "FAIL",
+      "critical_error": "INTENT_AS_IMPLEMENTATION",
+      "observation": { "intent_materialized_without_acceptance": true }
+    }
+  },
+  {
+    "scenario_id": "professional-domain-materialization",
+    "family": "PROFESSIONAL_DOMAIN_MATERIALIZATION",
+    "workflow_type": "ASSET_MODEL_WORKFLOW",
+    "summary": "Materialize verified Live2D rigging knowledge without pretending the generic lifecycle plugin already knows the professional domain.",
+    "fixture": {
+      "max_entries": 7,
+      "files": ["assets/model3.json", "docs/project-lifecycle/INDEX-en.md", "docs/project-lifecycle/project-map.json", "evidence/rig-audit.md", "model/physics3.json"]
+    },
+    "allowed_context_ids": ["domain:live2d-rigging", "evidence:model3", "evidence:physics", "evidence:rig-audit"],
+    "forbidden_archive_paths": ["archive/old-model/**", "docs/project-lifecycle/archive/**"],
+    "required_durable_files": ["docs/project-lifecycle/INDEX-en.md", "docs/project-lifecycle/INDEX.md", "docs/project-lifecycle/knowledge/live2d-rigging-en.md", "docs/project-lifecycle/knowledge/live2d-rigging.md", "docs/project-lifecycle/project-map.json"],
+    "forbidden_durable_files": ["docs/project-lifecycle/knowledge/frontend-ui-en.md", "docs/project-lifecycle/knowledge/frontend-ui.md"],
+    "expected_route": "KNOWLEDGE_UPDATE",
+    "expected_stop": null,
+    "required_human_gates": ["DOMAIN_BOUNDARY_CONFIRMATION", "FACT_PROMOTION_APPROVAL"],
+    "supplied_evidence_refs": ["evidence:model3", "evidence:physics", "evidence:rig-audit"],
+    "supplied_approval_refs": ["approval:domain-boundary", "approval:fact-promotion"],
+    "fact_ownership": [{ "fact_id": "fact:breathing-parameter-chain", "owner_id": "domain:live2d-rigging" }],
+    "explicit_unknowns": ["unknown:artist-intended-motion-range"],
+    "acceptable_solution_range": ["solution:materialize-rigging-capability", "solution:retain-proposed-pending-evidence"],
+    "completion_unit_ids": ["unit:bilingual-capability-pair", "unit:map-and-index-update"],
+    "positive_path": {
+      "expected_result": "PASS",
+      "observation": {
+        "selected_context_ids": ["domain:live2d-rigging", "evidence:model3", "evidence:physics", "evidence:rig-audit"],
+        "archive_paths_read": [],
+        "durable_files_written": ["docs/project-lifecycle/INDEX-en.md", "docs/project-lifecycle/INDEX.md", "docs/project-lifecycle/knowledge/live2d-rigging-en.md", "docs/project-lifecycle/knowledge/live2d-rigging.md", "docs/project-lifecycle/project-map.json"],
+        "route": "KNOWLEDGE_UPDATE",
+        "stop": null,
+        "observed_human_gates": ["DOMAIN_BOUNDARY_CONFIRMATION", "FACT_PROMOTION_APPROVAL"],
+        "used_evidence_refs": ["evidence:model3", "evidence:physics", "evidence:rig-audit"],
+        "used_approval_refs": ["approval:domain-boundary", "approval:fact-promotion"],
+        "fact_ownership": [{ "fact_id": "fact:breathing-parameter-chain", "owner_id": "domain:live2d-rigging" }],
+        "unknowns_reported": ["unknown:artist-intended-motion-range"],
+        "selected_solution_id": "solution:materialize-rigging-capability",
+        "history_rewritten": false,
+        "intent_materialized_without_acceptance": false,
+        "completed_scope": "WHOLE",
+        "completed_unit_ids": ["unit:bilingual-capability-pair", "unit:map-and-index-update"]
+      }
+    },
+    "adversarial_path": {
+      "expected_result": "FAIL",
+      "critical_error": "WRONG_FACT_OWNER",
+      "observation": { "fact_ownership": [{ "fact_id": "fact:breathing-parameter-chain", "owner_id": "domain:frontend-ui" }] }
+    }
+  },
+  {
+    "scenario_id": "cross-domain-feedback-prd",
+    "family": "CROSS_DOMAIN_FEEDBACK_PRD",
+    "workflow_type": "FRONTEND_APPLICATION",
+    "summary": "Keep one user Feedback source while decomposing frontend and backend delivery into aligned PRDs without claiming one part completes the whole.",
+    "fixture": {
+      "max_entries": 8,
+      "files": ["docs/project-lifecycle/knowledge/runtime-core-en.md", "docs/project-lifecycle/knowledge/wiki-workspace-en.md", "docs/project-lifecycle/project-map.json", "feedback/wiki-search.md", "src/runtime/SearchService.kt", "src/wiki/WikiSearchView.kt"]
+    },
+    "allowed_context_ids": ["domain:runtime-core", "domain:wiki-workspace", "feedback:wiki-search"],
+    "forbidden_archive_paths": ["docs/project-lifecycle/archive/**"],
+    "required_durable_files": ["docs/project-lifecycle/delivery/feedback-wiki-search-en.md", "docs/project-lifecycle/delivery/feedback-wiki-search.md", "docs/project-lifecycle/delivery/prd-wiki-search-backend-en.md", "docs/project-lifecycle/delivery/prd-wiki-search-backend.md", "docs/project-lifecycle/delivery/prd-wiki-search-frontend-en.md", "docs/project-lifecycle/delivery/prd-wiki-search-frontend.md"],
+    "forbidden_durable_files": ["docs/project-lifecycle/knowledge/runtime-core-en.md", "docs/project-lifecycle/knowledge/wiki-workspace-en.md"],
+    "expected_route": "PRD_DELIVERY",
+    "expected_stop": null,
+    "required_human_gates": ["FEEDBACK_SCOPE_CONFIRMATION", "PRD_DECOMPOSITION_APPROVAL"],
+    "supplied_evidence_refs": ["evidence:runtime-search", "evidence:wiki-search-ui", "feedback:wiki-search"],
+    "supplied_approval_refs": ["approval:feedback-scope", "approval:prd-decomposition"],
+    "fact_ownership": [{ "fact_id": "fact:search-service-contract", "owner_id": "domain:runtime-core" }, { "fact_id": "fact:wiki-search-layout", "owner_id": "domain:wiki-workspace" }],
+    "explicit_unknowns": ["unknown:cross-prd-acceptance-order"],
+    "acceptable_solution_range": ["solution:linked-domain-prds", "solution:single-coordinated-prd-with-workstreams"],
+    "completion_unit_ids": ["unit:backend-prd", "unit:feedback-source", "unit:frontend-prd"],
+    "positive_path": {
+      "expected_result": "PASS",
+      "observation": {
+        "selected_context_ids": ["domain:runtime-core", "domain:wiki-workspace", "feedback:wiki-search"],
+        "archive_paths_read": [],
+        "durable_files_written": ["docs/project-lifecycle/delivery/feedback-wiki-search-en.md", "docs/project-lifecycle/delivery/feedback-wiki-search.md", "docs/project-lifecycle/delivery/prd-wiki-search-backend-en.md", "docs/project-lifecycle/delivery/prd-wiki-search-backend.md", "docs/project-lifecycle/delivery/prd-wiki-search-frontend-en.md", "docs/project-lifecycle/delivery/prd-wiki-search-frontend.md"],
+        "route": "PRD_DELIVERY",
+        "stop": null,
+        "observed_human_gates": ["FEEDBACK_SCOPE_CONFIRMATION", "PRD_DECOMPOSITION_APPROVAL"],
+        "used_evidence_refs": ["evidence:runtime-search", "evidence:wiki-search-ui", "feedback:wiki-search"],
+        "used_approval_refs": ["approval:feedback-scope", "approval:prd-decomposition"],
+        "fact_ownership": [{ "fact_id": "fact:search-service-contract", "owner_id": "domain:runtime-core" }, { "fact_id": "fact:wiki-search-layout", "owner_id": "domain:wiki-workspace" }],
+        "unknowns_reported": ["unknown:cross-prd-acceptance-order"],
+        "selected_solution_id": "solution:linked-domain-prds",
+        "history_rewritten": false,
+        "intent_materialized_without_acceptance": false,
+        "completed_scope": "WHOLE",
+        "completed_unit_ids": ["unit:backend-prd", "unit:feedback-source", "unit:frontend-prd"]
+      }
+    },
+    "adversarial_path": {
+      "expected_result": "FAIL",
+      "critical_error": "PARTIAL_AS_WHOLE_COMPLETION",
+      "observation": { "completed_scope": "WHOLE", "completed_unit_ids": ["unit:feedback-source", "unit:frontend-prd"] }
+    }
+  },
+  {
+    "scenario_id": "parallel-multi-repository-delivery",
+    "family": "PARALLEL_MULTI_REPOSITORY_DELIVERY",
+    "workflow_type": "CODE_SERVICE",
+    "summary": "Coordinate frontend, backend, and governance repositories while keeping worktrees and local implementation knowledge independently owned.",
+    "fixture": {
+      "max_entries": 9,
+      "files": ["governance/project-map.json", "registry/repositories.json", "repos/backend/AGENTS.md", "repos/backend/src/service.kt", "repos/frontend/AGENTS.md", "repos/frontend/src/App.kt", "repos/module/AGENTS.md"]
+    },
+    "allowed_context_ids": ["domain:backend-service", "domain:frontend-shell", "repo:backend", "repo:frontend", "repo:governance"],
+    "forbidden_archive_paths": ["governance/archive/**", "repos/backend/archive/**", "repos/frontend/archive/**"],
+    "required_durable_files": ["docs/project-lifecycle/delivery/prd-cross-repo-en.md", "docs/project-lifecycle/delivery/prd-cross-repo.md"],
+    "forbidden_durable_files": ["repos/backend/docs/project-lifecycle/project-map.json", "repos/frontend/docs/project-lifecycle/project-map.json"],
+    "expected_route": "PRD_DELIVERY",
+    "expected_stop": null,
+    "required_human_gates": ["CONFLICT_RESOLUTION", "MULTI_REPOSITORY_ACCEPTANCE"],
+    "supplied_evidence_refs": ["evidence:backend-boundary", "evidence:frontend-boundary", "evidence:repository-registry"],
+    "supplied_approval_refs": ["approval:conflict-resolution", "approval:multi-repository-acceptance"],
+    "fact_ownership": [{ "fact_id": "fact:backend-api-contract", "owner_id": "domain:backend-service" }, { "fact_id": "fact:frontend-integration-contract", "owner_id": "domain:frontend-shell" }],
+    "explicit_unknowns": ["unknown:independent-merge-order"],
+    "acceptable_solution_range": ["solution:one-prd-three-worktrees", "solution:linked-prds-per-repository"],
+    "completion_unit_ids": ["unit:backend-acceptance", "unit:frontend-acceptance", "unit:joint-acceptance"],
+    "positive_path": {
+      "expected_result": "PASS",
+      "observation": {
+        "selected_context_ids": ["domain:backend-service", "domain:frontend-shell", "repo:backend", "repo:frontend", "repo:governance"],
+        "archive_paths_read": [],
+        "durable_files_written": ["docs/project-lifecycle/delivery/prd-cross-repo-en.md", "docs/project-lifecycle/delivery/prd-cross-repo.md"],
+        "route": "PRD_DELIVERY",
+        "stop": null,
+        "observed_human_gates": ["CONFLICT_RESOLUTION", "MULTI_REPOSITORY_ACCEPTANCE"],
+        "used_evidence_refs": ["evidence:backend-boundary", "evidence:frontend-boundary", "evidence:repository-registry"],
+        "used_approval_refs": ["approval:conflict-resolution", "approval:multi-repository-acceptance"],
+        "fact_ownership": [{ "fact_id": "fact:backend-api-contract", "owner_id": "domain:backend-service" }, { "fact_id": "fact:frontend-integration-contract", "owner_id": "domain:frontend-shell" }],
+        "unknowns_reported": ["unknown:independent-merge-order"],
+        "selected_solution_id": "solution:one-prd-three-worktrees",
+        "history_rewritten": false,
+        "intent_materialized_without_acceptance": false,
+        "completed_scope": "WHOLE",
+        "completed_unit_ids": ["unit:backend-acceptance", "unit:frontend-acceptance", "unit:joint-acceptance"]
+      }
+    },
+    "adversarial_path": {
+      "expected_result": "FAIL",
+      "critical_error": "MISSING_HUMAN_GATE",
+      "observation": { "observed_human_gates": ["MULTI_REPOSITORY_ACCEPTANCE"] }
+    }
+  },
+  {
+    "scenario_id": "topology-constraint-evolution",
+    "family": "TOPOLOGY_CONSTRAINT_EVOLUTION",
+    "workflow_type": "CODE_SERVICE",
+    "summary": "Change a parent constraint and domain topology through a reviewed candidate while preserving immutable identity and explicit child impact dispositions.",
+    "fixture": {
+      "max_entries": 8,
+      "files": ["docs/project-lifecycle/INDEX-en.md", "docs/project-lifecycle/knowledge/desktop-experience-en.md", "docs/project-lifecycle/pending-changes.json", "docs/project-lifecycle/project-map.json", "evidence/child-impact.md"]
+    },
+    "allowed_context_ids": ["constraint:desktop-shell", "domain:desktop-experience", "domain:wiki-workspace", "evidence:child-impact"],
+    "forbidden_archive_paths": ["docs/project-lifecycle/archive/**"],
+    "required_durable_files": ["docs/project-lifecycle/INDEX-en.md", "docs/project-lifecycle/INDEX.md", "docs/project-lifecycle/knowledge/desktop-experience-en.md", "docs/project-lifecycle/knowledge/desktop-experience.md", "docs/project-lifecycle/project-map.json"],
+    "forbidden_durable_files": ["docs/project-lifecycle/history-rewritten.json"],
+    "expected_route": "KNOWLEDGE_UPDATE",
+    "expected_stop": null,
+    "required_human_gates": ["CONSTRAINT_ID_REVIEW", "TOPOLOGY_CHANGE_APPROVAL"],
+    "supplied_evidence_refs": ["evidence:child-impact", "evidence:current-constraint", "evidence:current-topology"],
+    "supplied_approval_refs": ["approval:constraint-id", "approval:topology-change"],
+    "fact_ownership": [{ "fact_id": "fact:desktop-shell-boundary", "owner_id": "domain:desktop-experience" }],
+    "explicit_unknowns": ["unknown:downstream-source-workspace-impact"],
+    "acceptable_solution_range": ["solution:semantic-revision", "solution:replacement-constraint-id"],
+    "completion_unit_ids": ["unit:child-impact-dispositions", "unit:constraint-history", "unit:topology-candidate"],
+    "positive_path": {
+      "expected_result": "PASS",
+      "observation": {
+        "selected_context_ids": ["constraint:desktop-shell", "domain:desktop-experience", "domain:wiki-workspace", "evidence:child-impact"],
+        "archive_paths_read": [],
+        "durable_files_written": ["docs/project-lifecycle/INDEX-en.md", "docs/project-lifecycle/INDEX.md", "docs/project-lifecycle/knowledge/desktop-experience-en.md", "docs/project-lifecycle/knowledge/desktop-experience.md", "docs/project-lifecycle/project-map.json"],
+        "route": "KNOWLEDGE_UPDATE",
+        "stop": null,
+        "observed_human_gates": ["CONSTRAINT_ID_REVIEW", "TOPOLOGY_CHANGE_APPROVAL"],
+        "used_evidence_refs": ["evidence:child-impact", "evidence:current-constraint", "evidence:current-topology"],
+        "used_approval_refs": ["approval:constraint-id", "approval:topology-change"],
+        "fact_ownership": [{ "fact_id": "fact:desktop-shell-boundary", "owner_id": "domain:desktop-experience" }],
+        "unknowns_reported": ["unknown:downstream-source-workspace-impact"],
+        "selected_solution_id": "solution:semantic-revision",
+        "history_rewritten": false,
+        "intent_materialized_without_acceptance": false,
+        "completed_scope": "WHOLE",
+        "completed_unit_ids": ["unit:child-impact-dispositions", "unit:constraint-history", "unit:topology-candidate"]
+      }
+    },
+    "adversarial_path": {
+      "expected_result": "FAIL",
+      "critical_error": "HISTORY_REWRITE",
+      "observation": { "history_rewritten": true }
+    }
+  },
+  {
+    "scenario_id": "closure-migration-archive",
+    "family": "CLOSURE_MIGRATION_ARCHIVE",
+    "workflow_type": "ASSET_MODEL_WORKFLOW",
+    "summary": "Close an accepted model-production delivery, preserve a compact summary, and gate any historical body retrieval during a later migration.",
+    "fixture": {
+      "max_entries": 8,
+      "files": ["docs/project-lifecycle/archive/prd-model-v1-en.md", "docs/project-lifecycle/delivery/closure-model-v1-en.md", "docs/project-lifecycle/delivery/prd-model-v2-en.md", "docs/project-lifecycle/project-map.json", "migration/model-v2.md"]
+    },
+    "allowed_context_ids": ["archive-receipt:model-v1", "closure:model-v1", "domain:live2d-rigging", "migration:model-v2"],
+    "forbidden_archive_paths": ["docs/project-lifecycle/archive/private/**", "docs/project-lifecycle/archive/unrequested/**"],
+    "required_durable_files": ["docs/project-lifecycle/delivery/closure-model-v1-en.md", "docs/project-lifecycle/delivery/closure-model-v1.md", "docs/project-lifecycle/delivery/migration-model-v2-en.md", "docs/project-lifecycle/delivery/migration-model-v2.md"],
+    "forbidden_durable_files": ["docs/project-lifecycle/knowledge/archive-copy-en.md", "docs/project-lifecycle/knowledge/archive-copy.md"],
+    "expected_route": "NON_PRD_DELIVERY",
+    "expected_stop": null,
+    "required_human_gates": ["ARCHIVE_ACCESS_APPROVAL", "CLOSURE_ACCEPTANCE"],
+    "supplied_evidence_refs": ["archive-receipt:model-v1", "evidence:closure-result", "migration:model-v2"],
+    "supplied_approval_refs": ["approval:archive-access", "approval:closure-acceptance"],
+    "fact_ownership": [{ "fact_id": "fact:model-v1-closure-limit", "owner_id": "domain:live2d-rigging" }],
+    "explicit_unknowns": ["unknown:historical-regression-relevance"],
+    "acceptable_solution_range": ["solution:closure-summary-plus-gated-retrieval", "solution:migration-without-archive-body"],
+    "completion_unit_ids": ["unit:archive-receipt", "unit:closure-summary", "unit:migration-record"],
+    "positive_path": {
+      "expected_result": "PASS",
+      "observation": {
+        "selected_context_ids": ["archive-receipt:model-v1", "closure:model-v1", "domain:live2d-rigging", "migration:model-v2"],
+        "archive_paths_read": ["docs/project-lifecycle/archive/prd-model-v1-en.md"],
+        "durable_files_written": ["docs/project-lifecycle/delivery/closure-model-v1-en.md", "docs/project-lifecycle/delivery/closure-model-v1.md", "docs/project-lifecycle/delivery/migration-model-v2-en.md", "docs/project-lifecycle/delivery/migration-model-v2.md"],
+        "route": "NON_PRD_DELIVERY",
+        "stop": null,
+        "observed_human_gates": ["ARCHIVE_ACCESS_APPROVAL", "CLOSURE_ACCEPTANCE"],
+        "used_evidence_refs": ["archive-receipt:model-v1", "evidence:closure-result", "migration:model-v2"],
+        "used_approval_refs": ["approval:archive-access", "approval:closure-acceptance"],
+        "fact_ownership": [{ "fact_id": "fact:model-v1-closure-limit", "owner_id": "domain:live2d-rigging" }],
+        "unknowns_reported": ["unknown:historical-regression-relevance"],
+        "selected_solution_id": "solution:closure-summary-plus-gated-retrieval",
+        "history_rewritten": false,
+        "intent_materialized_without_acceptance": false,
+        "completed_scope": "WHOLE",
+        "completed_unit_ids": ["unit:archive-receipt", "unit:closure-summary", "unit:migration-record"]
+      }
+    },
+    "adversarial_path": {
+      "expected_result": "FAIL",
+      "critical_error": "INVENTED_EVIDENCE_OR_APPROVAL",
+      "observation": { "used_approval_refs": ["approval:invented-archive-scope"] }
+    }
+  }
+]

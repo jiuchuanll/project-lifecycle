@@ -1,0 +1,8 @@
+[
+  { "name": "knowledge-update", "primary_route": "KNOWLEDGE_UPDATE", "evidence_refs": ["request:knowledge-correction"], "expected": "OK" },
+  { "name": "prd-delivery", "primary_route": "PRD_DELIVERY", "evidence_refs": ["request:wiki-redesign"], "expected": "OK" },
+  { "name": "non-prd-delivery", "primary_route": "NON_PRD_DELIVERY", "evidence_refs": ["request:migration-repair"], "expected": "OK" },
+  { "name": "outside-plugin", "primary_route": "OUTSIDE_PLUGIN", "evidence_refs": ["request:ephemeral-summary"], "expected": "OK" },
+  { "name": "missing", "evidence_refs": ["request:ambiguous"], "expected": "ROUTE_MISSING" },
+  { "name": "multiple", "primary_route": ["PRD_DELIVERY", "KNOWLEDGE_UPDATE"], "evidence_refs": ["request:mixed"], "expected": "ROUTE_CARDINALITY_INVALID" }
+]

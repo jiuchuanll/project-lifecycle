@@ -1,0 +1,3 @@
+#!/usr/bin/env node
+
+await import(new URL('../dist/project-lifecycle.mjs', import.meta.url));

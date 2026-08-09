@@ -1,0 +1,8 @@
+{
+  "local_repository_id": "frontend-repository",
+  "local_domain_id": "frontend-experience",
+  "dependency_domain_id": "backend-contract",
+  "common_asset": "knowledge/common-en.md",
+  "frontend_asset": "knowledge/frontend-en.md",
+  "backend_asset": "knowledge/backend-en.md"
+}

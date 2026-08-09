@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "prd_id": "prd-wiki-layout-v2",
+  "receipt_revision": 4,
+  "updated_at": "2026-08-07T10:30:00+08:00",
+  "knowledge_baseline": "knowledge-revision-42",
+  "intent_summary": "Adjust the Wiki workspace layout",
+  "route": {
+    "primary_domain_id": "wiki-workspace",
+    "affected_domain_ids": [
+      "desktop-shell"
+    ]
+  },
+  "selected_context": [
+    {
+      "kind": "fact",
+      "id": "fact-wiki-layout-model",
+      "version_ref": "4",
+      "reason": "PRIMARY"
+    }
+  ],
+  "material_exclusions": [],
+  "open_questions": [],
+  "stop": {
+    "code": "SUFFICIENT",
+    "reason": "Current domain facts and active delivery are sufficient"
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "auxiliary_roots": ["delivery/assets", "delivery/closure", "delivery/context-receipt", "delivery/parallel", "delivery/routing", "governance/baselines", "governance/multi-repository", "governance/pointers", "governance/reconcile", "harnesses/smoke-project", "knowledge/absorption", "knowledge/archive", "knowledge/bootstrap", "knowledge/materialization", "knowledge/topology", "migrations/knowledgevault-agent-app"],
+  "fixtures": [
+    {
+      "path": "contracts/handoffs/archive-access-receipt.valid.json",
+      "validator": "json:archive-access-receipt",
+      "expected_code": "OK"
+    },
+    {
+      "path": "contracts/handoffs/context-receipt.valid.json",
+      "validator": "json:context-receipt",
+      "expected_code": "OK"
+    },
+    {
+      "path": "contracts/handoffs/delivery-frontmatter.valid.json",
+      "validator": "json:delivery-frontmatter",
+      "expected_code": "OK"
+    },
+    {
+      "path": "contracts/handoffs/knowledge-diff.no-change.valid.json",
+      "validator": "json:knowledge-diff",
+      "expected_code": "OK"
+    },
+    {
+      "path": "contracts/handoffs/knowledge-diff.valid.json",
+      "validator": "json:knowledge-diff",
+      "expected_code": "OK"
+    },
+    {
+      "path": "contracts/knowledge-pairs/missing-pair",
+      "validator": "bilingual-pair",
+      "expected_code": "PAIR_MACHINE_MISMATCH",
+      "inputs": {
+        "en": "wiki-workspace-en.md",
+        "zh-CN": "wiki-workspace.md",
+        "project_map": "../valid/project-map.json"
+      }
+    },
+    {
+      "path": "contracts/knowledge-pairs/valid",
+      "validator": "bilingual-pair",
+      "expected_code": "OK",
+      "inputs": {
+        "en": "wiki-workspace-en.md",
+        "zh-CN": "wiki-workspace.md",
+        "project_map": "project-map.json"
+      }
+    },
+    {
+      "path": "contracts/project-map/broken-parent.json",
+      "validator": "json:project-map",
+      "expected_code": "REFERENCE_MISSING"
+    },
+    {
+      "path": "contracts/project-map/cyclic-parents.json",
+      "validator": "json:project-map",
+      "expected_code": "SCHEMA_INVALID"
+    },
+    {
+      "path": "contracts/project-map/duplicate-domain-id.json",
+      "validator": "json:project-map",
+      "expected_code": "ID_DUPLICATE"
+    },
+    {
+      "path": "contracts/project-map/generic-related-to.json",
+      "validator": "json:project-map",
+      "expected_code": "SCHEMA_INVALID"
+    },
+    {
+      "path": "contracts/project-map/id-with-parent-path.json",
+      "validator": "json:project-map",
+      "expected_code": "SCHEMA_INVALID"
+    },
+    {
+      "path": "contracts/project-map/materialized-without-assets.json",
+      "validator": "json:project-map",
+      "expected_code": "STATE_REQUIREMENT_MISSING"
+    },
+    {
+      "path": "contracts/project-map/missing-zh.json",
+      "validator": "json:project-map",
+      "expected_code": "SCHEMA_INVALID"
+    },
+    {
+      "path": "contracts/project-map/non-empty-identity-lineage.json",
+      "validator": "json:project-map",
+      "expected_code": "SCHEMA_INVALID"
+    },
+    {
+      "path": "contracts/project-map/non-empty-repositories.json",
+      "validator": "json:project-map",
+      "expected_code": "SCHEMA_INVALID"
+    },
+    {
+      "path": "contracts/project-map/retired-without-reason.json",
+      "validator": "json:project-map",
+      "expected_code": "STATE_REQUIREMENT_MISSING"
+    },
+    {
+      "path": "contracts/project-map/unknown-field.json",
+      "validator": "json:project-map",
+      "expected_code": "SCHEMA_INVALID"
+    },
+    {
+      "path": "contracts/project-map/valid.json",
+      "validator": "json:project-map",
+      "expected_code": "OK"
+    },
+    {
+      "path": "contracts/project-pointer/valid.json",
+      "validator": "json:project-pointer",
+      "expected_code": "OK",
+      "inputs": {
+        "resolved_project_map": "../project-map/valid.json"
+      }
+    }
+  ]
+}

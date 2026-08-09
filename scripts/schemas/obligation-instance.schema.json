@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "obligation-instance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "obligation_id",
+    "kind",
+    "status",
+    "trigger_refs",
+    "scope_refs",
+    "responsible_refs",
+    "required_before",
+    "evidence_refs"
+  ],
+  "properties": {
+    "obligation_id": { "$ref": "#/$defs/id" },
+    "kind": {
+      "enum": [
+        "CONFLICT_RESOLUTION_REQUIRED",
+        "CROSS_DOMAIN_COORDINATION_REQUIRED",
+        "DEPENDENCY_RESOLUTION_REQUIRED",
+        "KNOWLEDGE_CHANGE_HANDOFF_REQUIRED",
+        "KNOWLEDGE_READINESS_REQUIRED",
+        "MULTI_REPOSITORY_COORDINATION_REQUIRED"
+      ]
+    },
+    "status": { "enum": ["OPEN", "RESOLVED", "SUPERSEDED", "WAIVED"] },
+    "trigger_refs": { "$ref": "#/$defs/nonEmptyRefs" },
+    "scope_refs": { "$ref": "#/$defs/nonEmptyRefs" },
+    "responsible_refs": { "$ref": "#/$defs/nonEmptyRefs" },
+    "required_before": { "$ref": "#/$defs/ref" },
+    "evidence_refs": { "$ref": "#/$defs/refs" },
+    "resolution_ref": { "$ref": "#/$defs/ref" },
+    "human_approval_ref": { "$ref": "#/$defs/ref" },
+    "successor_obligation_ref": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*#[a-z][a-z0-9-]*$"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "type": "object", "properties": { "status": { "const": "OPEN" } }, "required": ["status"] },
+      "then": {
+        "type": "object",
+        "properties": {
+          "resolution_ref": false,
+          "human_approval_ref": false,
+          "successor_obligation_ref": false
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "status": { "const": "RESOLVED" } }, "required": ["status"] },
+      "then": {
+        "type": "object",
+        "required": ["resolution_ref"],
+        "properties": {
+          "resolution_ref": { "$ref": "#/$defs/ref" },
+          "human_approval_ref": false,
+          "successor_obligation_ref": false,
+          "evidence_refs": { "type": "array", "minItems": 1 }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "status": { "const": "WAIVED" } }, "required": ["status"] },
+      "then": {
+        "type": "object",
+        "required": ["human_approval_ref"],
+        "properties": {
+          "human_approval_ref": { "$ref": "#/$defs/ref" },
+          "resolution_ref": false,
+          "successor_obligation_ref": false,
+          "evidence_refs": { "type": "array", "minItems": 1 }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "status": { "const": "SUPERSEDED" } }, "required": ["status"] },
+      "then": {
+        "type": "object",
+        "required": ["successor_obligation_ref"],
+        "properties": {
+          "resolution_ref": false,
+          "human_approval_ref": false,
+          "successor_obligation_ref": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*#[a-z][a-z0-9-]*$"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "ref": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "refs": {
+      "type": "array",
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/ref" }
+    },
+    "nonEmptyRefs": {
+      "$ref": "#/$defs/refs",
+      "type": "array",
+      "minItems": 1
+    }
+  }
+}

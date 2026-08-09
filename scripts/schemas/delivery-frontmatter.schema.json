@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "delivery-frontmatter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_id",
+    "artifact_kind",
+    "primary_route",
+    "project_id_at_creation",
+    "domain_ids",
+    "knowledge_baseline",
+    "relationships",
+    "retention_tier",
+    "reclassified_from_refs",
+    "obligations"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "artifact_id": { "$ref": "#/$defs/id" },
+    "artifact_kind": {
+      "enum": ["feedback", "prd", "architecture", "guidance", "batch", "test-report", "closure-summary", "non-prd-delivery"]
+    },
+    "primary_route": { "enum": ["KNOWLEDGE_UPDATE", "NON_PRD_DELIVERY", "OUTSIDE_PLUGIN", "PRD_DELIVERY"] },
+    "project_id_at_creation": { "$ref": "#/$defs/id" },
+    "current_project_id": { "$ref": "#/$defs/id" },
+    "domain_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "knowledge_baseline": { "$ref": "#/$defs/ref" },
+    "relationships": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feedback_ids", "prd_ids", "legacy_artifact_refs"],
+      "properties": {
+        "feedback_ids": { "$ref": "#/$defs/feedbackIds" },
+        "prd_ids": { "$ref": "#/$defs/prdIds" },
+        "legacy_artifact_refs": { "$ref": "#/$defs/refs" }
+      }
+    },
+    "retention_tier": { "enum": ["active", "archive", "closed-summary"] },
+    "reclassified_from_refs": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/ref" }
+    },
+    "obligations": {
+      "type": "array",
+      "maxItems": 50,
+      "items": { "$ref": "obligation-instance" }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "type": "object", "properties": { "retention_tier": { "const": "active" } }, "required": ["retention_tier"] },
+      "then": {
+        "type": "object",
+        "required": ["current_project_id"],
+        "properties": { "current_project_id": { "$ref": "#/$defs/id" } }
+      },
+      "else": { "type": "object", "not": { "type": "object", "required": ["current_project_id"] } }
+    },
+    {
+      "if": { "type": "object", "properties": { "artifact_kind": { "const": "feedback" } }, "required": ["artifact_kind"] },
+      "then": { "type": "object", "properties": { "artifact_id": { "type": "string", "pattern": "^feedback-[a-z0-9-]+$" } } }
+    },
+    {
+      "if": { "type": "object", "properties": { "artifact_kind": { "const": "prd" } }, "required": ["artifact_kind"] },
+      "then": { "type": "object", "properties": { "artifact_id": { "type": "string", "pattern": "^prd-[a-z0-9-]+$" } } }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "ref": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "feedbackIds": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^feedback-[a-z0-9-]+$" }
+    },
+    "prdIds": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^prd-[a-z0-9-]+$" }
+    },
+    "refs": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/ref" }
+    }
+  }
+}

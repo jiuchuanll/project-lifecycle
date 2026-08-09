@@ -1,0 +1,286 @@
+import { readFile, realpath } from 'node:fs/promises';
+import { dirname, isAbsolute, normalize, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { createError } from './errors.mjs';
+import { parseFactBlocks } from './fact-blocks.mjs';
+import { maskFencedMarkdown, parseFrontmatter } from './markdown.mjs';
+import { fail, ok } from './result.mjs';
+import { validateJson } from './validate-json.mjs';
+
+const MACHINE_FIELDS = [
+  'id',
+  'knowledge_state',
+  'paired_asset',
+  'last_verified_baseline',
+  'implementation_refs',
+  'verification_refs',
+];
+const FACT_FIELDS = ['fact_id', 'revision', 'evidence_refs', 'last_verified_baseline'];
+
+const toPath = (value) => value instanceof URL ? fileURLToPath(value) : resolve(value);
+const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+export const relativeAssetLocator = (root, asset, pathApi = { relative, sep }) => (
+  pathApi.relative(root, asset).split(pathApi.sep).join('/')
+);
+const inside = (root, candidate) => {
+  const path = relative(root, candidate);
+  return path === '' || (!path.startsWith('..') && !isAbsolute(path));
+};
+
+const headingLevels = (body) => [...maskFencedMarkdown(body).matchAll(/^(#{1,6})[ \t]+.+$/gm)]
+  .map((match) => match[1].length);
+
+const commonAssetRoot = (left, right) => {
+  let root = dirname(left);
+  while (!inside(root, right)) root = dirname(root);
+  return root;
+};
+
+const locatorSegments = (locator) => normalize(locator).split(sep).filter(Boolean);
+
+const safeLocator = (locator) => typeof locator === 'string'
+  && locator.length > 0
+  && !isAbsolute(locator)
+  && !/^[A-Za-z]:[\\/]/.test(locator)
+  && !locator.includes('\\')
+  && !locator.includes('://')
+  && !locator.split('/').includes('..')
+  && locatorSegments(locator).length > 0;
+
+const rootFromLocator = (assetPath, locator) => {
+  let root = assetPath;
+  for (const _segment of locatorSegments(locator)) root = dirname(root);
+  return resolve(root, locator) === assetPath ? root : null;
+};
+
+const establishTrustedPair = async (enPath, zhPath, map) => {
+  for (const domain of map.domains) {
+    if (!domain.paired_assets) continue;
+    for (const language of ['en', 'zh-CN']) {
+      if (!safeLocator(domain.paired_assets[language])) {
+        return fail([createError(
+          'PAIR_MACHINE_MISMATCH',
+          `/map/paired_assets/${language}`,
+          `Project-map paired asset escapes the trusted knowledge root for ${language}.`,
+        )]);
+      }
+    }
+  }
+
+  for (const domain of map.domains) {
+    if (!domain.paired_assets) continue;
+    const enRoot = rootFromLocator(enPath, domain.paired_assets.en);
+    const zhRoot = rootFromLocator(zhPath, domain.paired_assets['zh-CN']);
+    if (!enRoot || enRoot !== zhRoot) continue;
+    const enAsset = resolve(enRoot, domain.paired_assets.en);
+    const zhAsset = resolve(enRoot, domain.paired_assets['zh-CN']);
+    if (enAsset !== enPath || zhAsset !== zhPath) continue;
+    if (!inside(enRoot, enAsset) || !inside(enRoot, zhAsset)) continue;
+    const knowledgeRoot = commonAssetRoot(enAsset, zhAsset);
+    try {
+      const [realKnowledgeRoot, realEnAsset, realZhAsset] = await Promise.all([
+        realpath(knowledgeRoot),
+        realpath(enAsset),
+        realpath(zhAsset),
+      ]);
+      if (!inside(realKnowledgeRoot, realEnAsset) || !inside(realKnowledgeRoot, realZhAsset)) {
+        return fail([createError(
+          'PAIR_MACHINE_MISMATCH',
+          '/paths',
+          'Supplied bilingual assets escape the real knowledge root.',
+        )]);
+      }
+      return ok({
+        domain,
+        enReadPath: realEnAsset,
+        knowledgeRoot,
+        projectRoot: enRoot,
+        realKnowledgeRoot,
+        zhReadPath: realZhAsset,
+      });
+    } catch {
+      return fail([createError(
+        'PAIR_MACHINE_MISMATCH',
+        '/frontmatter/paired_asset',
+        'Paired capability asset is missing.',
+      )]);
+    }
+  }
+
+  return fail([createError(
+    'PAIR_MACHINE_MISMATCH',
+    '/paths',
+    'Supplied bilingual assets do not resolve under one trusted project-map root.',
+  )]);
+};
+
+const readDocument = async (path) => {
+  try {
+    return { source: await readFile(path, 'utf8') };
+  } catch {
+    return { error: createError('PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset', 'Paired capability asset is missing.') };
+  }
+};
+
+const validateOwnedConstraintSections = ({ domain, map, sources }) => {
+  const errors = [];
+  const constraints = map.constraints.filter(({ knowledge_refs: refs, owner_id: ownerId }) => (
+    ownerId === domain.id && Boolean(refs)
+  ));
+  for (const constraint of constraints) {
+    const anchor = `<a id="constraint-${constraint.id}"></a>`;
+    const marker = `<!-- project-lifecycle:constraint id=${constraint.id} revision=${constraint.semantic_revision} -->`;
+    const close = '<!-- /project-lifecycle:constraint -->';
+    for (const language of ['en', 'zh-CN']) {
+      const path = `/constraints/${constraint.id}/knowledge_refs/${language}`;
+      const expectedRef = `${domain.paired_assets[language]}#constraint-${constraint.id}`;
+      const lines = maskFencedMarkdown(sources[language].replaceAll('\r\n', '\n')).split('\n');
+      const anchors = lines.flatMap((line, index) => line === anchor ? [index] : []);
+      const markers = lines.flatMap((line, index) => line === marker ? [index] : []);
+      let valid = constraint.knowledge_refs[language] === expectedRef
+        && anchors.length === 1
+        && markers.length === 1;
+      if (valid) {
+        const anchorIndex = anchors[0];
+        const markerIndex = markers[0];
+        valid = markerIndex === anchorIndex + 1;
+        let closed = false;
+        for (let index = markerIndex + 1; valid && index < lines.length; index += 1) {
+          const line = lines[index];
+          if (line === close) {
+            closed = true;
+            break;
+          }
+          if (line.startsWith('<a id="constraint-')
+            || line.startsWith('<!-- project-lifecycle:constraint id=')) valid = false;
+        }
+        valid = valid && closed;
+      }
+      if (!valid) {
+        errors.push(createError(
+          'PAIR_MACHINE_MISMATCH',
+          path,
+          `Governed constraint section must occur exactly once with its current marker in ${language}.`,
+        ));
+      }
+    }
+  }
+  return errors;
+};
+
+export const validateBilingualPair = async (enPathValue, zhPathValue, map) => {
+  const enPath = toPath(enPathValue);
+  const zhPath = toPath(zhPathValue);
+  const mapResult = validateJson('project-map', map);
+  if (!mapResult.ok) return mapResult;
+  const trustedPair = await establishTrustedPair(enPath, zhPath, map);
+  if (!trustedPair.ok) return trustedPair;
+  const {
+    domain,
+    enReadPath,
+    knowledgeRoot,
+    projectRoot,
+    realKnowledgeRoot,
+    zhReadPath,
+  } = trustedPair.value;
+
+  // Phase 1 assumes the sole Project Lifecycle writer during this bounded read.
+  // It does not claim protection from hostile concurrent filesystem mutation.
+  const enDocument = await readDocument(enReadPath);
+  const zhDocument = await readDocument(zhReadPath);
+  if (enDocument.error || zhDocument.error) return fail([enDocument.error ?? zhDocument.error]);
+
+  const enFrontmatter = parseFrontmatter(enDocument.source);
+  const zhFrontmatter = parseFrontmatter(zhDocument.source);
+  const enFacts = parseFactBlocks(enDocument.source);
+  const zhFacts = parseFactBlocks(zhDocument.source);
+  const parseErrors = [enFrontmatter, zhFrontmatter, enFacts, zhFacts]
+    .filter((result) => !result.ok)
+    .flatMap((result) => result.errors);
+  if (parseErrors.length > 0) return fail(parseErrors);
+
+  const errors = [];
+  for (const field of MACHINE_FIELDS) {
+    if (!same(enFrontmatter.value.data[field], zhFrontmatter.value.data[field])) {
+      errors.push(createError('PAIR_MACHINE_MISMATCH', `/frontmatter/${field}`, `Bilingual Frontmatter field differs: ${field}`));
+    }
+  }
+
+  errors.push(...validateOwnedConstraintSections({
+    domain,
+    map,
+    sources: { en: enDocument.source, 'zh-CN': zhDocument.source },
+  }));
+
+  for (const [path, frontmatter] of [[enPath, enFrontmatter], [zhPath, zhFrontmatter]]) {
+    const pairedPath = resolve(dirname(path), frontmatter.value.data.paired_asset);
+    if (!inside(knowledgeRoot, pairedPath)) {
+      errors.push(createError('PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset', 'paired_asset escapes the allowed knowledge root.'));
+      continue;
+    }
+    try {
+      const realPairedPath = await realpath(pairedPath);
+      if (!inside(realKnowledgeRoot, realPairedPath)) {
+        errors.push(createError('PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset', 'paired_asset escapes the real knowledge root.'));
+      }
+    } catch {
+      errors.push(createError('PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset', 'paired_asset does not exist.'));
+    }
+  }
+
+  if (!same(headingLevels(enFrontmatter.value.body), headingLevels(zhFrontmatter.value.body))) {
+    errors.push(createError('PAIR_SECTION_MISMATCH', '/sections', 'Bilingual heading-level sequences differ.'));
+  }
+
+  if (enFacts.value.length !== zhFacts.value.length) {
+    errors.push(createError('PAIR_SECTION_MISMATCH', '/facts', 'Bilingual fact-block counts differ.'));
+  }
+  const pairedFactCount = Math.min(enFacts.value.length, zhFacts.value.length);
+  for (let index = 0; index < pairedFactCount; index += 1) {
+    for (const field of FACT_FIELDS) {
+      if (!same(enFacts.value[index][field], zhFacts.value[index][field])) {
+        errors.push(createError('PAIR_MACHINE_MISMATCH', `/facts/${index}/${field}`, `Bilingual fact field differs: ${field}`));
+      }
+    }
+    const isCurrent = enFrontmatter.value.data.knowledge_state === 'current'
+      || zhFrontmatter.value.data.knowledge_state === 'current';
+    const evidenceMissing = enFacts.value[index].evidence_refs.length === 0
+      || zhFacts.value[index].evidence_refs.length === 0;
+    if (isCurrent && evidenceMissing) {
+      errors.push(createError('CURRENT_EVIDENCE_MISSING', `/facts/${index}/evidence_refs`, 'Current facts require evidence.'));
+    }
+    const baselineMismatch = enFacts.value[index].last_verified_baseline
+        !== enFrontmatter.value.data.last_verified_baseline
+      || zhFacts.value[index].last_verified_baseline
+        !== zhFrontmatter.value.data.last_verified_baseline;
+    if (baselineMismatch) {
+      errors.push(createError(
+        'PAIR_MACHINE_MISMATCH',
+        `/facts/${index}/last_verified_baseline`,
+        'Fact baseline differs from its owning capability document.',
+      ));
+    }
+  }
+
+  if (domain.id !== enFrontmatter.value.data.id) {
+    errors.push(createError('PAIR_MACHINE_MISMATCH', '/frontmatter/id', 'Capability ID is absent from the project map.'));
+  } else {
+    if (domain.baseline !== enFrontmatter.value.data.last_verified_baseline) {
+      errors.push(createError('PAIR_MACHINE_MISMATCH', '/frontmatter/last_verified_baseline', 'Capability baseline differs from the project map.'));
+    }
+    const expectedAssets = {
+      en: relativeAssetLocator(projectRoot, enPath),
+      'zh-CN': relativeAssetLocator(projectRoot, zhPath),
+    };
+    for (const language of ['en', 'zh-CN']) {
+      if (domain.paired_assets?.[language] !== expectedAssets[language]) {
+        errors.push(createError('PAIR_MACHINE_MISMATCH', `/map/paired_assets/${language}`, `Project-map paired asset differs for ${language}.`));
+      }
+    }
+  }
+
+  return errors.length > 0
+    ? fail(errors)
+    : ok({ fact_ids: enFacts.value.map((fact) => fact.fact_id) });
+};

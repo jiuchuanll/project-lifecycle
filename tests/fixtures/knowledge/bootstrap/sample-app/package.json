@@ -1,0 +1,10 @@
+{
+  "name": "sample-application",
+  "private": true,
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "lint": "node tools/lint.mjs",
+    "start": "node src/main.mjs",
+    "test": "node --test test/smoke.test-entry.mjs"
+  }
+}

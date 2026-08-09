@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "project_id": "sample-project",
+  "knowledge_baseline": "baseline-7",
+  "project_identity": {
+    "label": {
+      "en": "Sample Project",
+      "zh-CN": "示例项目"
+    },
+    "purpose": {
+      "en": "Exercise bounded archive retrieval.",
+      "zh-CN": "验证有界归档检索。"
+    },
+    "calibration_ref": "calibration-1"
+  },
+  "identity_lineage": [],
+  "repositories": [],
+  "constraints": [],
+  "domains": [
+    {
+      "id": "search-workspace",
+      "kind": "capability",
+      "label": {
+        "en": "Search Workspace",
+        "zh-CN": "搜索工作区"
+      },
+      "purpose": {
+        "en": "Search project knowledge.",
+        "zh-CN": "搜索项目知识。"
+      },
+      "domain_state": "confirmed",
+      "scope": {
+        "includes": [
+          "search"
+        ],
+        "excludes": []
+      },
+      "parent_id": null,
+      "relationships": [],
+      "evidence_refs": [],
+      "known_gaps": []
+    },
+    {
+      "id": "wiki-workspace",
+      "kind": "capability",
+      "label": {
+        "en": "Wiki Workspace",
+        "zh-CN": "Wiki 工作区"
+      },
+      "purpose": {
+        "en": "Read project knowledge.",
+        "zh-CN": "阅读项目知识。"
+      },
+      "domain_state": "confirmed",
+      "scope": {
+        "includes": [
+          "wiki"
+        ],
+        "excludes": []
+      },
+      "parent_id": null,
+      "relationships": [],
+      "evidence_refs": [],
+      "known_gaps": []
+    }
+  ]
+}

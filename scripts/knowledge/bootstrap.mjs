@@ -1,0 +1,337 @@
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  rmdir,
+} from 'node:fs/promises';
+import { isAbsolute, join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
+
+import { atomicWriteValidated } from '../lib/atomic-write.mjs';
+import { compareCodePoints } from '../lib/deterministic-order.mjs';
+import { createError } from '../lib/errors.mjs';
+import { fail, ok } from '../lib/result.mjs';
+import { resolveInside } from '../lib/safe-path.mjs';
+import { validateJson } from '../lib/validate-json.mjs';
+import { generateIndexes } from './generate-indexes.mjs';
+
+const projectMapAsset = new URL(
+  '../../skills/maintain-project-knowledge/assets/project-map.json',
+  import.meta.url,
+);
+const pendingChangesAsset = new URL(
+  '../../skills/maintain-project-knowledge/assets/pending-changes.json',
+  import.meta.url,
+);
+
+const bootstrapFailure = (code, path, message) => fail([createError(code, path, message)]);
+
+const localizedTextIsComplete = (value) => value !== null
+  && typeof value === 'object'
+  && !Array.isArray(value)
+  && Object.keys(value).length === 2
+  && typeof value.en === 'string'
+  && value.en.trim().length > 0
+  && typeof value['zh-CN'] === 'string'
+  && value['zh-CN'].trim().length > 0;
+
+const fileState = async (path) => {
+  try {
+    return await lstat(path);
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+};
+
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const jsonContent = (value) => `${JSON.stringify(value, null, 2)}\n`;
+
+const canonicalizeDomains = (domains, calibrationRef) => clone(domains)
+  .map((domain) => ({
+    ...domain,
+    relationships: [...domain.relationships]
+      .sort((left, right) => compareCodePoints(left.target_id, right.target_id)),
+    evidence_refs: [...new Set([...domain.evidence_refs, calibrationRef])].sort(compareCodePoints),
+  }))
+  .sort((left, right) => compareCodePoints(left.id, right.id));
+
+const validateIndex = (source, domains) => {
+  const valid = typeof source === 'string'
+    && source.endsWith('\n')
+    && domains.every(({ id }) => source.includes(`\`${id}\``))
+    && !source.includes('](knowledge/');
+  return valid ? ok(source) : bootstrapFailure(
+    'BOOTSTRAP_INDEX_INVALID',
+    '/',
+    'Generated index is invalid.',
+  );
+};
+
+const readAsset = async (url, kind) => {
+  const value = JSON.parse(await readFile(url, 'utf8'));
+  const validation = validateJson(kind, value);
+  if (!validation.ok) {
+    const error = new Error(`Invalid bootstrap asset: ${kind}`);
+    error.code = 'BOOTSTRAP_ASSET_INVALID';
+    error.errors = validation.errors;
+    throw error;
+  }
+  return value;
+};
+
+const stableBootstrapErrorCodes = new Set([
+  'BOOTSTRAP_ASSET_INVALID',
+  'BOOTSTRAP_WRITE_FAILED',
+  'PATH_SYMLINK_ESCAPE',
+]);
+
+const asFailure = (error) => bootstrapFailure(
+  stableBootstrapErrorCodes.has(error?.code) ? error.code : 'BOOTSTRAP_WRITE_FAILED',
+  '/',
+  'Bootstrap could not be completed.',
+);
+
+const existingConflict = (path = '/') => bootstrapFailure(
+  'BOOTSTRAP_EXISTING_PROJECT',
+  path,
+  'A different project lifecycle root already exists.',
+);
+
+const inspectCompleteBootstrap = async ({
+  lifecycleRoot,
+  expectedMap,
+  expectedEnglishIndex,
+  expectedChineseIndex,
+}) => {
+  try {
+    const rootStat = await fileState(lifecycleRoot);
+    if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) return { ok: false, path: '/' };
+
+    for (const directory of ['knowledge', 'delivery']) {
+      const stat = await fileState(join(lifecycleRoot, directory));
+      if (!stat?.isDirectory() || stat.isSymbolicLink()) {
+        return { ok: false, path: `/${directory}` };
+      }
+    }
+
+    const requiredFiles = ['project-map.json', 'pending-changes.json', 'INDEX-en.md', 'INDEX.md'];
+    const fileStats = await Promise.all(requiredFiles.map(async (name) => ({
+      name,
+      stat: await fileState(join(lifecycleRoot, name)),
+    })));
+    for (const { name, stat } of fileStats) {
+      if (!stat?.isFile() || stat.isSymbolicLink()) return { ok: false, path: `/${name}` };
+    }
+
+    const [mapSource, pendingSource, englishIndex, chineseIndex] = await Promise.all([
+      readFile(join(lifecycleRoot, 'project-map.json'), 'utf8'),
+      readFile(join(lifecycleRoot, 'pending-changes.json'), 'utf8'),
+      readFile(join(lifecycleRoot, 'INDEX-en.md'), 'utf8'),
+      readFile(join(lifecycleRoot, 'INDEX.md'), 'utf8'),
+    ]);
+    const existingMap = JSON.parse(mapSource);
+    const existingPending = JSON.parse(pendingSource);
+    if (!validateJson('project-map', existingMap).ok
+      || !validateJson('pending-changes', existingPending).ok
+      || !isDeepStrictEqual(existingMap, expectedMap)
+      || englishIndex !== expectedEnglishIndex
+      || chineseIndex !== expectedChineseIndex) {
+      return { ok: false, path: '/' };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, path: '/' };
+  }
+};
+
+const existingBootstrap = async (expected) => {
+  const inspection = await inspectCompleteBootstrap(expected);
+  return inspection.ok ? ok({ status: 'existing' }) : existingConflict(inspection.path);
+};
+
+const requireCompleteBootstrap = async (expected) => {
+  const inspection = await inspectCompleteBootstrap(expected);
+  if (inspection.ok) return;
+  const error = new Error('Bootstrap postcondition validation failed.');
+  error.code = 'BOOTSTRAP_WRITE_FAILED';
+  throw error;
+};
+
+// The sole-writer boundary makes the final directory rename the visibility point. Earlier failures
+// receive best-effort cleanup; this is not a transaction against hostile filesystem failures.
+export async function bootstrap({
+  root,
+  project_id: projectId,
+  label,
+  purpose,
+  calibration_ref: calibrationRef,
+  calibration_approved: calibrationApproved,
+  domains,
+}, operations = {}) {
+  const writeArtifact = operations.atomicWriteValidated ?? atomicWriteValidated;
+  const publish = operations.rename ?? rename;
+  if (typeof calibrationRef !== 'string' || calibrationRef.trim().length === 0
+    || calibrationApproved !== true) {
+    return bootstrapFailure(
+      'BOOTSTRAP_CALIBRATION_REQUIRED',
+      '/calibration_ref',
+      'Initial calibration approval is required.',
+    );
+  }
+  if (typeof root !== 'string' || !isAbsolute(root)
+    || typeof projectId !== 'string' || projectId.trim().length === 0
+    || !localizedTextIsComplete(label)
+    || !localizedTextIsComplete(purpose)
+    || !Array.isArray(domains)
+    || domains.length === 0) {
+    return bootstrapFailure(
+      'BOOTSTRAP_INPUT_INVALID',
+      '/arguments',
+      'Explicit project identity, bilingual label and purpose, and a domain skeleton are required.',
+    );
+  }
+  if (domains.some((domain) => domain?.domain_state !== 'confirmed')) {
+    return bootstrapFailure(
+      'BOOTSTRAP_DOMAIN_NOT_CONFIRMED',
+      '/domains',
+      'Every bootstrap domain must be explicitly confirmed.',
+    );
+  }
+
+  let map;
+  let pending;
+  try {
+    const mapBase = await readAsset(projectMapAsset, 'project-map');
+    pending = await readAsset(pendingChangesAsset, 'pending-changes');
+    map = {
+      ...mapBase,
+      project_id: projectId,
+      knowledge_baseline: calibrationRef,
+      project_identity: { label: clone(label), purpose: clone(purpose), calibration_ref: calibrationRef },
+      domains: canonicalizeDomains(domains, calibrationRef),
+    };
+  } catch (error) {
+    return asFailure(error);
+  }
+
+  const mapValidation = validateJson('project-map', map);
+  if (!mapValidation.ok) return mapValidation;
+  const pendingValidation = validateJson('pending-changes', pending);
+  if (!pendingValidation.ok) return pendingValidation;
+
+  const generatedIndexes = generateIndexes({ map });
+  if (!generatedIndexes.ok) return generatedIndexes;
+  const englishIndex = generatedIndexes.value.en;
+  const chineseIndex = generatedIndexes.value['zh-CN'];
+  const englishValidation = validateIndex(englishIndex, map.domains);
+  if (!englishValidation.ok) return englishValidation;
+  const chineseValidation = validateIndex(chineseIndex, map.domains);
+  if (!chineseValidation.ok) return chineseValidation;
+
+  let docsPath;
+  let lifecycleRoot;
+  let stagingRoot;
+  let createdDocs = false;
+  try {
+    docsPath = await resolveInside(root, 'docs');
+    const docsStat = await fileState(docsPath);
+    if (docsStat?.isSymbolicLink()) {
+      const error = new Error('Docs parent must not be a symlink.');
+      error.code = 'PATH_SYMLINK_ESCAPE';
+      throw error;
+    }
+    if (docsStat && !docsStat.isDirectory()) {
+      return bootstrapFailure('BOOTSTRAP_WRITE_FAILED', '/docs', 'Bootstrap could not be completed.');
+    }
+    if (docsStat) {
+      lifecycleRoot = join(docsPath, 'project-lifecycle');
+      const lifecycleStat = await fileState(lifecycleRoot);
+      if (lifecycleStat) {
+        return await existingBootstrap({
+          lifecycleRoot,
+          expectedMap: map,
+          expectedEnglishIndex: englishIndex,
+          expectedChineseIndex: chineseIndex,
+        });
+      }
+    }
+
+    stagingRoot = await mkdtemp(join(root, '.project-lifecycle-bootstrap-'));
+    await mkdir(join(stagingRoot, 'knowledge'));
+    await mkdir(join(stagingRoot, 'delivery'));
+    await writeArtifact({
+      root: stagingRoot,
+      target: 'project-map.json',
+      content: jsonContent(map),
+      validate: async (source) => {
+        try {
+          return validateJson('project-map', JSON.parse(source));
+        } catch {
+          return bootstrapFailure('SCHEMA_INVALID', '/', 'Invalid project-map.');
+        }
+      },
+    });
+    await writeArtifact({
+      root: stagingRoot,
+      target: 'pending-changes.json',
+      content: jsonContent(pending),
+      validate: async (source) => {
+        try {
+          return validateJson('pending-changes', JSON.parse(source));
+        } catch {
+          return bootstrapFailure('SCHEMA_INVALID', '/', 'Invalid pending-changes.');
+        }
+      },
+    });
+    await writeArtifact({
+      root: stagingRoot,
+      target: 'INDEX-en.md',
+      content: englishIndex,
+      validate: async (source) => validateIndex(source, map.domains),
+    });
+    await writeArtifact({
+      root: stagingRoot,
+      target: 'INDEX.md',
+      content: chineseIndex,
+      validate: async (source) => validateIndex(source, map.domains),
+    });
+    const expectedPostcondition = {
+      expectedMap: map,
+      expectedEnglishIndex: englishIndex,
+      expectedChineseIndex: chineseIndex,
+    };
+    await requireCompleteBootstrap({
+      lifecycleRoot: stagingRoot,
+      ...expectedPostcondition,
+    });
+
+    if (!docsStat) {
+      await mkdir(docsPath);
+      createdDocs = true;
+    }
+    lifecycleRoot = join(docsPath, 'project-lifecycle');
+    await publish(stagingRoot, lifecycleRoot);
+    await requireCompleteBootstrap({
+      lifecycleRoot,
+      ...expectedPostcondition,
+    });
+    await rm(stagingRoot, { recursive: true, force: true });
+    stagingRoot = null;
+    return ok({ status: 'created' });
+  } catch (error) {
+    if (stagingRoot) await rm(stagingRoot, { recursive: true, force: true }).catch(() => {});
+    if (createdDocs && docsPath) await rmdir(docsPath).catch(() => {});
+    if (error.code === 'EEXIST' || error.code === 'ENOTEMPTY') {
+      return bootstrapFailure(
+        'BOOTSTRAP_EXISTING_PROJECT',
+        '/project-map.json',
+        'A different project lifecycle root already exists.',
+      );
+    }
+    return asFailure(error);
+  }
+}

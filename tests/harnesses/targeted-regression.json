@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "plugin_version": "0.1.0",
+  "scope": "targeted-remediation-only-not-support-evidence",
+  "skill_sha256": {
+    "maintain-project-knowledge": "2a334b2c7a99988b62c6249e38216ee278d2bb63ed973f8b5df2879f85418337",
+    "run-prd-lifecycle": "3b69f8966249427c0828f50754b243e39ab45fad190efbb0886984f6db6beb19"
+  },
+  "hosts": {
+    "codex": {
+      "observed_version": "0.147.0-alpha.6.5",
+      "latest_passed_scenarios": [
+        "closure-migration-archive",
+        "cross-domain-feedback-prd",
+        "parallel-multi-repository-delivery",
+        "topology-constraint-evolution"
+      ],
+      "latest_pass_count": 4,
+      "run_count": 5
+    },
+    "kimi": {
+      "observed_version": "0.29.2",
+      "latest_passed_scenarios": [
+        "closure-migration-archive",
+        "cross-domain-feedback-prd",
+        "parallel-multi-repository-delivery",
+        "professional-domain-materialization",
+        "reconnaissance-calibration",
+        "topology-constraint-evolution"
+      ],
+      "latest_pass_count": 6,
+      "run_count": 6
+    }
+  },
+  "support_effect": "none"
+}

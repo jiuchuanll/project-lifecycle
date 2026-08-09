@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context-receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "prd_id",
+    "receipt_revision",
+    "updated_at",
+    "knowledge_baseline",
+    "intent_summary",
+    "route",
+    "selected_context",
+    "material_exclusions",
+    "open_questions",
+    "stop"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "prd_id": { "$ref": "#/$defs/id" },
+    "receipt_revision": { "type": "integer", "minimum": 1 },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "knowledge_baseline": { "$ref": "#/$defs/ref" },
+    "intent_summary": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_domain_id", "affected_domain_ids"],
+      "properties": {
+        "primary_domain_id": { "$ref": "#/$defs/id" },
+        "affected_domain_ids": {
+          "type": "array",
+          "maxItems": 50,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "selected_context": {
+      "type": "array",
+      "maxItems": 100,
+      "items": { "$ref": "#/$defs/selectedContext" }
+    },
+    "material_exclusions": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/materialExclusion" }
+    },
+    "open_questions": {
+      "type": "array",
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    },
+    "stop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "reason"],
+      "properties": {
+        "code": {
+          "enum": ["SUFFICIENT", "NEEDS_USER", "NEEDS_EVIDENCE", "NEEDS_ARCHIVE_RECEIPT", "CONFLICT"]
+        },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 500 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "open_questions": { "type": "array", "minItems": 1 }
+        },
+        "required": ["open_questions"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "stop": {
+            "type": "object",
+            "properties": {
+              "code": { "enum": ["NEEDS_USER", "NEEDS_EVIDENCE", "NEEDS_ARCHIVE_RECEIPT", "CONFLICT"] }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "stop": {
+            "type": "object",
+            "properties": { "code": { "const": "NEEDS_USER" } },
+            "required": ["code"]
+          }
+        },
+        "required": ["stop"]
+      },
+      "then": {
+        "type": "object",
+        "properties": { "open_questions": { "type": "array", "minItems": 1 } }
+      }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "ref": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "selectedContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "version_ref", "reason"],
+      "properties": {
+        "kind": { "enum": ["global_principle", "domain_asset", "fact", "constraint", "active_delivery"] },
+        "id": { "$ref": "#/$defs/id" },
+        "version_ref": { "$ref": "#/$defs/ref" },
+        "reason": { "enum": ["PRIMARY", "DEPENDENCY", "CONSTRAINT", "ACTIVE_CHANGE", "USER_EXPLICIT", "VALIDATION"] }
+      }
+    },
+    "materialExclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "reason", "explanation"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "reason": { "enum": ["OUT_OF_SCOPE", "REDUNDANT", "UNCONFIRMED", "STALE", "ARCHIVE_GATED"] },
+        "explanation": { "type": "string", "minLength": 1, "maxLength": 500 }
+      }
+    }
+  }
+}

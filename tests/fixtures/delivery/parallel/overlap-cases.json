@@ -1,0 +1,9 @@
+[
+  { "name": "informational-overlap", "class": "INFORMATIONAL_OVERLAP", "expected": "OK" },
+  { "name": "dependency", "class": "DEPENDENCY", "relationship_kind": "depends_on", "expected": "OK" },
+  { "name": "composable-seam", "class": "COMPOSABLE_SEAM", "relationship_kind": "coordinates_with", "joint_acceptance_seam_ref": "acceptance:wiki-api-v2", "expected": "OK" },
+  { "name": "semantic-same-fact-conflict", "class": "SAME_FACT_CONFLICT", "shared_fact_ids": ["fact-wiki-layout"], "conflict_ref": "conflict:wiki-layout", "expected": "OK" },
+  { "name": "disjoint-same-domain-facts", "class": "DISJOINT_FACTS", "peer_fact_ids": ["fact-wiki-search"], "expected": "OK" },
+  { "name": "stale-replayable-baseline", "class": "STALE_REPLAYABLE", "current_knowledge_baseline": "baseline-8", "baseline_replay_ref": "replay:baseline-7-to-8", "expected": "OK" },
+  { "name": "stale-unreplayable-baseline", "class": "STALE_UNREPLAYABLE", "current_knowledge_baseline": "baseline-8", "conflict_ref": "conflict:baseline-semantics", "expected": "OK" }
+]

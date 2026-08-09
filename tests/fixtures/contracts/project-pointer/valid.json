@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "project_id": "sample-app",
+  "repository_id": "sample-repository",
+  "governance_locator": "../project-map/valid.json"
+}
