@@ -99,6 +99,22 @@ test('scans a tracked basename beginning with two dots inside the explicit root'
   assert.equal(result.stdout.includes(secretAssignment), false);
 });
 
+test('allows only the declared canonical plugin repository locator', async (context) => {
+  const root = await createGitRoot(context);
+  const host = ['github', 'com'].join('.');
+  const owner = ['jiuchuan', 'll'].join('');
+  await writeFile(join(root, 'manifest.json'), `${JSON.stringify({
+    repository: `https://${host}/${owner}/project-lifecycle`,
+    website: `https://${host}/${owner}/project-lifecycle`,
+  })}\n`);
+  execFileSync('git', ['add', '--', 'manifest.json'], { cwd: root });
+
+  const result = runPrivacy(root);
+
+  assert.equal(result.status, 0);
+  assert.equal(JSON.parse(result.stdout).ok, true);
+});
+
 test('sorts privacy findings by locale-independent code-point order', async (context) => {
   const root = await createGitRoot(context);
   const secretAssignment = ['token', 'secret'].join('=');

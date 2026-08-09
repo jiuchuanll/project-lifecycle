@@ -1,0 +1,12 @@
+{
+  "name": "project-lifecycle",
+  "interface": { "displayName": "Project Lifecycle" },
+  "plugins": [
+    {
+      "name": "project-lifecycle",
+      "source": { "source": "local", "path": "../.." },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Developer Tools"
+    }
+  ]
+}

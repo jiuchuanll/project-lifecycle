@@ -4,6 +4,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const canonicalRepository = ['https://github', '.com/jiuchuan', 'll/project-lifecycle'].join('');
 const compareCodePoints = (left, right) => {
   const leftPoints = [...left].map((character) => character.codePointAt(0));
   const rightPoints = [...right].map((character) => character.codePointAt(0));
@@ -61,8 +62,9 @@ export const checkPrivacy = async (rootValue) => {
     if (content.includes(0)) continue;
     scannedFiles += 1;
     for (const [index, line] of content.toString('utf8').split(/\r?\n/).entries()) {
+      const scannedLine = line.replaceAll(canonicalRepository, '');
       for (const { code, pattern } of rules) {
-        if (pattern.test(line)) findings.push({ code, path, line: index + 1 });
+        if (pattern.test(scannedLine)) findings.push({ code, path, line: index + 1 });
       }
     }
   }
