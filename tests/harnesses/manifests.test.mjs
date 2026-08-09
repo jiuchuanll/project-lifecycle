@@ -42,7 +42,7 @@ test('publishes root plugin entries through Codex and Claude marketplaces', asyn
   assert.equal(codex.interface.displayName, 'Project Lifecycle');
   assert.deepEqual(codex.plugins, [{
     name: 'project-lifecycle',
-    source: { source: 'local', path: '../..' },
+    source: { source: 'local', path: './' },
     policy: { installation: 'AVAILABLE', authentication: 'ON_INSTALL' },
     category: 'Developer Tools',
   }]);
