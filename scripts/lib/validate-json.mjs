@@ -363,8 +363,8 @@ const validateDeterministicOrder = (kind, value) => {
   } else if (kind === 'pending-changes') {
     appendOrderErrors(errors, value.changes, '/changes', 'change_id');
     for (const [index, change] of value.changes.entries()) {
-      appendOrderErrors(errors, change.trigger_refs, `/changes/${index}/trigger_refs`);
-      appendOrderErrors(errors, change.affected_refs, `/changes/${index}/affected_refs`);
+      if (change.trigger_refs) appendOrderErrors(errors, change.trigger_refs, `/changes/${index}/trigger_refs`);
+      if (change.affected_refs) appendOrderErrors(errors, change.affected_refs, `/changes/${index}/affected_refs`);
       if (change.source_refs) appendOrderErrors(errors, change.source_refs, `/changes/${index}/source_refs`);
       if (change.proposed_patch) {
         appendOrderErrors(errors, change.proposed_patch.changed_fields, `/changes/${index}/proposed_patch/changed_fields`);
@@ -382,6 +382,19 @@ const validateDeterministicOrder = (kind, value) => {
         appendOrderErrors(errors, change.knowledge_commitments, `/changes/${index}/knowledge_commitments`, 'domain_id');
         for (const [commitmentIndex, commitment] of change.knowledge_commitments.entries()) {
           appendOrderErrors(errors, commitment.facts, `/changes/${index}/knowledge_commitments/${commitmentIndex}/facts`, 'fact_id');
+        }
+      }
+      if (change.absorption_version === 1) {
+        appendOrderErrors(errors, change.operations, `/changes/${index}/operations`, 'fact_id');
+        appendOrderErrors(errors, change.affected_domain_ids, `/changes/${index}/affected_domain_ids`);
+        appendOrderErrors(errors, change.affected_fact_ids, `/changes/${index}/affected_fact_ids`);
+        appendOrderErrors(errors, change.affected_owner_ids, `/changes/${index}/affected_owner_ids`);
+        appendOrderErrors(errors, change.constraint_refs, `/changes/${index}/constraint_refs`);
+        appendOrderErrors(errors, change.relationship_refs, `/changes/${index}/relationship_refs`);
+        appendOrderErrors(errors, change.topology_target_ids, `/changes/${index}/topology_target_ids`);
+        appendOrderErrors(errors, change.evidence_refs, `/changes/${index}/evidence_refs`);
+        for (const [operationIndex, operation] of change.operations.entries()) {
+          appendOrderErrors(errors, operation.evidence_refs, `/changes/${index}/operations/${operationIndex}/evidence_refs`);
         }
       }
     }

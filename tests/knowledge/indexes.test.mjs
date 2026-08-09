@@ -224,6 +224,11 @@ test('rejects unsafe generated reference values before Markdown or comment inter
       for (const entry of deliveries) entry.frontmatter.knowledge_baseline = 'baseline-->unsafe';
       return { map, capability_frontmatters: capabilityPair, delivery_frontmatters: deliveries };
     },
+    () => {
+      const unsafeMap = clone(map);
+      unsafeMap.knowledge_baseline = 'repo:https://user:secret@example.test/private';
+      return { map: unsafeMap, capability_frontmatters: capabilityPair, delivery_frontmatters: [] };
+    },
   ];
   for (const build of cases) {
     const result = generateIndexes(build());

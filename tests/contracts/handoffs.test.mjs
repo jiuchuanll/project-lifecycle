@@ -415,3 +415,49 @@ test('separates legacy and governed pending entries and rejects duplicate change
     code === 'ID_DUPLICATE' && path === '/changes/1/change_id'
   )));
 });
+
+test('accepts a strictly discriminated absorption pending entry and rejects incomplete lookalikes', () => {
+  const absorption = {
+    absorption_version: 1,
+    change_id: 'absorption-fact-desktop-shell-fact',
+    semantic_target_key: 'fact:desktop-shell-fact',
+    conflict_revision: 2,
+    candidate_commitment: `sha256:${'c'.repeat(64)}`,
+    diff_id: 'diff-rewrite-desktop',
+    owner_delivery_id: 'prd-desktop-theme',
+    knowledge_baseline: 'baseline-1',
+    new_baseline: 'baseline-2',
+    operations: [{
+      kind: 'REWRITE',
+      fact_id: 'desktop-shell-fact',
+      owner_domain_id: 'desktop-experience',
+      evidence_refs: ['repo:src/desktop', 'test:desktop'],
+    }],
+    affected_domain_ids: ['desktop-experience'],
+    affected_fact_ids: ['desktop-shell-fact'],
+    affected_owner_ids: ['desktop-experience'],
+    constraint_refs: [],
+    relationship_refs: [],
+    topology_target_ids: [],
+    evidence_refs: ['repo:src/desktop', 'test:desktop'],
+    risks: ['Current accepted knowledge remains unchanged until exact resolution.'],
+    evidence_gaps: ['Externally verified resolution is required.'],
+    review_state: 'open',
+    opened_at: '2026-08-09T00:00:00.000Z',
+  };
+
+  assert.equal(validateJson('pending-changes', { schema_version: 1, changes: [absorption] }).ok, true);
+  for (const candidate of [
+    { ...absorption, absorption_version: undefined },
+    { ...absorption, conflict_revision: 0 },
+    { ...absorption, candidate_commitment: 'sha256:short' },
+    { ...absorption, proposed_disposition: 'Legacy prose must not overlap.' },
+  ]) {
+    const result = validateJson('pending-changes', {
+      schema_version: 1,
+      changes: [Object.fromEntries(Object.entries(candidate).filter(([, value]) => value !== undefined))],
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some(({ path }) => path === '/changes/0' || path.startsWith('/changes/0/')));
+  }
+});

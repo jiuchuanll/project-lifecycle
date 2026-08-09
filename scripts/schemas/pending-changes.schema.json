@@ -23,11 +23,106 @@
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 }
     },
+    "list": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    },
+    "ids": {
+      "type": "array",
+      "maxItems": 200,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
     "change": {
       "oneOf": [
         { "$ref": "#/$defs/legacyChange" },
-        { "$ref": "#/$defs/governedChange" }
+        { "$ref": "#/$defs/governedChange" },
+        { "$ref": "#/$defs/absorptionChange" }
       ]
+    },
+    "absorptionChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "absorption_version",
+        "change_id",
+        "semantic_target_key",
+        "conflict_revision",
+        "candidate_commitment",
+        "diff_id",
+        "owner_delivery_id",
+        "knowledge_baseline",
+        "new_baseline",
+        "operations",
+        "affected_domain_ids",
+        "affected_fact_ids",
+        "affected_owner_ids",
+        "constraint_refs",
+        "relationship_refs",
+        "topology_target_ids",
+        "evidence_refs",
+        "risks",
+        "evidence_gaps",
+        "review_state",
+        "opened_at"
+      ],
+      "properties": {
+        "absorption_version": { "const": 1 },
+        "change_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "semantic_target_key": { "type": "string", "pattern": "^(fact|domain|owner|constraint|relationship|topology):[a-z][a-z0-9-]*$" },
+        "conflict_revision": { "type": "integer", "minimum": 1 },
+        "candidate_commitment": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "diff_id": { "$ref": "#/$defs/id" },
+        "owner_delivery_id": { "$ref": "#/$defs/id" },
+        "knowledge_baseline": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "new_baseline": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "operations": {
+          "type": "array",
+          "maxItems": 100,
+          "items": { "$ref": "#/$defs/absorptionOperation" }
+        },
+        "affected_domain_ids": { "$ref": "#/$defs/ids" },
+        "affected_fact_ids": { "$ref": "#/$defs/ids" },
+        "affected_owner_ids": { "$ref": "#/$defs/ids" },
+        "constraint_refs": { "$ref": "#/$defs/list" },
+        "relationship_refs": { "$ref": "#/$defs/list" },
+        "topology_target_ids": { "$ref": "#/$defs/ids" },
+        "evidence_refs": { "$ref": "#/$defs/list" },
+        "risks": { "$ref": "#/$defs/boundedNotes" },
+        "evidence_gaps": { "$ref": "#/$defs/boundedNotes" },
+        "review_state": { "const": "open" },
+        "opened_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "absorptionOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "fact_id", "owner_domain_id", "evidence_refs"],
+      "properties": {
+        "kind": { "enum": ["ADD", "REWRITE", "SUPERSEDE"] },
+        "fact_id": { "$ref": "#/$defs/id" },
+        "owner_domain_id": { "$ref": "#/$defs/id" },
+        "successor_fact_id": { "$ref": "#/$defs/id" },
+        "evidence_refs": { "$ref": "#/$defs/refs" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "SUPERSEDE" } }, "required": ["kind"] },
+          "then": {
+            "required": ["successor_fact_id"],
+            "properties": { "successor_fact_id": { "$ref": "#/$defs/id" } }
+          },
+          "else": { "properties": { "successor_fact_id": false } }
+        }
+      ]
+    },
+    "boundedNotes": {
+      "type": "array",
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 1000 }
     },
     "legacyChange": {
       "type": "object",

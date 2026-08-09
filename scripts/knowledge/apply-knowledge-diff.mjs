@@ -19,6 +19,7 @@ import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
 import { parseFactBlocks } from '../lib/fact-blocks.mjs';
 import { parseFrontmatter } from '../lib/markdown.mjs';
+import { isSafeLocator, isSafeReference } from '../lib/reference-safety.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
@@ -29,23 +30,51 @@ const envelopeFields = new Set([
   'root',
   'knowledge_diff',
   'new_baseline',
-  'approval_ref',
-  'resolution_ref',
-  'conflict_resolution',
+  'approval_receipt',
+  'resolution_receipts',
   'knowledge_updates',
 ]);
 const mutationKinds = new Set(['ADD', 'REWRITE', 'SUPERSEDE']);
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
-const isStructuredRef = (value) => isNonEmptyString(value)
-  && value.length <= 500
-  && /^[a-z][a-z0-9-]*:[^\s`<>\\]+$/u.test(value)
-  && !value.includes('--');
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const jsonContent = (value) => `${JSON.stringify(value, null, 2)}\n`;
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const contentHash = (source) => `sha256:${createHash('sha256').update(source).digest('hex')}`;
+const sorted = (values) => [...new Set(values)].sort(compareCodePoints);
+const canonicalize = (value) => Array.isArray(value)
+  ? value.map(canonicalize)
+  : isRecord(value)
+    ? Object.fromEntries(Object.keys(value).sort(compareCodePoints).map((key) => [key, canonicalize(value[key])]))
+    : value;
+const receiptFields = new Set(['ref', 'verified', 'candidate_commitment']);
+const resolutionReceiptFields = new Set([...receiptFields, 'conflict_id', 'conflict_revision']);
+
+const knowledgeUpdateCommitments = (updates) => updates.map((update) => ({
+  domain_id: update.domain_id,
+  en: { locator: update.en.locator, content_hash: update.en.content_hash },
+  'zh-CN': { locator: update['zh-CN'].locator, content_hash: update['zh-CN'].content_hash },
+  facts: update.facts,
+})).sort((left, right) => compareCodePoints(left.domain_id, right.domain_id));
+
+export const computeKnowledgeDiffCommitment = (input, conflicts = []) => contentHash(JSON.stringify(canonicalize({
+  commitment_version: 1,
+  knowledge_diff: input.knowledge_diff,
+  current_baseline: input.knowledge_diff.knowledge_baseline,
+  new_baseline: input.new_baseline,
+  knowledge_updates: knowledgeUpdateCommitments(input.knowledge_updates),
+  conflicts: conflicts.map(({ conflict_id, conflict_revision }) => ({ conflict_id, conflict_revision }))
+    .sort((left, right) => compareCodePoints(left.conflict_id, right.conflict_id)),
+})));
+
+const validReceipt = (receipt, fields = receiptFields) => isRecord(receipt)
+  && Object.keys(receipt).length === fields.size
+  && Object.keys(receipt).every((field) => fields.has(field))
+  && isSafeReference(receipt.ref)
+  && /^[a-z][a-z0-9-]*:/u.test(receipt.ref)
+  && receipt.verified === true
+  && /^sha256:[0-9a-f]{64}$/u.test(receipt.candidate_commitment ?? '');
 
 const fileState = async (path) => {
   try {
@@ -103,16 +132,42 @@ const validateEnvelope = (input) => {
     || !Array.isArray(input.knowledge_updates)) {
     return failure('ABSORPTION_ENVELOPE_INVALID', '/', 'A closed privileged absorption envelope is required.');
   }
-  for (const field of ['approval_ref', 'resolution_ref']) {
-    if (Object.hasOwn(input, field) && !isStructuredRef(input[field])) {
-      return failure('ABSORPTION_APPROVAL_INVALID', `/${field}`, 'Approval and resolution references must be structured references.');
-    }
+  if (Object.hasOwn(input, 'approval_receipt') && !validReceipt(input.approval_receipt)) {
+    return failure('ABSORPTION_APPROVAL_INVALID', '/approval_receipt', 'Approval receipt must be a closed externally verified candidate binding.');
   }
-  if (Object.hasOwn(input, 'conflict_resolution')
-    && (!isRecord(input.conflict_resolution)
-      || Object.keys(input.conflict_resolution).length !== 1
-      || !/^[a-z][a-z0-9-]*$/u.test(input.conflict_resolution.change_id ?? ''))) {
-    return failure('ABSORPTION_CONFLICT_MISMATCH', '/conflict_resolution', 'Conflict resolution must identify exactly one bounded pending change.');
+  if (Object.hasOwn(input, 'resolution_receipts')
+    && (!Array.isArray(input.resolution_receipts)
+      || input.resolution_receipts.length === 0
+      || input.resolution_receipts.some((receipt) => !validReceipt(receipt, resolutionReceiptFields)
+        || !/^[a-z][a-z0-9-]*$/u.test(receipt.conflict_id ?? '')
+        || !Number.isInteger(receipt.conflict_revision)
+        || receipt.conflict_revision < 1))) {
+    return failure('ABSORPTION_CONFLICT_MISMATCH', '/resolution_receipts', 'Resolution receipts must bind exact pending conflict identities and revisions.');
+  }
+  return ok(null);
+};
+
+const validateSafeInputs = (input) => {
+  const refs = [
+    input.knowledge_diff.knowledge_baseline,
+    ...(Object.hasOwn(input, 'new_baseline') ? [input.new_baseline] : []),
+    ...input.knowledge_diff.entry_points,
+    ...input.knowledge_diff.evidence_refs,
+    ...input.knowledge_diff.operations.flatMap(({ evidence_refs: evidence }) => evidence),
+    ...input.knowledge_diff.domain_changes.flatMap((change) => [
+      ...change.evidence_refs,
+      ...(change.relationship_refs ?? []),
+    ]),
+  ];
+  if (refs.some((reference) => !isSafeReference(reference))) {
+    return failure('ABSORPTION_REFERENCE_INVALID', '/', 'Knowledge absorption contains an unsafe reference value.');
+  }
+  for (const update of input.knowledge_updates) {
+    for (const language of LANGUAGES) {
+      if (update?.[language]?.locator !== undefined && !isSafeLocator(update[language].locator)) {
+        return failure('ABSORPTION_REFERENCE_INVALID', '/knowledge_updates', 'Knowledge absorption contains an unsafe locator.');
+      }
+    }
   }
   return ok(null);
 };
@@ -150,13 +205,23 @@ const factSummary = (document) => document.facts.map((fact) => ({
   knowledge_state: document.frontmatter.knowledge_state,
 }));
 
-const factUnitPattern = /^#{3,6}[^\n]*\n(?:\n)*<!-- project-lifecycle:fact\n[\s\S]*?<!-- \/project-lifecycle:fact -->\n?/gmu;
-const documentSkeleton = (source) => source
-  .replace(factUnitPattern, '')
+const factUnitPattern = /^### `([^`\n]+)`\n(?:\n)*<!-- project-lifecycle:fact\n[\s\S]*?<!-- \/project-lifecycle:fact -->(?:\n)*/gmu;
+const factUnits = (document) => {
+  const units = new Map();
+  for (const match of document.source.matchAll(factUnitPattern)) units.set(match[1], match[0]);
+  return units.size === document.facts.length ? ok(units) : failure(
+    'ABSORPTION_CHANGE_NOT_BOUNDED',
+    '/',
+    'Every fact block must have one exact fact identity heading.',
+  );
+};
+const normalizeMachine = (source) => source
   .replace(/last_verified_baseline: [^\n]+/u, 'last_verified_baseline: <baseline>')
-  .replace(/implementation_refs: [^\n]+/u, 'implementation_refs: <implementation-refs>')
-  .replace(/\n{3,}/gu, '\n\n')
-  .trim();
+  .replace(/implementation_refs: [^\n]+/u, 'implementation_refs: <implementation-refs>');
+const documentFrame = (document, identityMap = new Map(), omitted = new Set()) => normalizeMachine(document.source.replace(
+  factUnitPattern,
+  (_unit, factId) => omitted.has(factId) ? '' : `<!-- fact-unit:${identityMap.get(factId) ?? factId} -->\n`,
+));
 
 const validateCandidateUpdates = async ({ lifecycleRoot, map, input }) => {
   const updates = new Map();
@@ -167,6 +232,12 @@ const validateCandidateUpdates = async ({ lifecycleRoot, map, input }) => {
     if (!domain.paired_assets || !domain.baseline) {
       return failure('ABSORPTION_OWNER_MISMATCH', `/domains/${domain.id}`, 'Every current fact owner requires one canonical bilingual asset.');
     }
+    const currentPair = await validateBilingualPair(
+      join(lifecycleRoot, domain.paired_assets.en),
+      join(lifecycleRoot, domain.paired_assets['zh-CN']),
+      map,
+    );
+    if (!currentPair.ok) return currentPair;
     const documents = {};
     for (const language of LANGUAGES) {
       let source;
@@ -257,10 +328,6 @@ const validateCandidateUpdates = async ({ lifecycleRoot, map, input }) => {
       }
     }
     const current = currentDocuments.get(domain.id);
-    if (documentSkeleton(current.en.source) !== documentSkeleton(parsed.en.source)
-      || documentSkeleton(current['zh-CN'].source) !== documentSkeleton(parsed['zh-CN'].source)) {
-      return failure('ABSORPTION_CHANGE_NOT_BOUNDED', `/knowledge_updates/${index}`, 'Knowledge Diff cannot rewrite unrelated capability prose.');
-    }
     seenDomains.add(domain.id);
     updates.set(domain.id, { update, parsed, current });
   }
@@ -269,6 +336,13 @@ const validateCandidateUpdates = async ({ lifecycleRoot, map, input }) => {
 };
 
 const validateOperations = ({ diff, candidateState }) => {
+  const evidenceUnion = sorted([
+    ...diff.operations.flatMap(({ evidence_refs: refs }) => refs),
+    ...diff.domain_changes.flatMap(({ evidence_refs: refs }) => refs),
+  ]);
+  if (!same(diff.evidence_refs, evidenceUnion)) {
+    return failure('ABSORPTION_EVIDENCE_REQUIRED', '/knowledge_diff/evidence_refs', 'Knowledge Diff evidence must equal the deterministic union of declared change evidence.');
+  }
   const touchedOwners = new Set(diff.operations.map(({ owner_domain_id: owner }) => owner));
   if (touchedOwners.size !== candidateState.updates.size
     || [...touchedOwners].some((owner) => !candidateState.updates.has(owner))) {
@@ -304,8 +378,8 @@ const validateOperations = ({ diff, candidateState }) => {
       if (canonical || !added || beforeFacts.has(operation.fact_id) || added.revision !== 1) {
         return failure('ABSORPTION_FACT_IDENTITY_INVALID', `${path}/fact_id`, 'ADD requires one globally fresh fact at revision 1.');
       }
-      if (added.evidence_refs.some((reference) => !diff.evidence_refs.includes(reference))) {
-        return failure('ABSORPTION_EVIDENCE_REQUIRED', `${path}/evidence_refs`, 'Added fact evidence must belong to the accepted Knowledge Diff.');
+      if (!same(added.evidence_refs, operation.evidence_refs)) {
+        return failure('ABSORPTION_EVIDENCE_REQUIRED', `${path}/evidence_refs`, 'Added fact evidence must exactly match its declared operation evidence.');
       }
       appliedFacts.push({ fact_id: added.fact_id, owner_domain_id: operation.owner_domain_id, revision: 1 });
     } else if (operation.kind === 'REWRITE') {
@@ -316,8 +390,24 @@ const validateOperations = ({ diff, candidateState }) => {
       if (rewritten.revision !== canonical.fact.revision + 1) {
         return failure('ABSORPTION_REVISION_INVALID', `${path}/fact_id`, 'REWRITE must increment fact revision exactly once.');
       }
-      if (rewritten.evidence_refs.some((reference) => !diff.evidence_refs.includes(reference))) {
-        return failure('ABSORPTION_EVIDENCE_REQUIRED', `${path}/evidence_refs`, 'Rewritten fact evidence must belong to the accepted Knowledge Diff.');
+      if (!same(rewritten.evidence_refs, operation.evidence_refs)) {
+        return failure('ABSORPTION_EVIDENCE_REQUIRED', `${path}/evidence_refs`, 'Rewritten fact evidence must exactly match its declared operation evidence.');
+      }
+      if (same(
+        { statement: canonical.fact.statement, known_limits: canonical.fact.known_limits },
+        { statement: rewritten.statement, known_limits: rewritten.known_limits },
+      )) {
+        return failure('ABSORPTION_CHANGE_NOT_BOUNDED', `${path}/fact_id`, 'REWRITE requires a substantive fact payload change.');
+      }
+      for (const language of LANGUAGES) {
+        const localizedBefore = ownerUpdate.current[language].facts.find(({ fact_id: id }) => id === operation.fact_id);
+        const localizedAfter = ownerUpdate.parsed[language].facts.find(({ fact_id: id }) => id === operation.fact_id);
+        if (same(
+          { statement: localizedBefore?.statement, known_limits: localizedBefore?.known_limits },
+          { statement: localizedAfter?.statement, known_limits: localizedAfter?.known_limits },
+        )) {
+          return failure('ABSORPTION_CHANGE_NOT_BOUNDED', `${path}/fact_id`, 'Every localized REWRITE requires a substantive fact payload change.');
+        }
       }
       appliedFacts.push({ fact_id: rewritten.fact_id, owner_domain_id: operation.owner_domain_id, revision: rewritten.revision });
     } else {
@@ -330,8 +420,24 @@ const validateOperations = ({ diff, candidateState }) => {
         || operation.successor_fact_id === operation.fact_id) {
         return failure('ABSORPTION_FACT_IDENTITY_INVALID', `${path}/successor_fact_id`, 'SUPERSEDE requires a fresh revision-1 successor and removal of the predecessor from current retrieval.');
       }
-      if (successor.evidence_refs.some((reference) => !diff.evidence_refs.includes(reference))) {
-        return failure('ABSORPTION_EVIDENCE_REQUIRED', `${path}/evidence_refs`, 'Successor evidence must belong to the accepted Knowledge Diff.');
+      if (!same(successor.evidence_refs, operation.evidence_refs)) {
+        return failure('ABSORPTION_EVIDENCE_REQUIRED', `${path}/evidence_refs`, 'Successor evidence must exactly match its declared operation evidence.');
+      }
+      if (same(
+        { statement: canonical.fact.statement, known_limits: canonical.fact.known_limits },
+        { statement: successor.statement, known_limits: successor.known_limits },
+      )) {
+        return failure('ABSORPTION_CHANGE_NOT_BOUNDED', `${path}/successor_fact_id`, 'SUPERSEDE requires a substantive successor payload.');
+      }
+      for (const language of LANGUAGES) {
+        const localizedBefore = ownerUpdate.current[language].facts.find(({ fact_id: id }) => id === operation.fact_id);
+        const localizedAfter = ownerUpdate.parsed[language].facts.find(({ fact_id: id }) => id === operation.successor_fact_id);
+        if (same(
+          { statement: localizedBefore?.statement, known_limits: localizedBefore?.known_limits },
+          { statement: localizedAfter?.statement, known_limits: localizedAfter?.known_limits },
+        )) {
+          return failure('ABSORPTION_CHANGE_NOT_BOUNDED', `${path}/successor_fact_id`, 'Every localized SUPERSEDE requires a substantive successor payload.');
+        }
       }
       appliedFacts.push({ fact_id: successor.fact_id, owner_domain_id: operation.owner_domain_id, revision: 1 });
       supersededFacts.push({ fact_id: operation.fact_id, successor_fact_id: operation.successor_fact_id });
@@ -359,37 +465,99 @@ const validateOperations = ({ diff, candidateState }) => {
         return failure('ABSORPTION_CHANGE_NOT_BOUNDED', `/knowledge_updates/${domainId}/facts/${factId}`, 'An unlisted fact was added.');
       }
     }
+    const domainOperations = diff.operations.filter(({ owner_domain_id: owner }) => owner === domainId);
+    for (const language of LANGUAGES) {
+      const beforeUnits = factUnits(ownerUpdate.current[language]);
+      const afterUnits = factUnits(ownerUpdate.parsed[language]);
+      if (!beforeUnits.ok || !afterUnits.ok) return beforeUnits.ok ? afterUnits : beforeUnits;
+      const additions = new Set(domainOperations.filter(({ kind }) => kind === 'ADD').map(({ fact_id: id }) => id));
+      const identityMap = new Map(domainOperations
+        .filter(({ kind }) => kind === 'SUPERSEDE')
+        .map(({ fact_id: id, successor_fact_id: successor }) => [successor, id]));
+      if (documentFrame(ownerUpdate.current[language])
+        !== documentFrame(ownerUpdate.parsed[language], identityMap, additions)) {
+        return failure('ABSORPTION_CHANGE_NOT_BOUNDED', `/knowledge_updates/${domainId}/${language}`, 'Knowledge Diff changed document structure or unrelated prose.');
+      }
+      for (const [factId, unit] of beforeUnits.value) {
+        if (operatedBefore.has(factId)) continue;
+        if (normalizeMachine(unit) !== normalizeMachine(afterUnits.value.get(factId) ?? '')) {
+          return failure('ABSORPTION_CHANGE_NOT_BOUNDED', `/knowledge_updates/${domainId}/${language}/${factId}`, 'An undeclared fact unit changed.');
+        }
+      }
+    }
   }
   return ok({ appliedFacts, supersededFacts });
 };
 
-const conflictId = (diffId) => `absorption-${diffId}`;
+const footprintForDiff = (diff) => ({
+  domains: new Set([
+    ...diff.operations.map(({ owner_domain_id: id }) => id),
+    ...diff.domain_changes.map(({ domain_id: id }) => id),
+  ]),
+  facts: new Set(diff.operations.flatMap(({ fact_id: id, successor_fact_id: successor }) => [id, ...(successor ? [successor] : [])])),
+  owners: new Set(diff.operations.map(({ owner_domain_id: id }) => id)),
+  constraints: new Set(diff.domain_changes.flatMap(({ relationship_refs: refs = [] }) => refs.filter((ref) => ref.startsWith('constraint:')))),
+  relationships: new Set(diff.domain_changes.flatMap(({ relationship_refs: refs = [] }) => refs)),
+  topology: new Set(diff.domain_changes.map(({ domain_id: id }) => id)),
+});
 
-const conflictKind = (diff) => {
-  if (diff.domain_changes.length > 0) return 'topology';
-  if (diff.operations.some(({ kind }) => kind === 'SUPERSEDE')) return 'fact_identity';
-  if (diff.operations.some(({ kind }) => kind === 'REWRITE')) return 'material_conflict';
-  return 'fact_identity';
+const targetKeysForDiff = (diff) => sorted([
+  ...diff.operations.map(({ fact_id: id }) => `fact:${id}`),
+  ...diff.domain_changes.map(({ domain_id: id }) => `topology:${id}`),
+]);
+const conflictIdForTarget = (target) => `absorption-${target.replace(':', '-')}`;
+const intersects = (left, right) => [...left].some((value) => right.has(value));
+
+const footprintForPending = (change, map) => {
+  if (change.absorption_version === 1) return {
+    domains: new Set(change.affected_domain_ids),
+    facts: new Set(change.affected_fact_ids),
+    owners: new Set(change.affected_owner_ids),
+    constraints: new Set(change.constraint_refs),
+    relationships: new Set(change.relationship_refs),
+    topology: new Set(change.topology_target_ids),
+  };
+  const affected = new Set(change.affected_refs ?? []);
+  return {
+    domains: new Set([...affected].filter((ref) => ref.startsWith('domain:')).map((ref) => ref.slice(7))),
+    facts: new Set([...affected].filter((ref) => ref.startsWith('fact:')).map((ref) => ref.slice(5))),
+    owners: new Set([...affected].filter((ref) => ref.startsWith('owner:')).map((ref) => ref.slice(6))),
+    constraints: new Set([...affected].filter((ref) => ref.startsWith('constraint:'))),
+    relationships: new Set(change.source_refs ?? []),
+    topology: new Set(change.proposed_patch?.target_type === 'domain' ? [change.proposed_patch.target_id] : []),
+  };
 };
 
-const pendingConflict = (diff, now) => ({
-  change_id: conflictId(diff.diff_id),
-  kind: conflictKind(diff),
-  trigger_refs: [`knowledge-diff:${diff.diff_id}`],
-  affected_refs: [
-    ...diff.operations.flatMap((operation) => [
-      `domain:${operation.owner_domain_id}`,
-      `fact:${operation.fact_id}`,
-      ...(operation.successor_fact_id ? [`fact:${operation.successor_fact_id}`] : []),
-    ]),
-    ...diff.domain_changes.map(({ domain_id: domainId }) => `domain:${domainId}`),
-  ].filter((value, index, values) => values.indexOf(value) === index).sort(compareCodePoints),
-  proposed_disposition: 'Review the referenced Knowledge Diff against the current canonical owner and baseline.',
-  risks: ['Current accepted knowledge remains unchanged until explicit resolution.'],
-  evidence_gaps: ['Human approval or supported conflict resolution is unresolved.'],
-  review_state: 'open',
-  created_at: now(),
-});
+const footprintsOverlap = (left, right) => ['domains', 'facts', 'owners', 'constraints', 'relationships', 'topology']
+  .some((field) => intersects(left[field], right[field]));
+
+const pendingEntry = ({ diff, newBaseline, target, revision, commitment, openedAt }) => {
+  const footprint = footprintForDiff(diff);
+  const relationships = sorted([...footprint.relationships]);
+  return {
+    absorption_version: 1,
+    change_id: conflictIdForTarget(target),
+    semantic_target_key: target,
+    conflict_revision: revision,
+    candidate_commitment: commitment,
+    diff_id: diff.diff_id,
+    owner_delivery_id: diff.owner_delivery_id,
+    knowledge_baseline: diff.knowledge_baseline,
+    new_baseline: newBaseline,
+    operations: clone(diff.operations),
+    affected_domain_ids: sorted([...footprint.domains]),
+    affected_fact_ids: sorted([...footprint.facts]),
+    affected_owner_ids: sorted([...footprint.owners]),
+    constraint_refs: sorted([...footprint.constraints]),
+    relationship_refs: relationships,
+    topology_target_ids: sorted([...footprint.topology]),
+    evidence_refs: clone(diff.evidence_refs),
+    risks: ['Current accepted knowledge remains unchanged until explicit resolution.'],
+    evidence_gaps: ['Exact externally verified conflict resolution is unresolved.'],
+    review_state: 'open',
+    opened_at: openedAt,
+  };
+};
 
 const directoryFingerprint = async (root) => {
   const entries = [];
@@ -624,14 +792,18 @@ const publishCandidate = async ({ roots, originalFingerprint, map, pending, inde
 
 /**
  * Applies accepted fact changes under the Project Lifecycle sole-writer trust boundary.
- * Approval references are externally authoritative host inputs; this boundary binds
- * them to one validated diff, candidate pair set, baseline, and optional conflict.
+ * The host authenticates receipt refs and the `verified` authority precondition.
+ * This local boundary proves only that each receipt binds the exact validated diff,
+ * bilingual candidate hashes/summaries, baselines, and conflict revision(s); it does
+ * not authenticate a human identity or infer approval from delivery completion.
  */
 export async function applyKnowledgeDiff(input, operations = {}) {
   const envelope = validateEnvelope(input);
   if (!envelope.ok) return envelope;
   const diffValidation = validateJson('knowledge-diff', input.knowledge_diff);
   if (!diffValidation.ok) return diffValidation;
+  const safeInputs = validateSafeInputs(input);
+  if (!safeInputs.ok) return safeInputs;
 
   let roots;
   let map;
@@ -663,9 +835,8 @@ export async function applyKnowledgeDiff(input, operations = {}) {
   if (input.knowledge_diff.outcome === 'NO_CHANGE') {
     if (input.knowledge_updates.length !== 0
       || Object.hasOwn(input, 'new_baseline')
-      || Object.hasOwn(input, 'approval_ref')
-      || Object.hasOwn(input, 'resolution_ref')
-      || Object.hasOwn(input, 'conflict_resolution')) {
+      || Object.hasOwn(input, 'approval_receipt')
+      || Object.hasOwn(input, 'resolution_receipts')) {
       return failure('ABSORPTION_NO_CHANGE_INVALID', '/', 'NO_CHANGE cannot carry writes, approvals, resolution, or a new baseline.');
     }
     return ok({
@@ -675,23 +846,76 @@ export async function applyKnowledgeDiff(input, operations = {}) {
     });
   }
 
+  if (!isNonEmptyString(input.new_baseline) || input.new_baseline === map.knowledge_baseline) {
+    return failure('ABSORPTION_BASELINE_INVALID', '/new_baseline', 'Accepted mutation requires one exact advancing baseline reference.');
+  }
+
+  const candidateState = await validateCandidateUpdates({ lifecycleRoot: roots.lifecycleRoot, map, input });
+  if (!candidateState.ok) return candidateState;
+  const operationResult = validateOperations({ diff: input.knowledge_diff, candidateState: candidateState.value });
+  if (!operationResult.ok) return operationResult;
+
+  const incomingFootprint = footprintForDiff(input.knowledge_diff);
+  const overlappingPending = pending.changes.filter((change) => footprintsOverlap(incomingFootprint, footprintForPending(change, map)));
+  const revalidationOverlap = (map.revalidation_required ?? []).some((marker) => (
+    incomingFootprint.domains.has(marker.domain_id)
+      || (marker.fact_id && incomingFootprint.facts.has(marker.fact_id))
+      || (marker.constraint_id && incomingFootprint.constraints.has(`constraint:${marker.constraint_id}`))
+  ));
   const requiresResolution = input.knowledge_diff.domain_changes.length > 0
-    || input.knowledge_diff.operations.some(({ kind }) => ['REWRITE', 'SUPERSEDE'].includes(kind));
-  const approved = isStructuredRef(input.approval_ref)
-    && (!requiresResolution || isStructuredRef(input.resolution_ref));
-  const supportedMutation = input.knowledge_diff.domain_changes.length === 0;
-  if (!approved || !supportedMutation) {
-    const nextPending = clone(pending);
-    const id = conflictId(input.knowledge_diff.diff_id);
-    const existing = nextPending.changes.findIndex(({ change_id: changeId }) => changeId === id);
-    const candidate = pendingConflict(input.knowledge_diff, operations.now ?? (() => new Date().toISOString()));
-    if (existing !== -1
-      && !nextPending.changes[existing].trigger_refs.includes(`knowledge-diff:${input.knowledge_diff.diff_id}`)) {
-      return failure('ABSORPTION_CONFLICT_MISMATCH', '/knowledge_diff/diff_id', 'Derived pending identity is already owned by another change.');
+    || input.knowledge_diff.operations.some(({ kind }) => ['REWRITE', 'SUPERSEDE'].includes(kind))
+    || overlappingPending.length > 0
+    || revalidationOverlap;
+  const targetKeys = targetKeysForDiff(input.knowledge_diff);
+  const existingByTarget = new Map(pending.changes
+    .filter(({ absorption_version: version }) => version === 1)
+    .map((change) => [change.semantic_target_key, change]));
+  const existingTargets = targetKeys.map((target) => existingByTarget.get(target)).filter(Boolean);
+  const bindings = existingTargets.map((change) => ({
+    conflict_id: change.change_id,
+    conflict_revision: change.conflict_revision,
+  }));
+  const existingCommitment = bindings.length === targetKeys.length
+    ? computeKnowledgeDiffCommitment(input, bindings)
+    : null;
+  const exactExisting = existingTargets.length === targetKeys.length
+    && existingTargets.every((change) => change.diff_id === input.knowledge_diff.diff_id
+      && change.knowledge_baseline === map.knowledge_baseline
+      && change.new_baseline === input.new_baseline
+      && change.candidate_commitment === existingCommitment);
+
+  if (requiresResolution && !exactExisting) {
+    if ((input.resolution_receipts ?? []).length > 0) {
+      return failure('ABSORPTION_CONFLICT_MISMATCH', '/resolution_receipts', 'A stale resolution receipt cannot refresh or resolve a changed candidate.');
     }
-    if (existing === -1) nextPending.changes.push(candidate);
-    else candidate.created_at = nextPending.changes[existing].created_at;
-    if (existing !== -1) nextPending.changes[existing] = candidate;
+    const nextPending = clone(pending);
+    const nextBindings = [];
+    const candidates = [];
+    const openedAt = (operations.now ?? (() => new Date().toISOString()))();
+    for (const target of targetKeys) {
+      const id = conflictIdForTarget(target);
+      const index = nextPending.changes.findIndex(({ change_id: changeId }) => changeId === id);
+      const prior = index === -1 ? null : nextPending.changes[index];
+      if (prior && prior.absorption_version !== 1) {
+        return failure('ABSORPTION_CONFLICT_MISMATCH', '/knowledge_diff', 'Derived absorption conflict identity is already owned by another pending contract.');
+      }
+      const revision = (prior?.conflict_revision ?? 0) + 1;
+      nextBindings.push({ conflict_id: id, conflict_revision: revision });
+      candidates.push({ target, id, index, prior, revision });
+    }
+    const commitment = computeKnowledgeDiffCommitment(input, nextBindings);
+    for (const candidate of candidates) {
+      const entry = pendingEntry({
+        diff: input.knowledge_diff,
+        newBaseline: input.new_baseline,
+        target: candidate.target,
+        revision: candidate.revision,
+        commitment,
+        openedAt: candidate.prior?.opened_at ?? openedAt,
+      });
+      if (candidate.index === -1) nextPending.changes.push(entry);
+      else nextPending.changes[candidate.index] = entry;
+    }
     nextPending.changes.sort((left, right) => compareCodePoints(left.change_id, right.change_id));
     const nextValidation = validateJson('pending-changes', nextPending);
     if (!nextValidation.ok) return nextValidation;
@@ -704,7 +928,7 @@ export async function applyKnowledgeDiff(input, operations = {}) {
       updates: [],
       operations,
       result: {
-        change_id: id,
+        conflicts: nextBindings.map((binding) => ({ ...binding, candidate_commitment: commitment })),
         diff_id: input.knowledge_diff.diff_id,
         knowledge_baseline: map.knowledge_baseline,
         status: 'pending-review',
@@ -712,42 +936,57 @@ export async function applyKnowledgeDiff(input, operations = {}) {
     });
   }
 
-  if (!isNonEmptyString(input.new_baseline) || input.new_baseline === map.knowledge_baseline) {
-    return failure('ABSORPTION_BASELINE_INVALID', '/new_baseline', 'Accepted mutation requires one exact advancing baseline reference.');
-  }
-  const expectedConflictId = conflictId(input.knowledge_diff.diff_id);
-  const matchingPendingIndex = pending.changes.findIndex(({ change_id: id }) => id === expectedConflictId);
-  if (matchingPendingIndex !== -1 && !input.conflict_resolution) {
-    return failure('ABSORPTION_CONFLICT_MISMATCH', '/conflict_resolution', 'An existing pending review requires its explicit accepted resolution link.');
-  }
-  let resolvedConflictIndex = -1;
-  if (input.conflict_resolution) {
-    resolvedConflictIndex = pending.changes.findIndex(({ change_id: id }) => id === input.conflict_resolution.change_id);
-    const conflict = pending.changes[resolvedConflictIndex];
-    if (input.conflict_resolution.change_id !== expectedConflictId
-      || !conflict
-      || !conflict.trigger_refs.includes(`knowledge-diff:${input.knowledge_diff.diff_id}`)) {
-      return failure('ABSORPTION_CONFLICT_MISMATCH', '/conflict_resolution/change_id', 'Pending conflict does not match this Knowledge Diff identity.');
+  if (requiresResolution) {
+    const receipts = input.resolution_receipts ?? [];
+    const exactReceipts = bindings.length === receipts.length && bindings.every((binding) => receipts.some((receipt) => (
+      receipt.conflict_id === binding.conflict_id
+        && receipt.conflict_revision === binding.conflict_revision
+        && receipt.candidate_commitment === existingCommitment
+        && receipt.verified === true
+    )));
+    const externalOverlap = overlappingPending.some(({ absorption_version: version, semantic_target_key: target }) => (
+      version !== 1 || !targetKeys.includes(target)
+    ));
+    if (!exactReceipts || externalOverlap || revalidationOverlap) {
+      if (receipts.length > 0) {
+        return failure('ABSORPTION_CONFLICT_MISMATCH', '/resolution_receipts', 'Resolution receipt does not bind every exact current pending conflict.');
+      }
+      return ok({
+        conflicts: bindings.map((binding) => ({ ...binding, candidate_commitment: existingCommitment })),
+        diff_id: input.knowledge_diff.diff_id,
+        knowledge_baseline: map.knowledge_baseline,
+        status: 'pending-review',
+      });
+    }
+  } else {
+    const directCommitment = computeKnowledgeDiffCommitment(input);
+    if (!input.approval_receipt
+      || input.approval_receipt.candidate_commitment !== directCommitment
+      || input.approval_receipt.verified !== true) {
+      return failure('ABSORPTION_APPROVAL_INVALID', '/approval_receipt', 'Current knowledge creation requires an exact externally verified candidate receipt.');
     }
   }
 
-  const candidateState = await validateCandidateUpdates({ lifecycleRoot: roots.lifecycleRoot, map, input });
-  if (!candidateState.ok) return candidateState;
-  const operationResult = validateOperations({ diff: input.knowledge_diff, candidateState: candidateState.value });
-  if (!operationResult.ok) return operationResult;
+  if (input.knowledge_diff.domain_changes.length > 0) {
+    return failure('ABSORPTION_CONFLICT_MISMATCH', '/knowledge_diff/domain_changes', 'Topology and ownership changes require the governed topology applier.');
+  }
 
   const candidateMap = clone(map);
   candidateMap.knowledge_baseline = input.new_baseline;
   for (const [domainId] of candidateState.value.updates) {
     const domain = candidateMap.domains.find(({ id }) => id === domainId);
     domain.baseline = input.new_baseline;
-    domain.evidence_refs = [...new Set([...domain.evidence_refs, ...input.knowledge_diff.evidence_refs])]
-      .sort(compareCodePoints);
+    const attributed = input.knowledge_diff.operations
+      .filter(({ owner_domain_id: owner }) => owner === domainId)
+      .flatMap(({ evidence_refs: refs }) => refs);
+    domain.evidence_refs = sorted([...domain.evidence_refs, ...attributed]);
   }
   const candidateMapValidation = validateJson('project-map', candidateMap);
   if (!candidateMapValidation.ok) return candidateMapValidation;
   const candidatePending = clone(pending);
-  if (resolvedConflictIndex !== -1) candidatePending.changes.splice(resolvedConflictIndex, 1);
+  if (requiresResolution) {
+    candidatePending.changes = candidatePending.changes.filter(({ semantic_target_key: target }) => !targetKeys.includes(target));
+  }
   const candidatePendingValidation = validateJson('pending-changes', candidatePending);
   if (!candidatePendingValidation.ok) return candidatePendingValidation;
 
@@ -767,12 +1006,13 @@ export async function applyKnowledgeDiff(input, operations = {}) {
     operations,
     result: {
       applied_facts: operationResult.value.appliedFacts,
-      approval_ref: input.approval_ref,
       diff_id: input.knowledge_diff.diff_id,
       knowledge_baseline: input.new_baseline,
       status: 'applied',
       superseded_facts: operationResult.value.supersededFacts,
-      ...(input.resolution_ref ? { resolution_ref: input.resolution_ref } : {}),
+      ...(requiresResolution
+        ? { resolution_refs: input.resolution_receipts.map(({ ref }) => ref) }
+        : { approval_ref: input.approval_receipt.ref }),
     },
   });
 }

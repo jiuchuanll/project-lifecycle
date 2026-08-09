@@ -8,7 +8,7 @@ import { maskFencedMarkdown, parseRestrictedYaml } from '../lib/markdown.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
-import { isSafeTask5Reference } from './generate-indexes.mjs';
+import { isSafeReference } from '../lib/reference-safety.mjs';
 
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -232,7 +232,7 @@ export async function selectContext(inputValue, operations = {}) {
   const normalized = normalizeInput(inputValue);
   if (!normalized.ok) return normalized;
   const input = normalized.value;
-  if (!isSafeTask5Reference(input.knowledge_baseline)) {
+  if (!isSafeReference(input.knowledge_baseline)) {
     return failure('CONTEXT_REFERENCE_INVALID', '/knowledge_baseline', 'Context references must be portable single-line tokens.');
   }
   const onRead = operations.onRead ?? (() => {});
@@ -250,7 +250,7 @@ export async function selectContext(inputValue, operations = {}) {
   const mapValidation = validateJson('project-map', map);
   if (!mapValidation.ok) return mapValidation;
   const globalBaseline = map.knowledge_baseline ?? map.project_identity?.calibration_ref;
-  if (globalBaseline !== undefined && !isSafeTask5Reference(globalBaseline)) {
+  if (globalBaseline !== undefined && !isSafeReference(globalBaseline)) {
     return failure('CONTEXT_REFERENCE_INVALID', '/knowledge_baseline', 'The canonical global baseline is not a safe portable reference.');
   }
   const byId = new Map(map.domains.map((domain) => [domain.id, domain]));
@@ -389,7 +389,7 @@ export async function selectContext(inputValue, operations = {}) {
       || frontmatter.paired_asset !== domain.paired_assets['zh-CN'].split('/').at(-1)) {
       return failure('CONTEXT_VERSION_INVALID', `/domains/${domainId}`, 'Capability version and ownership must match the current map.');
     }
-    if (!isSafeTask5Reference(frontmatter.last_verified_baseline)) {
+    if (!isSafeReference(frontmatter.last_verified_baseline)) {
       return failure('CONTEXT_REFERENCE_INVALID', `/domains/${domainId}/baseline`, 'Capability baseline is not a safe portable reference.');
     }
     if (frontmatter.knowledge_state !== 'current') evidenceGaps.push(`domain:${domainId}`);
@@ -426,7 +426,7 @@ export async function selectContext(inputValue, operations = {}) {
       || (frontmatter.retention_tier === 'active' && frontmatter.current_project_id !== map.project_id)) {
       return failure('CONTEXT_DELIVERY_INVALID', `/task_delivery_refs/${index}`, 'Task-linked delivery must match its ID and selected domains.');
     }
-    if (!isSafeTask5Reference(frontmatter.knowledge_baseline)) {
+    if (!isSafeReference(frontmatter.knowledge_baseline)) {
       return failure('CONTEXT_REFERENCE_INVALID', `/task_delivery_refs/${index}/knowledge_baseline`, 'Delivery baseline is not a safe portable reference.');
     }
     if (frontmatter.retention_tier === 'archive') {
