@@ -20,6 +20,7 @@ const RELEASE_FILES = Object.freeze([
   ['README.md', 'README.md'],
   ['README.zh-CN.md', 'README.zh-CN.md'],
   ['RELEASE-NOTES.md', 'RELEASE-NOTES.md'],
+  ['LICENSE', 'LICENSE'],
   ['package.json', 'package.json'],
   ['bin/project-lifecycle', 'bin/project-lifecycle'],
   ['dist/project-lifecycle.mjs', 'dist/project-lifecycle.mjs'],
