@@ -60,6 +60,8 @@ test('builds a deterministic private candidate with the complete explicit releas
     'integrations/kimi/tool-map.md',
     'README.md',
     'README.zh-CN.md',
+    'CONTRIBUTING.md',
+    'CONTRIBUTING.zh-CN.md',
     'RELEASE-NOTES.md',
     'LICENSE',
     'docs/migrations/knowledgevault-agent-app.md',

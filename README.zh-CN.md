@@ -2,14 +2,22 @@
 
 [English](README.md)
 
+[![CI](https://github.com/jiuchuanll/project-lifecycle/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/jiuchuanll/project-lifecycle/actions/workflows/ci.yml?query=branch%3Adevelop)
+[![许可证：Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![状态：预发布](https://img.shields.io/badge/status-pre--release-orange.svg)](#项目状态)
+
 Project Lifecycle 是一个共享、宿主中立的插件，用于构建低噪声、可追溯的项目知识，
 并运行与知识库相互关联但彼此分离的 PRD 交付生命周期。它把长期知识保留在项目仓库
 中，同时避免交付过程内容未经确认就成为项目当前事实。
 
+## 项目状态
+
 > [!IMPORTANT]
-> 版本 `0.1.0` 是私有的**非发布候选**。当前包和保留的一致性证据可供验证，但还没有
-> 任何原生宿主满足发布支持门禁。不要创建首次发布 tag，也不要把安装说明视为生产
-> 支持承诺。
+> 本仓库已经开源，但版本 `0.1.0` 仍是**预发布评估候选**。它尚未发布到 npm，且目前
+> 没有任何原生宿主满足发布支持门禁。安装说明仅用于评估，不代表生产支持承诺。
+
+源代码、确定性发布压缩包和保留的一致性证据均已公开，可供检查和贡献。所有支持声明
+仍以[基于证据的支持矩阵](#支持矩阵)为准。
 
 ## 插件提供什么
 
@@ -146,6 +154,21 @@ npm run check:bundle
 `npm run check` 会运行契约和行为测试、验证 fixture，并执行隐私门禁；
 `npm run check:bundle` 会重建和验证自包含验证器。在干净的候选工作树上，
 `node scripts/package-release.mjs` 会重建确定性压缩包和校验和。
+
+## 参与贡献
+
+欢迎参与贡献。发起拉取请求前请先阅读[贡献指南](CONTRIBUTING.zh-CN.md)；如需报告可复现
+问题或提出边界明确的功能建议，请使用
+[Issue 列表](https://github.com/jiuchuanll/project-lifecycle/issues)。
+
+- 常规贡献以 `develop` 为目标分支。
+- 行为或面向用户的说明发生变化时，请同步补充测试并更新中英文文档。
+- 请勿提交凭据、私有数据、本地生成状态或与特定机器绑定的路径。
+- 受保护分支要求 `check` 状态通过、获得所有者审核，并解决全部审核对话后才能合并。
+
+## 许可证
+
+Project Lifecycle 使用 [Apache License 2.0](LICENSE) 开源。
 
 ## 信任边界与已知限制
 

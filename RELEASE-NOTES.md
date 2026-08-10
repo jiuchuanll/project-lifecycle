@@ -1,10 +1,13 @@
 # Project Lifecycle 0.1.0 candidate notes
 
-Status: **NON-RELEASE CANDIDATE**
+Publication status: **PUBLIC PRE-RELEASE EVALUATION CANDIDATE**
 
-This private candidate packages the two shared Skills, five thin host
-manifests, bundled Node.js 22+ validator, host tool maps, fixed-root project
-knowledge lifecycle, PRD delivery lifecycle, multi-repository governance,
+Host support gate: **NON-RELEASE CANDIDATE**
+
+This public pre-release evaluation candidate packages the two shared Skills,
+five thin host manifests, bundled Node.js 22+ validator, host tool maps,
+fixed-root project knowledge lifecycle, PRD delivery lifecycle,
+multi-repository governance,
 bounded archive access, retained Gold scenarios, and the read-only
 KnowledgeVault migration recipe.
 
