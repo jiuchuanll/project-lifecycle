@@ -242,7 +242,7 @@ const renderDelivery = ({ id, pair, frontmatter }, language) => {
   return `${marker}\n- [\`${id}\`](${pair[language].locator}) — kind: \`${frontmatter.artifact_kind}\`; route: \`${frontmatter.primary_route}\`; retention: \`${frontmatter.retention_tier}\`; created: \`${frontmatter.project_id_at_creation}\`; current: \`${currentProject}\`; baseline: \`${frontmatter.knowledge_baseline}\`; domains: \`${domains}\``;
 };
 
-const renderRoot = (map, manifest, language) => {
+const renderRoot = (map, manifest, language, repositoryId) => {
   const text = headings[language];
   const baselineLines = manifest.baselineRefs.length > 0
     ? manifest.baselineRefs.map((baseline) => `- \`${baseline}\``)
@@ -269,7 +269,7 @@ const renderRoot = (map, manifest, language) => {
     '',
     `## ${text.delivery}`,
     '',
-    `- [${text.delivery}](delivery/)`,
+    repositoryId === null ? `- [${text.delivery}](delivery/)` : `- ${text.empty}`,
     '',
     `## ${text.active}`,
     '',
@@ -405,7 +405,7 @@ const renderFiles = (map, layout, manifest, repositoryId) => {
         repository_id: repository.repository_id,
         locator: language === 'en' ? 'INDEX-en.md' : 'INDEX.md',
         language,
-        content: renderRoot(map, manifest, language),
+        content: renderRoot(map, manifest, language, repository.repository_id),
         scope: 'lifecycle-root',
         domain_id: null,
       });

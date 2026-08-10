@@ -402,7 +402,7 @@ export async function applyApprovedChange(input, operations = {}) {
         content = managedBodySource(content, {
           oldId: sourceDomain?.id ?? domain.id,
           newId: domain.id,
-          pairedAsset: domain.paired_assets[language === 'en' ? 'zh-CN' : 'en'].split('/').at(-1),
+          pairedAsset: domain.paired_assets['zh-CN'].split('/').at(-1),
         });
         overlaysByRepository.get(repositoryId)[locator] = content;
         bodyFilesByRepository.get(repositoryId).push({

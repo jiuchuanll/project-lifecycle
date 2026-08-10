@@ -120,6 +120,8 @@ knowledge/runtime/loop/INDEX-en.md
 
 跨仓子领域从其仓库的 `knowledge/` 根开始一个仓库本地分片。全局父级 INDEX 通过已注册 portable repository locator 链接该分片。
 
+对于反向形态——治理仓所有的子领域嵌套在仓库所有的父领域之下——分片 INDEX 使用稳定的 `project:<project_id>` 治理定位符，绝不会对该分片中不存在的正文生成本地相对链接。
+
 同一个已验证 map 和仓库注册必须永远生成相同 locator manifest。现有目录不能影响计算结果。
 
 ## INDEX 职责
@@ -128,7 +130,7 @@ knowledge/runtime/loop/INDEX-en.md
 
 ### 生命周期根 INDEX
 
-`docs/project-lifecycle/INDEX.md` 与 `INDEX-en.md` 只包含：
+治理仓的 `docs/project-lifecycle/INDEX.md` 与 `INDEX-en.md` 只包含：
 
 - 项目标识和用途；
 - 当前知识 baseline；
@@ -137,6 +139,8 @@ knowledge/runtime/loop/INDEX-en.md
 - active change、archive 和 identity lineage 的轻量入口。
 
 它们不枚举领域或后代。
+
+仓库分片的生命周期根 INDEX 保留项目身份、baseline 与本地 Knowledge 入口，但不链接并不存在的本地 Delivery 目录。Delivery 导航仍由治理仓所有。
 
 ### 治理仓 Knowledge INDEX
 

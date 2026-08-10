@@ -281,6 +281,7 @@ test('bounds repository shards and renders portable cross-repository children', 
   assert.doesNotMatch(file(null, 'knowledge/INDEX-en.md'), /domain:api|domain:storage/);
   assert.match(file('backend', 'knowledge/INDEX-en.md'), /domain:api/);
   assert.doesNotMatch(file('backend', 'knowledge/INDEX-en.md'), /domain:runtime|domain:storage/);
+  assert.doesNotMatch(file('backend', 'INDEX-en.md'), /\]\(delivery\/\)/);
   assert.match(file(null, 'knowledge/runtime/INDEX-en.md'), /github:example\/backend\/docs\/project-lifecycle\/knowledge\/api\/INDEX-en\.md/);
   const apiIndex = file('backend', 'knowledge/api/INDEX-en.md');
   assert.match(apiIndex, /## Historical direct children[\s\S]*domain:storage/);

@@ -213,6 +213,18 @@ test('returns the same JSON-safe manifest for shuffled map input', () => {
   assert.doesNotThrow(() => JSON.stringify(first.value));
 });
 
+test('uses the project locator for a governance child beneath a repository parent', () => {
+  const result = planKnowledgeLayout({ map: mapWith([
+    domain('child', 'parent', 'materialized'),
+    domain('parent', null, 'materialized', 'remote'),
+  ], [repository('remote', ['parent'])]) });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(result.value.domains.find(({ domain_id: id }) => id === 'parent').direct_children, [{
+    domain_id: 'child', repository_id: null, portable_locator: 'project:sample-project',
+  }]);
+});
+
 test('fails closed for missing parents, cycles, ambiguous ownership, and locator collisions', () => {
   const cases = [
     mapWith([domain('orphan', 'missing', 'materialized')]),

@@ -120,6 +120,8 @@ knowledge/runtime/loop/INDEX-en.md
 
 A cross-repository child begins a repository-local shard at that repository's `knowledge/` root. Its global parent index links to the shard through the registered portable repository locator.
 
+For the inverse shape—a governance-owned child nested below a repository-owned parent—the shard index uses the stable `project:<project_id>` governance locator. It never emits a local relative link to a body absent from that shard.
+
 The same validated map and repository registrations must always produce the same locator manifest. Existing directories cannot affect the result.
 
 ## Index Responsibilities
@@ -128,7 +130,7 @@ Every generated index has an English and Chinese counterpart, stable code-point 
 
 ### Lifecycle-root index
 
-`docs/project-lifecycle/INDEX.md` and `INDEX-en.md` contain only:
+The governance repository's `docs/project-lifecycle/INDEX.md` and `INDEX-en.md` contain only:
 
 - project identity and purpose;
 - the current knowledge baseline;
@@ -137,6 +139,8 @@ Every generated index has an English and Chinese counterpart, stable code-point 
 - lightweight active-change, archive, and identity-lineage entry points.
 
 They do not enumerate domains or descendants.
+
+A repository-shard lifecycle-root index retains project identity, baseline, and its local Knowledge entry point, but does not link to a nonexistent local Delivery directory. Delivery navigation remains governance-owned.
 
 ### Governance Knowledge index
 

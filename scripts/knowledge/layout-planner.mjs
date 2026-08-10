@@ -210,7 +210,9 @@ export const planKnowledgeLayout = ({ map }) => {
         repository_id: childRepositoryId,
         portable_locator: childRepositoryId === repositoryId
           ? null
-          : (knownRepositories.get(childRepositoryId)?.portable_locator ?? null),
+          : (childRepositoryId === null
+            ? `project:${map.project_id}`
+            : (knownRepositories.get(childRepositoryId)?.portable_locator ?? null)),
       };
     });
     domains.push({

@@ -534,7 +534,8 @@ test('binds a relationship proposal key and affected refs to the added edge', as
     proposed_patch: { operation: 'ADD_RELATIONSHIP', target_type: 'relationship', target_id: 'inbox-workspace', changed_fields: ['relationship'], new_ids: [], successor_ids: [] },
     child_dispositions: [],
   });
-  assert.equal((await proposeChange({ root, change: proposal })).ok, true);
+  const proposed = await proposeChange({ root, change: proposal });
+  assert.equal(proposed.ok, true, JSON.stringify(proposed));
   assert.equal((await pendingAt(root)).changes[0].semantic_target_key, proposal.semantic_target_key);
 });
 
@@ -875,6 +876,8 @@ test('publishes repository-owned topology before advancing the governance map', 
     domain_state: 'confirmed', scope: { includes: ['runtime loop'], excludes: [] },
     parent_id: 'runtime', relationships: [], evidence_refs: ['repo:src/loop'], known_gaps: [],
   });
+  candidate.repositories[0].domain_ids.push('loop');
+  candidate.repositories[0].domain_ids.sort();
   candidate.domains.sort((left, right) => left.id < right.id ? -1 : 1);
   const proposal = semanticProposal(candidate, {
     change_id: 'change-add-shard-loop', kind: 'topology', trigger_refs: ['decision:add-loop'],
@@ -882,7 +885,8 @@ test('publishes repository-owned topology before advancing the governance map', 
     proposed_patch: { operation: 'ADD_DOMAIN', target_type: 'domain', target_id: 'loop', changed_fields: ['boundary', 'kind', 'lifecycle', 'parentage'], new_ids: [], successor_ids: [] },
     child_dispositions: [],
   });
-  assert.equal((await proposeChange({ root, change: proposal })).ok, true);
+  const proposedShard = await proposeChange({ root, change: proposal });
+  assert.equal(proposedShard.ok, true, JSON.stringify(proposedShard));
 
   const publications = [];
   const applied = await applyApprovedChange({
