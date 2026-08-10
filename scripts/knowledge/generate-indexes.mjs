@@ -288,8 +288,8 @@ const renderRoot = (map, manifest, language, repositoryId) => {
 
 const localizedIndexName = (language) => language === 'en' ? 'INDEX-en.md' : 'INDEX.md';
 
-const targetForDomain = (layoutDomain, language) => {
-  if (layoutDomain.has_children) return `${layoutDomain.directory}/${localizedIndexName(language)}`;
+const targetForDomain = (layoutDomain, language, expandChildren = true) => {
+  if (expandChildren && layoutDomain.has_children) return `${layoutDomain.directory}/${localizedIndexName(language)}`;
   return layoutDomain.pair?.[language] ?? null;
 };
 
@@ -299,14 +299,18 @@ const renderDomainEntry = ({
   manifest,
   language,
   fromDirectory,
+  activeRepositoryId,
   portableLocator = null,
+  expandChildren = true,
 }) => {
-  const frontmatter = manifest.capabilityPairs.get(domain.id)?.en.frontmatter;
+  const frontmatter = layoutDomain.repository_id === activeRepositoryId
+    ? manifest.capabilityPairs.get(domain.id)?.en.frontmatter
+    : undefined;
   const knowledgeState = frontmatter?.knowledge_state
-    ?? (domain.domain_state === 'materialized' && layoutDomain.repository_id !== null
+    ?? (domain.domain_state === 'materialized' && layoutDomain.repository_id !== activeRepositoryId
       ? 'remote'
       : 'not-materialized');
-  const target = targetForDomain(layoutDomain, language);
+  const target = targetForDomain(layoutDomain, language, expandChildren);
   const portableTarget = target && portableLocator
     ? `${portableLocator}/docs/project-lifecycle/${target}`
     : (target ? posix.relative(fromDirectory, target) : null);
@@ -327,6 +331,7 @@ const renderKnowledgeRoot = (map, layout, manifest, repository, language) => {
     manifest,
     language,
     fromDirectory: 'knowledge',
+    activeRepositoryId: repository.repository_id,
     portableLocator: repository.repository_id === null
       ? layout.repositories.find(({ repository_id: repositoryId }) => (
         repositoryId === layoutById.get(id).repository_id
@@ -359,16 +364,20 @@ const renderDomainIndex = (map, layout, manifest, layoutDomain, language) => {
   for (const child of layoutDomain.direct_children) {
     const childDomain = domainsById.get(child.domain_id);
     const childLayout = layoutById.get(child.domain_id);
+    const knowledgeState = manifest.capabilityPairs.get(child.domain_id)?.en.frontmatter.knowledge_state;
+    const isHistorical = ['merged', 'retired'].includes(childDomain.domain_state)
+      || knowledgeState === 'superseded';
     const entry = renderDomainEntry({
       domain: childDomain,
       layoutDomain: childLayout,
       manifest,
       language,
       fromDirectory: layoutDomain.directory,
+      activeRepositoryId: layoutDomain.repository_id,
       portableLocator: child.portable_locator,
+      expandChildren: !isHistorical,
     });
-    const knowledgeState = manifest.capabilityPairs.get(child.domain_id)?.en.frontmatter.knowledge_state;
-    if (['merged', 'retired'].includes(childDomain.domain_state) || knowledgeState === 'superseded') historical.push(entry);
+    if (isHistorical) historical.push(entry);
     else active.push(entry);
   }
   return [

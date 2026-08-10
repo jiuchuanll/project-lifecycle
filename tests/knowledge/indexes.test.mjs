@@ -237,7 +237,7 @@ test('bounds repository shards and renders portable cross-repository children', 
         'zh-CN': id === 'runtime' ? 'knowledge/runtime/runtime.md' : 'knowledge/api/api.md',
       },
     } : {}),
-    ...(state === 'retired' ? { retirement_reason: 'Replaced by API.' } : {}),
+    ...(['retired', 'merged'].includes(state) ? { retirement_reason: 'Replaced by API.' } : {}),
   });
   const crossMap = {
     ...JSON.parse(JSON.stringify(map)),
@@ -246,14 +246,23 @@ test('bounds repository shards and renders portable cross-repository children', 
       purpose: { en: 'Owns backend knowledge.', 'zh-CN': '负责后端知识。' },
       portable_locator: 'github:example/backend',
       integration_ref: 'refs/heads/main',
-      domain_ids: ['api', 'storage'],
+      domain_ids: ['api', 'archive', 'storage'],
       knowledge_asset_locators: ['knowledge/api/api-en.md', 'knowledge/api/api.md'],
       accepted_revision: 'revision:backend',
     }],
     domains: [
-      makeDomain('api', 'runtime', 'materialized', ['api', 'storage'], 'backend'),
-      makeDomain('runtime', null, 'materialized', ['api', 'runtime', 'storage']),
-      { ...makeDomain('storage', 'api', 'merged', ['storage'], 'backend'), successor_id: 'api' },
+      makeDomain('api', 'runtime', 'materialized', ['api', 'archive', 'portal', 'storage'], 'backend'),
+      makeDomain('archive', 'storage', 'confirmed', ['archive'], 'backend'),
+      {
+        ...makeDomain('portal', 'api', 'materialized', ['portal']),
+        paired_assets: {
+          repository_id: null,
+          en: 'knowledge/portal-en.md',
+          'zh-CN': 'knowledge/portal.md',
+        },
+      },
+      makeDomain('runtime', null, 'materialized', ['api', 'archive', 'portal', 'runtime', 'storage']),
+      { ...makeDomain('storage', 'api', 'merged', ['archive', 'storage'], 'backend'), successor_id: 'api' },
     ],
   };
   const pairs = crossMap.domains
@@ -284,8 +293,10 @@ test('bounds repository shards and renders portable cross-repository children', 
   assert.doesNotMatch(file('backend', 'INDEX-en.md'), /\]\(delivery\/\)/);
   assert.match(file(null, 'knowledge/runtime/INDEX-en.md'), /github:example\/backend\/docs\/project-lifecycle\/knowledge\/api\/INDEX-en\.md/);
   const apiIndex = file('backend', 'knowledge/api/INDEX-en.md');
+  assert.match(apiIndex, /project:sample-project\/docs\/project-lifecycle\/knowledge\/portal-en\.md[\s\S]*knowledge: `remote`/);
   assert.match(apiIndex, /## Historical direct children[\s\S]*domain:storage/);
   assert.match(apiIndex, /domain:storage[\s\S]*successor: `domain:api`/);
+  assert.doesNotMatch(apiIndex, /domain:storage`\]\(storage\/INDEX-en\.md\)/);
   assert.doesNotMatch(/## Direct children[\s\S]*?## Historical direct children/u.exec(apiIndex)[0], /domain:storage/);
 });
 

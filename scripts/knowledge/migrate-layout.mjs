@@ -145,6 +145,20 @@ const inspectV1 = async ({ rootsByRepository, map, fingerprint, repositoryFinger
     );
     if (!pair.ok) return failure('KNOWLEDGE_LAYOUT_MIGRATION_INVALID', `/domains/${domain.id}`, `Legacy bilingual pair validation failed: ${pair.errors[0]?.code ?? 'unknown'}.`);
     const target = pairForDomain(transformed.value.layout, domain.id);
+    const repositoryRoots = rootsByRepository.get(repositoryOwner(map, domain.id));
+    for (const language of LANGUAGES) {
+      if (expected[language] === target[language]) continue;
+      try {
+        await lstat(join(repositoryRoots.lifecycleRoot, target[language]));
+        return failure(
+          'KNOWLEDGE_LAYOUT_MIGRATION_INVALID',
+          `/domains/${domain.id}/paired_assets/${language}`,
+          'A planned recursive target is already occupied by unapproved content.',
+        );
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+    }
     if (expected.en !== target.en || expected['zh-CN'] !== target['zh-CN']) {
       movedPairs.push({ domain_id: domain.id, from: expected, to: target });
     }
@@ -209,7 +223,6 @@ export const inspectLegacyKnowledgeLayout = async ({ root, repository_roots: rep
     const map = await readJson(join(governanceRoots.lifecycleRoot, 'project-map.json'));
     const rootsByRepository = new Map([[null, governanceRoots]]);
     const requiredRepositoryIds = [...new Set(map.domains
-      .filter(({ domain_state: state }) => state === 'materialized')
       .map((domain) => repositoryOwner(map, domain.id))
       .filter((id) => id !== null))].sort(compareCodePoints);
     for (const repositoryId of requiredRepositoryIds) {

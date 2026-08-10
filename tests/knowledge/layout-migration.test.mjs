@@ -109,6 +109,19 @@ test('requires explicit approval and exact inspection fingerprint before migrati
   assert.equal(stale.errors[0].code, 'LAYOUT_FINGERPRINT_STALE');
 });
 
+test('rejects a migration when a recursive v2 target already contains content', async (context) => {
+  const root = await setupLegacy(context);
+  const occupied = join(lifecycle(root), 'knowledge/desktop-experience/desktop-experience-en.md');
+  await mkdir(join(lifecycle(root), 'knowledge/desktop-experience'), { recursive: true });
+  await writeFile(occupied, 'pre-existing v2 content\n');
+
+  const result = await inspectLegacyKnowledgeLayout({ root });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'KNOWLEDGE_LAYOUT_MIGRATION_INVALID');
+  assert.equal(await readFile(occupied, 'utf8'), 'pre-existing v2 content\n');
+});
+
 test('atomically migrates v1 to v2 and a second run performs zero writes', async (context) => {
   const root = await setupLegacy(context);
   const inspection = await inspectLegacyKnowledgeLayout({ root });
@@ -173,6 +186,27 @@ test('migrates repository-local shards before publishing the governance map', as
   assert.equal((await readJson(join(lifecycle(governanceRoot), 'project-map.json'))).schema_version, 2);
   assert.equal((await lstat(join(lifecycle(shardRoot), 'knowledge/desktop-experience/desktop-experience-en.md'))).isFile(), true);
   await assert.rejects(lstat(join(lifecycle(shardRoot), 'knowledge/desktop-experience-en.md')), { code: 'ENOENT' });
+});
+
+test('requires a root for a repository that owns only confirmed domains', async (context) => {
+  const root = await setupLegacy(context);
+  const mapPath = join(lifecycle(root), 'project-map.json');
+  const map = await readJson(mapPath);
+  const confirmed = map.domains.find(({ domain_state: state }) => state === 'confirmed');
+  map.repositories = [{
+    id: 'backend',
+    purpose: { en: 'Owns backend knowledge.', 'zh-CN': '负责后端知识。' },
+    portable_locator: 'github:example/backend', integration_ref: 'refs/heads/main',
+    domain_ids: [confirmed.id], knowledge_asset_locators: [],
+    accepted_revision: 'revision:backend',
+  }];
+  await writeFile(mapPath, `${JSON.stringify(map, null, 2)}\n`);
+
+  const result = await inspectLegacyKnowledgeLayout({ root });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'KNOWLEDGE_LAYOUT_MIGRATION_INVALID');
+  assert.equal(result.errors[0].path, '/repository_roots/backend');
 });
 
 test('restores already-published shards when governance publication fails', async (context) => {
