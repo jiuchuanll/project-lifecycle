@@ -56,6 +56,7 @@ Expected: branch is `codex/open-source-governance`, worktree is clean, and `orig
 Run:
 
 ~~~bash
+git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
 git fetch --prune --prune-tags --tags origin '+refs/tags/*:refs/tags/*'
 git fetch origin \
   '+refs/pull/*/head:refs/remotes/origin/pull/*/head' \
@@ -67,7 +68,7 @@ test -z "$(comm -23 \
   <(git for-each-ref --format='%(refname)' refs/tags | sort))"
 ~~~
 
-Expected: fetch succeeds, remote pull-request head and merge refs are available for the history audit, every remote tag exists locally, and the comparison exits 0. If `origin/main` moved, rebase this branch onto it, review the new commits, and restart Task 1.
+Expected: fetch succeeds, every remote branch head, pull-request head and merge ref is available for the history audit, every remote tag exists locally, and the comparison exits 0. If `origin/main` moved, rebase this branch onto it, review the new commits, and restart Task 1.
 
 - [ ] **Step 3: Restore GitHub CLI authentication for the exact owner**
 
