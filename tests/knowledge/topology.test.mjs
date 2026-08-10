@@ -835,6 +835,20 @@ test('planner-derived promotion and demotion move a parent pair symmetrically', 
   });
   const proposedDemotion = await proposeChange({ root, change: demotion });
   assert.equal(proposedDemotion.ok, true, JSON.stringify(proposedDemotion));
+  const unmanaged = join(lifecycle(root), 'knowledge/runtime/attachment.txt');
+  await writeFile(unmanaged, 'unmanaged attachment\n');
+  const blockedDemotion = await applyApprovedChange({
+    root,
+    change_id: demotion.change_id,
+    approval_ref: 'approval:reparent-loop',
+    traceability: { knowledge_diff_ref: 'diff:reparent-loop', history_ref: 'git:reparent-loop' },
+    candidate_map: demotedCandidate,
+    knowledge_updates: [],
+  });
+  assert.equal(blockedDemotion.ok, false);
+  assert.equal(blockedDemotion.errors[0].code, 'CHANGE_WRITE_FAILED');
+  assert.equal(await readFile(unmanaged, 'utf8'), 'unmanaged attachment\n');
+  await rm(unmanaged);
   const demoted = await applyApprovedChange({
     root,
     change_id: demotion.change_id,

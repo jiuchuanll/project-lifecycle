@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -122,6 +122,23 @@ test('rejects a migration when a recursive v2 target already contains content', 
   assert.equal(await readFile(occupied, 'utf8'), 'pre-existing v2 content\n');
 });
 
+test('rejects symlinked project and lifecycle roots before migration inspection', async (context) => {
+  const root = await setupLegacy(context);
+  const parent = await mkdtemp(join(tmpdir(), 'project-lifecycle-v1-link-'));
+  context.after(() => rm(parent, { recursive: true, force: true }));
+  await symlink(root, join(parent, 'project'));
+  const projectLink = await inspectLegacyKnowledgeLayout({ root: join(parent, 'project') });
+  assert.equal(projectLink.ok, false);
+  assert.equal(projectLink.errors[0].code, 'KNOWLEDGE_LAYOUT_MIGRATION_INVALID');
+
+  const realLifecycle = `${lifecycle(root)}-real`;
+  await rename(lifecycle(root), realLifecycle);
+  await symlink(realLifecycle, lifecycle(root));
+  const lifecycleLink = await inspectLegacyKnowledgeLayout({ root });
+  assert.equal(lifecycleLink.ok, false);
+  assert.equal(lifecycleLink.errors[0].code, 'KNOWLEDGE_LAYOUT_MIGRATION_INVALID');
+});
+
 test('atomically migrates v1 to v2 and a second run performs zero writes', async (context) => {
   const root = await setupLegacy(context);
   const inspection = await inspectLegacyKnowledgeLayout({ root });
@@ -186,6 +203,34 @@ test('migrates repository-local shards before publishing the governance map', as
   assert.equal((await readJson(join(lifecycle(governanceRoot), 'project-map.json'))).schema_version, 2);
   assert.equal((await lstat(join(lifecycle(shardRoot), 'knowledge/desktop-experience/desktop-experience-en.md'))).isFile(), true);
   await assert.rejects(lstat(join(lifecycle(shardRoot), 'knowledge/desktop-experience-en.md')), { code: 'ENOENT' });
+});
+
+test('rewrites a migrated cross-repository body link through the portable project locator', async (context) => {
+  const { governanceRoot, shardRoot } = await setupMultiRepositoryLegacy(context);
+  const mapPath = join(lifecycle(governanceRoot), 'project-map.json');
+  const map = await readJson(mapPath);
+  const inbox = map.domains.find(({ id }) => id === 'inbox-workspace');
+  inbox.domain_state = 'materialized';
+  inbox.baseline = 'baseline-1';
+  inbox.paired_assets = {
+    en: 'knowledge/inbox-workspace-en.md',
+    'zh-CN': 'knowledge/inbox-workspace.md',
+  };
+  await writeFile(mapPath, `${JSON.stringify(map, null, 2)}\n`);
+  const frontmatter = (pairedAsset) => `---\nid: inbox-workspace\nknowledge_state: current\npaired_asset: ${pairedAsset}\nlast_verified_baseline: baseline-1\nimplementation_refs: ["repo:src/inbox"]\nverification_refs: ["test:inbox"]\n---\n\n# Inbox\n`;
+  await writeFile(join(lifecycle(governanceRoot), 'knowledge/inbox-workspace-en.md'), frontmatter('inbox-workspace.md'));
+  await writeFile(join(lifecycle(governanceRoot), 'knowledge/inbox-workspace.md'), frontmatter('inbox-workspace.md'));
+  const shardEnglish = join(lifecycle(shardRoot), 'knowledge/desktop-experience-en.md');
+  await writeFile(shardEnglish, `${await readFile(shardEnglish, 'utf8')}\n[Inbox](./inbox-workspace-en.md)\n`);
+
+  const repository_roots = { backend: shardRoot };
+  const inspection = await inspectLegacyKnowledgeLayout({ root: governanceRoot, repository_roots });
+  assert.equal(inspection.ok, true, JSON.stringify(inspection));
+  const migrated = inspection.value.bodies.find(({ domain_id: domainId, language }) => (
+    domainId === 'desktop-experience' && language === 'en'
+  ));
+  assert.match(migrated.content,
+    /\[Inbox\]\(project:sample-app\/docs\/project-lifecycle\/knowledge\/inbox-workspace-en\.md\)/);
 });
 
 test('requires a root for a repository that owns only confirmed domains', async (context) => {

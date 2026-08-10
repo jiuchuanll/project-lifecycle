@@ -169,12 +169,13 @@ const validateInputs = ({
   repositoryRoot,
   candidateFiles,
   candidateDirectories = [],
+  pruneDirectories = [],
   deleteLocators,
   validateCandidate,
 }) => {
   if (typeof repositoryRoot !== 'string' || !isAbsolute(repositoryRoot)
     || !Array.isArray(candidateFiles) || !Array.isArray(candidateDirectories)
-    || !Array.isArray(deleteLocators)
+    || !Array.isArray(deleteLocators) || !Array.isArray(pruneDirectories)
     || typeof validateCandidate !== 'function') {
     return failure('LAYOUT_INPUT_INVALID', '/', 'A bounded repository transaction input is required.');
   }
@@ -202,6 +203,13 @@ const validateInputs = ({
       if (candidateDirectories.indexOf(locator) !== index) return failure('LAYOUT_INPUT_INVALID', `/candidateDirectories/${index}`, 'Candidate directories must be unique.');
       if (locators.has(locator) || deleteLocators.includes(locator)) {
         return failure('LAYOUT_INPUT_INVALID', `/candidateDirectories/${index}`, 'Candidate directories cannot overlap file writes or deletes.');
+      }
+    }
+    for (const [index, locator] of pruneDirectories.entries()) {
+      assertBoundedRelativePath(locator);
+      if (pruneDirectories.indexOf(locator) !== index || candidateDirectories.includes(locator)
+        || locators.has(locator) || deleteLocators.includes(locator)) {
+        return failure('LAYOUT_INPUT_INVALID', `/pruneDirectories/${index}`, 'Pruned directories must be unique and separate from candidate paths.');
       }
     }
   } catch {
@@ -363,12 +371,16 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
   const directoriesToCreate = candidateDirectories
     .filter((locator) => currentByLocator.get(`${locator}/`)?.type !== 'directory')
     .sort(compareCodePoints);
+  const directoriesToPrune = (input.pruneDirectories ?? [])
+    .filter((locator) => currentByLocator.get(`${locator}/`)?.type === 'directory')
+    .sort((left, right) => right.length - left.length || compareCodePoints(left, right));
   const unchanged = [
     ...input.candidateFiles.filter((entry) => !writes.includes(entry)).map(({ locator }) => locator),
     ...input.deleteLocators.filter((locator) => !deletes.includes(locator)),
     ...candidateDirectories.filter((locator) => !directoriesToCreate.includes(locator)).map((locator) => `${locator}/`),
+    ...(input.pruneDirectories ?? []).filter((locator) => !directoriesToPrune.includes(locator)).map((locator) => `${locator}/`),
   ].sort(compareCodePoints);
-  if (writes.length === 0 && deletes.length === 0 && directoriesToCreate.length === 0) {
+  if (writes.length === 0 && deletes.length === 0 && directoriesToCreate.length === 0 && directoriesToPrune.length === 0) {
     try {
       const validation = await input.validateCandidate({ lifecycleRoot: paths.lifecycleRoot });
       if (validation?.ok !== true) return failure('LAYOUT_CANDIDATE_INVALID', '/', 'The complete lifecycle candidate is invalid.');
@@ -407,6 +419,10 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
       const target = await resolveInside(stagingRoot, locator);
       await rm(target, { recursive: true, force: true });
     }
+    for (const locator of directoriesToPrune) {
+      const target = await resolveInside(stagingRoot, locator);
+      await rmdir(target);
+    }
     for (const entry of writes) {
       await ensureParentDirectories(stagingRoot, entry.locator);
       await write({ root: stagingRoot, target: entry.locator, content: entry.content, validate: entry.validate });
@@ -440,7 +456,7 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
         throw pathError('LAYOUT_TRANSACTION_FAILED');
       }
       return ok({
-        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
         unchanged,
         cleanup_pending: false,
         recovery_artifacts: [],
@@ -482,7 +498,7 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
     await afterPublish({ lifecycleRoot: paths.lifecycleRoot });
     if (operations.retainBackup === true) {
       return ok({
-        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
         unchanged,
         cleanup_pending: true,
         recovery_artifacts: ['backup'],
@@ -499,7 +515,7 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
     } catch {}
     if (await fileState(backupRoot)) {
       return ok({
-        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
         unchanged,
         cleanup_pending: true,
         recovery_artifacts: ['backup'],
@@ -507,7 +523,7 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
     }
     backupRoot = null;
     return ok({
-      changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+      changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
       unchanged,
       cleanup_pending: false,
       recovery_artifacts: [],

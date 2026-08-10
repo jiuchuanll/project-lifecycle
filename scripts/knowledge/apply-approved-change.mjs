@@ -272,7 +272,10 @@ const rewriteRelocatedLinks = (source, {
     if (/^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith('//') || href.startsWith('/') || href.startsWith('#')) return whole;
     const [path, fragment] = href.split('#');
     const oldTarget = posix.normalize(posix.join(posix.dirname(oldLocator), path));
-    const target = moves.get(`${oldRepositoryId ?? ''}\0${oldTarget}`)
+    const movedTarget = moves.get(`${oldRepositoryId ?? ''}\0${oldTarget}`);
+    const sourceMoved = oldRepositoryId !== newRepositoryId || oldLocator !== newLocator;
+    if (!sourceMoved && !movedTarget) return whole;
+    const target = movedTarget
       ?? { repository_id: oldRepositoryId, locator: oldTarget };
     const rewritten = target.repository_id === newRepositoryId
       ? relativeLocator(newLocator, target.locator)
@@ -411,10 +414,13 @@ export async function applyApprovedChange(input, operations = {}) {
       ));
     if (!candidateDomain?.paired_assets) continue;
     for (const language of ['en', 'zh-CN']) {
-      bodyMoves.set(
-        `${currentDomain.paired_assets.repository_id ?? ''}\0${currentDomain.paired_assets[language]}`,
-        { repository_id: candidateDomain.paired_assets.repository_id, locator: candidateDomain.paired_assets[language] },
-      );
+      if (currentDomain.paired_assets.repository_id !== candidateDomain.paired_assets.repository_id
+        || currentDomain.paired_assets[language] !== candidateDomain.paired_assets[language]) {
+        bodyMoves.set(
+          `${currentDomain.paired_assets.repository_id ?? ''}\0${currentDomain.paired_assets[language]}`,
+          { repository_id: candidateDomain.paired_assets.repository_id, locator: candidateDomain.paired_assets[language] },
+        );
+      }
     }
   }
   const bodyFilesByRepository = new Map(repositoryIds.map((id) => [id, []]));
@@ -560,12 +566,10 @@ export async function applyApprovedChange(input, operations = {}) {
         .map(({ locator }) => locator),
       candidateFiles,
       deleteLocators: [
-        ...previousBodyLocators.filter((locator) => !nextBodyLocators.has(locator)
-          && !obsoleteDirectories.some((directory) => locator.startsWith(`${directory}/`))),
-        ...[...previousIndexes].filter((locator) => !nextIndexes.has(locator)
-          && !obsoleteDirectories.some((directory) => locator.startsWith(`${directory}/`))),
-        ...obsoleteDirectories,
+        ...previousBodyLocators.filter((locator) => !nextBodyLocators.has(locator)),
+        ...[...previousIndexes].filter((locator) => !nextIndexes.has(locator)),
       ],
+      pruneDirectories: obsoleteDirectories,
       validateCandidate: ({ lifecycleRoot }) => validatePublishedCandidate({
         lifecycleRoot, map: candidateMap, pending: candidatePending, indexFiles, repositoryId,
       }),

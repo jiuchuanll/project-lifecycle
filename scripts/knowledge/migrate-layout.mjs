@@ -29,10 +29,18 @@ const inside = (root, candidate) => {
 
 const rootsFor = async (root) => {
   if (typeof root !== 'string' || !isAbsolute(root)) throw new Error('absolute root required');
-  const projectRoot = await realpath(resolve(root));
-  const lifecycleRoot = await realpath(join(projectRoot, 'docs/project-lifecycle'));
-  const state = await lstat(lifecycleRoot);
-  if (!state.isDirectory() || state.isSymbolicLink() || !inside(projectRoot, lifecycleRoot)) throw new Error('bounded root required');
+  const lexicalRoot = resolve(root);
+  const rootState = await lstat(lexicalRoot);
+  if (!rootState.isDirectory() || rootState.isSymbolicLink()) throw new Error('bounded root required');
+  const projectRoot = await realpath(lexicalRoot);
+  const docsLexical = join(projectRoot, 'docs');
+  const docsState = await lstat(docsLexical);
+  const docsRoot = await realpath(docsLexical);
+  const lifecycleLexical = join(docsRoot, 'project-lifecycle');
+  const state = await lstat(lifecycleLexical);
+  const lifecycleRoot = await realpath(lifecycleLexical);
+  if (!docsState.isDirectory() || docsState.isSymbolicLink() || !inside(projectRoot, docsRoot)
+    || !state.isDirectory() || state.isSymbolicLink() || !inside(projectRoot, lifecycleRoot)) throw new Error('bounded root required');
   return { projectRoot, lifecycleRoot };
 };
 
@@ -91,14 +99,23 @@ const relativeLocator = (from, to) => {
   return path.startsWith('.') ? path : `./${path}`;
 };
 
-const rewriteLocalLinks = (source, oldLocator, newLocator, moves) => source.replace(
+const portableRepositoryLocator = (map, repositoryId) => repositoryId === null
+  ? `project:${map.project_id}`
+  : map.repositories.find(({ id }) => id === repositoryId)?.portable_locator;
+
+const rewriteLocalLinks = (source, {
+  map, oldLocator, newLocator, oldRepositoryId, newRepositoryId, moves,
+}) => source.replace(
   /(\[[^\]]*\]\()([^)\s]+)((?:\s+[^)]*)?\))/gu,
   (whole, prefix, href, suffix) => {
     if (/^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith('//') || href.startsWith('/') || href.startsWith('#')) return whole;
     const [path, fragment] = href.split('#');
     const normalized = posix.normalize(posix.join(posix.dirname(oldLocator), path));
-    const target = moves.get(normalized) ?? normalized;
-    return `${prefix}${relativeLocator(newLocator, target)}${fragment ? `#${fragment}` : ''}${suffix}`;
+    const target = moves.get(normalized) ?? { repository_id: oldRepositoryId, locator: normalized };
+    const rewritten = target.repository_id === newRepositoryId
+      ? relativeLocator(newLocator, target.locator)
+      : `${portableRepositoryLocator(map, target.repository_id)}/docs/project-lifecycle/${target.locator}`;
+    return `${prefix}${rewritten}${fragment ? `#${fragment}` : ''}${suffix}`;
   },
 );
 
@@ -162,7 +179,10 @@ const inspectV1 = async ({ rootsByRepository, map, fingerprint, repositoryFinger
     if (expected.en !== target.en || expected['zh-CN'] !== target['zh-CN']) {
       movedPairs.push({ domain_id: domain.id, from: expected, to: target });
     }
-    for (const language of LANGUAGES) moves.set(expected[language], target[language]);
+    for (const language of LANGUAGES) moves.set(expected[language], {
+      repository_id: target.repository_id,
+      locator: target[language],
+    });
   }
   for (const domain of map.domains.filter(({ domain_state: state }) => state === 'materialized')) {
     const repositoryId = repositoryOwner(map, domain.id);
@@ -178,7 +198,14 @@ const inspectV1 = async ({ rootsByRepository, map, fingerprint, repositoryFinger
         language,
         from: sourcePair[language],
         locator: targetPair[language],
-        content: rewriteLocalLinks(source, sourcePair[language], targetPair[language], moves),
+        content: rewriteLocalLinks(source, {
+          map: transformed.value.map,
+          oldLocator: sourcePair[language],
+          newLocator: targetPair[language],
+          oldRepositoryId: repositoryId,
+          newRepositoryId: targetPair.repository_id,
+          moves,
+        }),
       });
     }
   }
