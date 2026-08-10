@@ -10,7 +10,7 @@ After user confirmation, bootstrap may establish the fixed root, the initial `pr
 
 Bootstrap schema v2 directly. Create both lifecycle-root indexes and the repository-local Knowledge-root indexes. For a confirmed parent with children, create its direct-child index directory even when the parent does not meet the materialization threshold; do not create a placeholder body or promote it to `current`.
 
-If inspection finds a coherent v1 flat knowledge tree, report the exact move/reference plan and external-link risks, then ask once for migration approval. After approval, the internal migration moves the whole accepted bilingual layout atomically, rewrites managed references, removes old canonical copies, and verifies the v2 result. An ordinary temporary question performs no migration and no durable write.
+If inspection finds a coherent v1 flat knowledge tree, report the exact move/reference plan and external-link risks, then ask once for migration approval. For multiple repositories, bind every registered owner to its explicit local repository root during inspection. After approval, the internal migration moves the whole accepted bilingual layout atomically, rewrites managed references, publishes repository shards before the governance map, removes old canonical copies, and verifies the v2 result. An ordinary temporary question performs no migration and no durable write.
 
 ## Lightweight Evidence Pack
 

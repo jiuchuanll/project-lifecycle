@@ -5,10 +5,11 @@ Use this reference to select the smallest accepted knowledge context for a task 
 ## Inputs and Source Order
 
 1. Resolve `docs/project-lifecycle/project-map.json`, or a compact project pointer whose governance locator resolves to a matching accepted v2 map. A v1 map stops with migration required before any knowledge body is read.
-2. Verify map-declared paired assets against the canonical layout, then read the English lifecycle-root index, repository-local Knowledge root or shard index, and only the direct-child indexes on the selected branch. Treat Chinese files as user-facing mirrors.
-3. Route to the most specific confirmed node matching the user's language, purpose, scope, stable aliases, and current facts.
-4. Add only applicable global principles, exact propagated constraint sections, declared dependencies, coordination seams touched by the task, and task-linked active delivery.
-5. Stop when the selected primary domain and necessary dependencies are current enough for this task and remaining unknowns cannot change the decision.
+2. When the selected owner is another repository, follow its registered portable locator and continue with the accepted governance map plus the authenticated current repository ID. Read only indexes and bodies owned by that shard; if the selection spans another owner, stop again with that owner's locator instead of resolving its paths locally.
+3. Verify map-declared paired assets against the canonical layout, then read the English lifecycle-root index, repository-local Knowledge root or shard index, and only the direct-child indexes on the selected branch. Treat Chinese files as user-facing mirrors.
+4. Route to the most specific confirmed node matching the user's language, purpose, scope, stable aliases, and current facts.
+5. Add only applicable global principles, exact propagated constraint sections, declared dependencies, coordination seams touched by the task, and task-linked active delivery.
+6. Stop when the selected primary domain and necessary dependencies are current enough for this task and remaining unknowns cannot change the decision.
 
 Do not recursively read parents, children, neighbors, or delivery history. Parentage loads only applicable propagated constraints. A dependency is loaded only when the task relies on it; a coordination peer is loaded only when the shared seam is touched.
 

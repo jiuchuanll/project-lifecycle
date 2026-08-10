@@ -170,6 +170,8 @@ retired、merged 和正文 superseded 的直接子领域保留在紧凑的“历
 
 渲染器只接收规划结果和已验证本地化元数据，生成三类 INDEX，不重新推断拓扑，也不读取任意 Markdown 正文。
 
+基于文件系统的生成按仓库分片限定。`generateIndexesFromRoot()` 接收当前 `repository_id`，只读取归属该分片的能力文档对，也只输出该分片的 INDEX 文件。治理分片使用 `null`。其他分片的元数据绝不会相对当前 lifecycle root 解析。
+
 ### 布局验证器
 
 验证器检查 Schema、图完整性、所有权、安全路径、双语配对、Frontmatter 与事实一致性、链接目标，以及期望 manifest 和实际文件树是否一致。结构验证成功不代表产品事实真实。
@@ -216,6 +218,8 @@ Skill 指示 Agent 识别旧布局，在不写入的情况下勘察，解释完�
 
 多仓迁移或拓扑变化时，每个仓在已接受 baseline 和 write lease 下准备并验证 staged candidate。只有所有分片和治理 candidate 全部通过后才开始发布，治理 map 最后发布。
 
+内部迁移调用为每个非治理 owner 提供显式 `repository_roots` 映射。勘察会将所有参与的 lifecycle tree 指纹绑定为一个已批准输入。仓库分片在治理发布成功前保留回滚备份；任一分片或治理发布失败都会恢复所有已发布分片。
+
 任一仓失败时恢复所有已发布分片。如果恢复本身失败，操作返回阻断性恢复错误并保留明确标识的恢复资产；它不能推进治理 Schema 或声称成功。
 
 ## 安全路径与恢复边界
@@ -235,6 +239,8 @@ No-change 运行零写入。测试同时验证无关 INDEX 的字节和修改时
 ## Skill 与上下文路由行为
 
 新项目直接 bootstrap 为 v2。读取旧项目本身不触发迁移。对旧布局提出持久写请求时，自动产生迁移规划并经过一次人工确认，然后 Agent 调用内部迁移操作。
+
+通过 portable locator 完成发现后，上下文选择会接收已接受的治理 map 与已验证的 `currentRepositoryId`。只有当所有已选领域都归属当前分片时才继续；否则返回下一个所需仓库的 portable locator。这同时防止跨 root 读取与无限的 repository-required 循环。
 
 上下文选择从轻量生命周期根 INDEX 开始，进入相关 Knowledge 或仓库分片 INDEX，只加载目标领域、适用祖先约束和必要直接依赖。不能通过根 INDEX 预加载所有领域。
 

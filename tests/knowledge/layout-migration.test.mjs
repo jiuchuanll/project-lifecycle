@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, lstat, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -42,6 +42,30 @@ const setupLegacy = async (context) => {
   const english = join(base, 'knowledge/desktop-experience-en.md');
   await writeFile(english, `${(await readFile(english, 'utf8')).trimEnd()}\n\n[External guide](https://example.com/guide)\n`);
   return root;
+};
+
+const setupMultiRepositoryLegacy = async (context) => {
+  const governanceRoot = await setupLegacy(context);
+  const shardRoot = await mkdtemp(join(tmpdir(), 'project-lifecycle-v1-shard-'));
+  context.after(() => rm(shardRoot, { recursive: true, force: true }));
+  const governanceLifecycle = lifecycle(governanceRoot);
+  const shardLifecycle = lifecycle(shardRoot);
+  await mkdir(join(shardLifecycle, 'knowledge'), { recursive: true });
+  for (const name of ['desktop-experience-en.md', 'desktop-experience.md']) {
+    await rename(join(governanceLifecycle, 'knowledge', name), join(shardLifecycle, 'knowledge', name));
+  }
+  const mapPath = join(governanceLifecycle, 'project-map.json');
+  const map = await readJson(mapPath);
+  map.repositories = [{
+    id: 'backend',
+    purpose: { en: 'Owns backend knowledge.', 'zh-CN': '负责后端知识。' },
+    portable_locator: 'github:example/backend', integration_ref: 'refs/heads/main',
+    domain_ids: ['desktop-experience'],
+    knowledge_asset_locators: ['knowledge/desktop-experience-en.md', 'knowledge/desktop-experience.md'],
+    accepted_revision: 'revision:backend',
+  }];
+  await writeFile(mapPath, `${JSON.stringify(map, null, 2)}\n`);
+  return { governanceRoot, shardRoot };
 };
 
 test('inspects a strict v1 flat layout without writing and reports planned moves', async (context) => {
@@ -130,4 +154,43 @@ test('rejects an incomplete v1 pair and restores the original after a late failu
   });
   assert.equal(failed.ok, false);
   assert.equal(await readFile(join(lifecycle(rollback), 'project-map.json'), 'utf8'), before);
+});
+
+test('migrates repository-local shards before publishing the governance map', async (context) => {
+  const { governanceRoot, shardRoot } = await setupMultiRepositoryLegacy(context);
+  const repository_roots = { backend: shardRoot };
+  const inspection = await inspectLegacyKnowledgeLayout({ root: governanceRoot, repository_roots });
+  assert.equal(inspection.ok, true, JSON.stringify(inspection));
+  const result = await migrateKnowledgeLayout({
+    root: governanceRoot,
+    repository_roots,
+    approval_ref: 'approval:migrate-v2-multi',
+    expected_fingerprint: inspection.value.fingerprint,
+  });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal((await readJson(join(lifecycle(governanceRoot), 'project-map.json'))).schema_version, 2);
+  assert.equal((await lstat(join(lifecycle(shardRoot), 'knowledge/desktop-experience/desktop-experience-en.md'))).isFile(), true);
+  await assert.rejects(lstat(join(lifecycle(shardRoot), 'knowledge/desktop-experience-en.md')), { code: 'ENOENT' });
+});
+
+test('restores already-published shards when governance publication fails', async (context) => {
+  const { governanceRoot, shardRoot } = await setupMultiRepositoryLegacy(context);
+  const repository_roots = { backend: shardRoot };
+  const inspection = await inspectLegacyKnowledgeLayout({ root: governanceRoot, repository_roots });
+  const result = await migrateKnowledgeLayout({
+    root: governanceRoot,
+    repository_roots,
+    approval_ref: 'approval:migrate-v2-multi',
+    expected_fingerprint: inspection.value.fingerprint,
+  }, {
+    afterRepositoryPublish: async ({ repository_id: repositoryId }) => {
+      if (repositoryId === null) throw new Error('governance publication failed');
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal((await readJson(join(lifecycle(governanceRoot), 'project-map.json'))).schema_version, 1);
+  assert.equal((await lstat(join(lifecycle(shardRoot), 'knowledge/desktop-experience-en.md'))).isFile(), true);
+  await assert.rejects(lstat(join(lifecycle(shardRoot), 'knowledge/desktop-experience/desktop-experience-en.md')), { code: 'ENOENT' });
 });

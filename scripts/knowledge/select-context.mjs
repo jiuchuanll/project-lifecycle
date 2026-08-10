@@ -100,7 +100,7 @@ const readBoundedNavigationIndex = async (path, maxBytes = 262_144) => {
 
 const samePair = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
-const navigationLocatorsFor = (manifest, domainIds) => {
+const navigationLocatorsFor = (manifest, domainIds, repositoryId) => {
   const locators = ['INDEX-en.md', 'knowledge/INDEX-en.md'];
   const byId = new Map(manifest.domains.map((entry) => [entry.domain_id, entry]));
   for (const domainId of domainIds) {
@@ -111,7 +111,7 @@ const navigationLocatorsFor = (manifest, domainIds) => {
       entry = entry.parent_id === null ? null : byId.get(entry.parent_id);
     }
     for (const item of lineage.reverse()) {
-      if (item.repository_id === null && item.has_children) locators.push(`${item.directory}/INDEX-en.md`);
+      if (item.repository_id === repositoryId && item.has_children) locators.push(`${item.directory}/INDEX-en.md`);
     }
   }
   return [...new Set(locators)];
@@ -268,14 +268,21 @@ export async function selectContext(inputValue, operations = {}) {
     return failure('CONTEXT_REFERENCE_INVALID', '/knowledge_baseline', 'Context references must be portable single-line tokens.');
   }
   const onRead = operations.onRead ?? (() => {});
+  const currentRepositoryId = operations.currentRepositoryId ?? null;
+  const suppliedMap = operations.governanceMap;
 
   let lifecycleRoot;
   let map;
   try {
     lifecycleRoot = await resolveLifecycleRoot(input.root);
-    const mapPath = await resolveReadable(lifecycleRoot, 'project-map.json');
-    map = JSON.parse(await readFile(mapPath, 'utf8'));
-    onRead({ level: 'L0', locator: 'project-map.json', section: 'document' });
+    if (suppliedMap !== undefined) {
+      map = structuredClone(suppliedMap);
+      onRead({ level: 'L0', locator: 'governance:project-map.json', section: 'document' });
+    } else {
+      const mapPath = await resolveReadable(lifecycleRoot, 'project-map.json');
+      map = JSON.parse(await readFile(mapPath, 'utf8'));
+      onRead({ level: 'L0', locator: 'project-map.json', section: 'document' });
+    }
   } catch (error) {
     return failure(error?.code ?? 'CONTEXT_ROOT_INVALID', '/', 'A bounded validated project map is required.');
   }
@@ -288,6 +295,10 @@ export async function selectContext(inputValue, operations = {}) {
   }
   const mapValidation = validateJson('project-map', map);
   if (!mapValidation.ok) return mapValidation;
+  if (!(currentRepositoryId === null
+    || map.repositories.some(({ id }) => id === currentRepositoryId))) {
+    return failure('CONTEXT_REPOSITORY_INVALID', '/currentRepositoryId', 'The authenticated current repository is not registered by the governance map.');
+  }
   const planned = planKnowledgeLayout({ map });
   if (!planned.ok) return planned;
   for (const domain of map.domains) {
@@ -364,20 +375,24 @@ export async function selectContext(inputValue, operations = {}) {
     ...candidates.filter((id) => id !== input.primary_domain_id),
     ...uniqueSorted([...selectedDomainIds].filter((id) => !candidates.includes(id))),
   ];
-  const externalRepositories = uniqueSorted(domainOrder
+  const requiredRepositories = uniqueSorted(domainOrder
     .map((domainId) => planned.value.domains.find(({ domain_id: id }) => id === domainId)?.repository_id)
-    .filter((repositoryId) => repositoryId !== null && repositoryId !== undefined));
-  if (externalRepositories.length > 0) {
-    const repository = map.repositories.find(({ id }) => id === externalRepositories[0]);
+    .filter((repositoryId) => repositoryId !== undefined)
+    .map((repositoryId) => repositoryId ?? '<governance>'));
+  const currentRepositoryKey = currentRepositoryId ?? '<governance>';
+  const requiredRepositoryKey = requiredRepositories.find((repositoryId) => repositoryId !== currentRepositoryKey);
+  if (requiredRepositoryKey !== undefined) {
+    const requiredRepositoryId = requiredRepositoryKey === '<governance>' ? null : requiredRepositoryKey;
+    const repository = map.repositories.find(({ id }) => id === requiredRepositoryId);
     return failure(
       'CONTEXT_REPOSITORY_REQUIRED',
-      `/repositories/${externalRepositories[0]}`,
-      `Continue bounded knowledge routing in the repository shard at ${repository?.portable_locator ?? externalRepositories[0]}.`,
+      requiredRepositoryId === null ? '/repositories/governance' : `/repositories/${requiredRepositoryId}`,
+      `Continue bounded knowledge routing in the repository shard at ${repository?.portable_locator ?? 'the governance repository'}.`,
     );
   }
 
   try {
-    for (const locator of navigationLocatorsFor(planned.value, domainOrder)) {
+    for (const locator of navigationLocatorsFor(planned.value, domainOrder, currentRepositoryId)) {
       const path = await resolveReadable(lifecycleRoot, locator);
       const bytesRead = await readBoundedNavigationIndex(path);
       onRead({ level: 'L0', locator, section: 'navigation-index', bytes_read: bytesRead });

@@ -27,7 +27,9 @@ version bump does not upgrade any native-host support claim.
   delivery Frontmatter.
 - Multi-repository governance remains centralized while repository-owned
   implementation knowledge stays in repository-local shards connected by
-  registered portable locators.
+  registered portable locators. Index generation is shard-scoped, routing can
+  continue after authenticated shard entry, and migration publishes validated
+  repository shards before the governance map with cross-shard rollback.
 
 ## Upgrade from 0.1.0
 
@@ -42,6 +44,8 @@ approval before invoking migration. A successful migration:
 - rewrites project-map paired assets, constraint refs, repository locators, and
   generated navigation;
 - removes old canonical copies and verifies the complete v2 result atomically.
+- binds every participating repository tree into the approved fingerprint and
+  restores already-published shards if a later shard or governance publish fails.
 
 There is no public migration CLI, migration receipt, schema-v1 registry,
 redirect stub, symlink, or duplicate knowledge body. External Markdown links

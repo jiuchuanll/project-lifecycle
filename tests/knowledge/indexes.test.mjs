@@ -418,6 +418,37 @@ test('collects CRLF Frontmatter through the exact bounded delimiter', async (con
   assert.doesNotMatch(result.value.en, /BODY MUST STAY OUT/);
 });
 
+test('collects and renders only the active repository shard from disk', async (context) => {
+  const repositoryId = 'backend';
+  const crossMap = structuredClone(map);
+  crossMap.repositories = [{
+    id: repositoryId,
+    purpose: { en: 'Owns backend knowledge.', 'zh-CN': '负责后端知识。' },
+    portable_locator: 'github:example/backend',
+    integration_ref: 'refs/heads/main',
+    domain_ids: ['alpha-workspace'],
+    knowledge_asset_locators: ['knowledge/alpha-workspace-en.md', 'knowledge/alpha-workspace.md'],
+    accepted_revision: 'revision:backend',
+  }];
+  crossMap.domains[0].paired_assets.repository_id = repositoryId;
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-index-shard-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, 'knowledge'), { recursive: true });
+  for (const entry of capabilityPair) {
+    await writeFile(join(root, entry.locator), `---\nid: ${entry.frontmatter.id}\nknowledge_state: current\npaired_asset: ${entry.frontmatter.paired_asset}\nlast_verified_baseline: ${entry.frontmatter.last_verified_baseline}\nimplementation_refs:\n  - repo:src/alpha\nverification_refs:\n  - repo:test/alpha\n---\n`);
+  }
+
+  const result = await generateIndexesFromRoot({
+    map: crossMap,
+    lifecycleRoot: root,
+    repository_id: repositoryId,
+  });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.value.files.every(({ repository_id: id }) => id === repositoryId), true);
+  assert.equal(result.value.files.some(({ locator }) => locator === 'knowledge/INDEX-en.md'), true);
+});
+
 test('ships paired index templates as exact output of the inert validated map', async () => {
   const templateMap = JSON.parse(await readFile(
     new URL('../../skills/maintain-project-knowledge/assets/project-map.json', import.meta.url),

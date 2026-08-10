@@ -480,6 +480,49 @@ test('requires explicit v1 migration before any index or knowledge body read', a
   assert.deepEqual(reads, [{ level: 'L0', locator: 'project-map.json', section: 'document' }]);
 });
 
+test('continues bounded routing after the agent enters the authenticated owning shard', async (context) => {
+  const repositoryId = 'backend';
+  const map = structuredClone(projectMap);
+  map.constraints = [];
+  map.domains = [map.domains.find(({ id }) => id === 'wiki-workspace')];
+  map.domains[0].parent_id = null;
+  map.domains[0].relationships = [];
+  map.domains[0].paired_assets = {
+    repository_id: repositoryId,
+    en: 'knowledge/wiki-workspace-en.md',
+    'zh-CN': 'knowledge/wiki-workspace.md',
+  };
+  map.repositories = [{
+    id: repositoryId,
+    purpose: { en: 'Owns backend knowledge.', 'zh-CN': '负责后端知识。' },
+    portable_locator: 'github:example/backend', integration_ref: 'refs/heads/main',
+    domain_ids: ['wiki-workspace'],
+    knowledge_asset_locators: ['knowledge/wiki-workspace-en.md', 'knowledge/wiki-workspace.md'],
+    accepted_revision: 'revision:backend',
+  }];
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-context-shard-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const lifecycle = join(root, 'docs/project-lifecycle');
+  await mkdir(join(lifecycle, 'knowledge'), { recursive: true });
+  await writeFile(join(lifecycle, 'knowledge/wiki-workspace-en.md'), capability('wiki-workspace', 'wiki-workspace.md'));
+  await writeFile(join(lifecycle, 'knowledge/wiki-workspace.md'), capability('wiki-workspace', 'wiki-workspace.md'));
+  const indexes = await generateIndexesFromRoot({ map, lifecycleRoot: lifecycle, repository_id: repositoryId });
+  assert.equal(indexes.ok, true, JSON.stringify(indexes));
+  for (const file of indexes.value.files) {
+    await mkdir(dirname(join(lifecycle, file.locator)), { recursive: true });
+    await writeFile(join(lifecycle, file.locator), file.content);
+  }
+
+  const result = await selectContext({
+    ...baseInput(root), primary_domain_id: 'wiki-workspace', candidate_domain_ids: ['wiki-workspace'],
+    applicable_relationships: [], task_delivery_refs: [],
+  }, { governanceMap: map, currentRepositoryId: repositoryId });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.value.stop.code, 'SUFFICIENT');
+  assert.deepEqual(result.value.selected_context.map(({ id }) => id), ['wiki-workspace']);
+});
+
 test('accepts CRLF and reordered Frontmatter keys without reading the body', async (context) => {
   const root = await setup(context);
   const path = join(root, 'docs/project-lifecycle/knowledge/desktop-experience/wiki-workspace-en.md');

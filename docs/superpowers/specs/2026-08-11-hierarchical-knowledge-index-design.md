@@ -170,6 +170,8 @@ A pure planner accepts a validated v2 project map and repository registrations. 
 
 The renderer accepts only planner output and validated localized metadata. It emits the three index classes without reconstructing topology or reading arbitrary Markdown bodies.
 
+Filesystem-backed generation is repository-scoped. `generateIndexesFromRoot()` receives the active `repository_id`, reads only capability pairs owned by that shard, and emits only that shard's index files. The governance shard uses `null`. Metadata for another shard is never resolved against the current lifecycle root.
+
 ### Layout validator
 
 The validator checks schema integrity, graph integrity, ownership, safe paths, bilingual pairing, Frontmatter and fact consistency, link targets, and equality between the expected manifest and the actual tree. Structural success does not assert that product facts are true.
@@ -216,6 +218,8 @@ A second run returns `already-v2` with no writes or differences.
 
 For a multi-repository migration or topology change, each repository prepares and validates a staged candidate under its accepted baseline and write lease. Publication begins only after every shard and the governance candidate pass validation. The governance map publishes last.
 
+The internal migration call supplies an explicit `repository_roots` mapping for every non-governance owner. Inspection fingerprints every participating lifecycle tree as one approved input. Repository shards retain rollback backups until governance publication succeeds; a shard or governance failure restores every shard already published.
+
 If any repository fails, every already-published shard is restored. If restoration itself fails, the operation returns a blocking recovery error and preserves clearly identified recovery assets; it does not advance the governance schema or claim success.
 
 ## Safe-Path and Recovery Boundary
@@ -235,6 +239,8 @@ No-change runs perform zero writes. Tests verify both byte equality and unchange
 ## Skill and Context-Routing Behavior
 
 New projects bootstrap directly into v2. Reading a legacy project does not itself cause migration. A durable-write request against legacy layout triggers automatic planning and one human confirmation before the Agent invokes the internal migration operation.
+
+After portable-locator discovery, context selection receives the accepted governance map and an authenticated `currentRepositoryId`. It proceeds only when every selected domain belongs to that current shard; otherwise it returns the next required portable repository locator. This prevents both cross-root reads and an infinite repository-required loop.
 
 Context selection starts from the lightweight lifecycle-root index, enters the relevant Knowledge or repository-shard index, and loads only the target domain, applicable ancestor constraints, and required direct dependencies. It does not use the root index to preload every domain.
 

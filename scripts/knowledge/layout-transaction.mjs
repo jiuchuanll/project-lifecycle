@@ -480,6 +480,20 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
       throw pathError('LAYOUT_TRANSACTION_FAILED');
     }
     await afterPublish({ lifecycleRoot: paths.lifecycleRoot });
+    if (operations.retainBackup === true) {
+      return ok({
+        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+        unchanged,
+        cleanup_pending: true,
+        recovery_artifacts: ['backup'],
+        retained_publication: {
+          lifecycle_root: paths.lifecycleRoot,
+          backup_root: backupRoot,
+          original_fingerprint: current.fingerprint,
+          candidate_fingerprint: candidateFingerprint,
+        },
+      });
+    }
     try {
       await removeBackup(backupRoot);
     } catch {}
@@ -526,4 +540,39 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
       'The lifecycle layout transaction could not be completed.',
     );
   }
+};
+
+export const finalizeRetainedLayout = async ({ retained_publication: publication } = {}, operations = {}) => {
+  if (!publication?.backup_root) return failure('LAYOUT_INPUT_INVALID', '/retained_publication', 'A retained publication is required.');
+  try {
+    const removeBackup = operations.removeBackup ?? ((path) => rm(path, { recursive: true, force: true }));
+    if (!await fingerprintAt(publication.lifecycle_root, publication.candidate_fingerprint)) {
+      return failure('LAYOUT_FINGERPRINT_STALE', '/retained_publication', 'The published candidate changed before finalization.');
+    }
+    await removeBackup(publication.backup_root);
+    return await fileState(publication.backup_root)
+      ? failure('LAYOUT_TRANSACTION_FAILED', '/retained_publication', 'The retained backup could not be finalized.')
+      : ok(null);
+  } catch {
+    return failure('LAYOUT_TRANSACTION_FAILED', '/retained_publication', 'The retained backup could not be finalized.');
+  }
+};
+
+export const rollbackRetainedLayout = async ({ retained_publication: publication } = {}, operations = {}) => {
+  if (!publication?.backup_root) return failure('LAYOUT_INPUT_INVALID', '/retained_publication', 'A retained publication is required.');
+  let stagingRoot;
+  try {
+    stagingRoot = await mkdtemp(join(dirname(publication.lifecycle_root), '.project-lifecycle-layout-rollback-'));
+    await rmdir(stagingRoot);
+  } catch {
+    return failure('LAYOUT_RESTORE_FAILED', '/recovery', 'Recovery staging could not be initialized.');
+  }
+  return restoreOriginal({
+    lifecycleRoot: publication.lifecycle_root,
+    stagingRoot,
+    backupRoot: publication.backup_root,
+    originalFingerprint: publication.original_fingerprint,
+    candidateFingerprint: publication.candidate_fingerprint,
+    restoreRename: operations.restoreRename ?? rename,
+  });
 };

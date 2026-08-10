@@ -122,7 +122,7 @@ const relationshipToken = (domain) => [...domain.relationships]
   .map(({ kind, target_id: targetId }) => `${kind}:${targetId}`)
   .join(',') || '-';
 
-const navigationManifest = (map, capabilityPairs, deliveryPairs) => {
+const navigationManifest = (map, capabilityPairs, deliveryPairs, repositoryId) => {
   const domains = [...map.domains].sort((left, right) => compareCodePoints(left.id, right.id));
   const globalBaseline = map.knowledge_baseline ?? map.project_identity?.calibration_ref;
   const referenceChecks = [
@@ -161,11 +161,13 @@ const navigationManifest = (map, capabilityPairs, deliveryPairs) => {
   }
   for (const domain of domains) {
     const pair = capabilityPairs.get(domain.id);
+    const ownedHere = repositoryId === undefined
+      || domain.paired_assets?.repository_id === repositoryId;
     if (domain.domain_state === 'materialized') {
-      if (!pair || domain.paired_assets?.en !== pair.en.locator
+      if (ownedHere && (!pair || domain.paired_assets?.en !== pair.en.locator
         || domain.paired_assets?.['zh-CN'] !== pair['zh-CN'].locator
         || domain.baseline !== pair.en.frontmatter.last_verified_baseline
-        || pair.en.frontmatter.id !== domain.id) {
+        || pair.en.frontmatter.id !== domain.id)) {
         return failure('INDEX_PAIR_INVALID', `/domains/${domain.id}`, 'Materialized map ownership must match one validated capability pair.');
       }
     } else if (pair) {
@@ -387,7 +389,7 @@ const renderDomainIndex = (map, layout, manifest, layoutDomain, language) => {
   ].join('\n');
 };
 
-const renderFiles = (map, layout, manifest) => {
+const renderFiles = (map, layout, manifest, repositoryId) => {
   const files = [];
   for (const repository of layout.repositories) {
     for (const language of LANGUAGES) {
@@ -421,8 +423,10 @@ const renderFiles = (map, layout, manifest) => {
       });
     }
   }
-  return files.sort((left, right) => compareCodePoints(left.repository_id ?? '', right.repository_id ?? '')
-    || compareCodePoints(left.locator, right.locator));
+  return files
+    .filter((file) => repositoryId === undefined || file.repository_id === repositoryId)
+    .sort((left, right) => compareCodePoints(left.repository_id ?? '', right.repository_id ?? '')
+      || compareCodePoints(left.locator, right.locator));
 };
 
 const buildIndexes = ({
@@ -430,6 +434,7 @@ const buildIndexes = ({
   layout: suppliedLayout,
   capability_frontmatters: capabilities = [],
   delivery_frontmatters: deliveries = [],
+  repository_id: repositoryId,
 } = {}) => {
   const mapValidation = validateJson('project-map', map);
   if (!mapValidation.ok) return mapValidation;
@@ -444,7 +449,11 @@ const buildIndexes = ({
     idOf: ({ artifact_id: id }) => id, schema: 'delivery-frontmatter', path: '/delivery_frontmatters',
   });
   if (!deliveryPairs.ok) return deliveryPairs;
-  const manifest = navigationManifest(map, capabilityPairs.value, deliveryPairs.value);
+  if (!(repositoryId === undefined || repositoryId === null
+    || map.repositories.some(({ id }) => id === repositoryId))) {
+    return failure('INDEX_INPUT_INVALID', '/repository_id', 'The active repository must be canonical map ownership.');
+  }
+  const manifest = navigationManifest(map, capabilityPairs.value, deliveryPairs.value, repositoryId);
   if (!manifest.ok) return manifest;
   const planned = planKnowledgeLayout({ map });
   if (!planned.ok) return planned;
@@ -457,9 +466,10 @@ const buildIndexes = ({
       return failure('INDEX_LAYOUT_INVALID', `/domains/${domain.id}/paired_assets`, 'Materialized asset locators must match the canonical recursive layout.');
     }
   }
-  const files = renderFiles(map, planned.value, manifest.value);
-  const rootEn = files.find(({ repository_id: repositoryId, locator }) => repositoryId === null && locator === 'INDEX-en.md');
-  const rootZh = files.find(({ repository_id: repositoryId, locator }) => repositoryId === null && locator === 'INDEX.md');
+  const files = renderFiles(map, planned.value, manifest.value, repositoryId);
+  const selectedRepositoryId = repositoryId === undefined ? null : repositoryId;
+  const rootEn = files.find(({ repository_id: id, locator }) => id === selectedRepositoryId && locator === 'INDEX-en.md');
+  const rootZh = files.find(({ repository_id: id, locator }) => id === selectedRepositoryId && locator === 'INDEX.md');
   return ok({
     layout: planned.value,
     files,
@@ -484,7 +494,12 @@ export const generateIndexes = (input = {}) => buildIndexes(input);
  * Collects only bounded Frontmatter prefixes from a trusted lifecycle root and
  * delegates all navigation semantics to the pure generator above.
  */
-export const generateIndexesFromRoot = async ({ map, lifecycleRoot: rootValue, overlays = {} } = {}) => {
+export const generateIndexesFromRoot = async ({
+  map,
+  lifecycleRoot: rootValue,
+  overlays = {},
+  repository_id: repositoryId = null,
+} = {}) => {
   const mapValidation = validateJson('project-map', map);
   if (!mapValidation.ok) return mapValidation;
   if (typeof rootValue !== 'string' || !isAbsolute(rootValue) || !record(overlays)) {
@@ -504,7 +519,8 @@ export const generateIndexesFromRoot = async ({ map, lifecycleRoot: rootValue, o
   const deliveries = [];
   try {
     for (const domain of map.domains) {
-      if (domain.domain_state !== 'materialized') continue;
+      if (domain.domain_state !== 'materialized'
+        || domain.paired_assets?.repository_id !== repositoryId) continue;
       for (const language of LANGUAGES) {
         const locator = domain.paired_assets?.[language];
         capabilities.push({
@@ -523,6 +539,7 @@ export const generateIndexesFromRoot = async ({ map, lifecycleRoot: rootValue, o
     const deliveryRoot = join(lifecycleRoot, 'delivery');
     let names = [];
     try {
+      if (repositoryId !== null) throw Object.assign(new Error('Repository shards do not own delivery metadata.'), { code: 'ENOENT' });
       const deliveryState = await lstat(deliveryRoot);
       const realDeliveryRoot = await realpath(deliveryRoot);
       if (!deliveryState.isDirectory() || deliveryState.isSymbolicLink() || !inside(lifecycleRoot, realDeliveryRoot)) {
@@ -562,5 +579,10 @@ export const generateIndexesFromRoot = async ({ map, lifecycleRoot: rootValue, o
   } catch (error) {
     return failure(error?.code ?? 'INDEX_FRONTMATTER_INVALID', '/', 'Navigation Frontmatter could not be collected safely.');
   }
-  return generateIndexes({ map, capability_frontmatters: capabilities, delivery_frontmatters: deliveries });
+  return generateIndexes({
+    map,
+    capability_frontmatters: capabilities,
+    delivery_frontmatters: deliveries,
+    repository_id: repositoryId,
+  });
 };
