@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "plugin_version": "0.1.0",
+  "plugin_version": "0.2.0",
   "hosts": {
     "claude": { "status": "NOT_TESTED", "observed_version": null, "evidence_refs": ["availability:claude:unavailable"] },
     "codex": { "status": "FAILED", "observed_version": "0.147.0-alpha.6.5", "evidence_refs": ["invariant-failures:codex:8", "targeted-regression:codex:4of4", "trace-set:codex:ae5b5ad"] },

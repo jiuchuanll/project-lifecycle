@@ -13,7 +13,7 @@ import { validateJson } from '../lib/validate-json.mjs';
 import { collectEvidence } from '../knowledge/collect-evidence.mjs';
 import { validateFixtures } from '../validate-fixtures.mjs';
 
-const version = '0.1.0';
+const version = '0.2.0';
 const command = process.argv[2] ?? 'help';
 
 const cliFailure = (code, path, message) => fail([createError(code, path, message)]);

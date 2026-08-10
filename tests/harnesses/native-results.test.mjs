@@ -16,7 +16,7 @@ const trace = (host, scenarioId, runNumber, semanticStatus = 'PASS') => ({
   run_id: `${host}-${scenarioId}-${runNumber}`,
   scenario_id: scenarioId,
   run_number: runNumber,
-  plugin: { version: '0.1.0', commit: 'a'.repeat(40) },
+  plugin: { version: '0.2.0', commit: 'a'.repeat(40) },
   host: { id: host, version: '1.0.0' },
   model: { identity: 'test-model', revision: 'test-model-1' },
   parameters: { temperature: 0 },
@@ -59,12 +59,15 @@ test('requires three independently reviewed passes for every scenario before sup
   const traces = scenarios.flatMap((scenario) => [1, 2, 3].map((run) => trace('codex', scenario.scenario_id, run)));
   const supported = {
     schema_version: 1,
-    plugin_version: '0.1.0',
+    plugin_version: '0.2.0',
     hosts: { codex: { status: 'SUPPORTED', observed_version: '1.0.0', evidence_refs: ['trace-set:codex'] } },
   };
   assert.equal(validateNativeResults({ scenarios, matrix: supported, traces }).ok, true);
 
   assert.equal(validateNativeResults({ scenarios, matrix: supported, traces: traces.slice(1) }).ok, false);
+  const wrongPlugin = structuredClone(traces);
+  wrongPlugin[0].plugin.version = '0.1.0';
+  assert.equal(validateNativeResults({ scenarios, matrix: supported, traces: wrongPlugin }).ok, false);
   const pending = structuredClone(traces);
   pending[0] = trace('codex', scenarios[0].scenario_id, 1, 'PENDING');
   assert.equal(validateNativeResults({ scenarios, matrix: supported, traces: pending }).ok, false);

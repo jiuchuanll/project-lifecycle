@@ -15092,10 +15092,21 @@ function isRawAbsolute(candidate) {
 function hasRawParentSegment(candidate) {
   return candidate.split(/[\\/]/u).includes("..");
 }
-async function resolveInside(root, candidate) {
-  if (isRawAbsolute(candidate) || hasRawParentSegment(candidate)) {
-    throw pathError("PATH_ESCAPE", `Path must be a bounded relative target: ${candidate}`);
+function isBoundedRelativePath(candidate) {
+  if (typeof candidate !== "string" || candidate.length === 0 || candidate.includes("\0")) return false;
+  if (candidate.includes("\\") || isRawAbsolute(candidate) || hasRawParentSegment(candidate)) return false;
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/u.test(candidate)) return false;
+  const segments = candidate.split("/");
+  return segments.every((segment) => segment.length > 0 && segment !== ".");
+}
+function assertBoundedRelativePath(candidate) {
+  if (!isBoundedRelativePath(candidate)) {
+    throw pathError("PATH_ESCAPE", "Path must be a bounded portable relative target.");
   }
+  return candidate;
+}
+async function resolveInside(root, candidate) {
+  assertBoundedRelativePath(candidate);
   const rootPath = resolve(root);
   const rootRealPath = await realpath(rootPath);
   const candidatePath = resolve(rootPath, candidate);
@@ -15205,6 +15216,7 @@ async function atomicWriteValidated({ root, target, content, validate }) {
 // scripts/lib/errors.mjs
 var ERROR_CODES = Object.freeze({
   SCHEMA_INVALID: "SCHEMA_INVALID",
+  KNOWLEDGE_LAYOUT_MIGRATION_REQUIRED: "KNOWLEDGE_LAYOUT_MIGRATION_REQUIRED",
   ID_DUPLICATE: "ID_DUPLICATE",
   REFERENCE_MISSING: "REFERENCE_MISSING",
   STATE_REQUIREMENT_MISSING: "STATE_REQUIREMENT_MISSING",
@@ -16155,7 +16167,7 @@ var pending_changes_schema_default = {
       additionalProperties: false,
       required: ["locator", "content_hash"],
       properties: {
-        locator: { type: "string", pattern: "^knowledge/[a-z][a-z0-9-]*(?:-en)?\\.md$" },
+        locator: { type: "string", pattern: "^knowledge/(?:[a-z][a-z0-9-]*/)*[a-z][a-z0-9-]*(?:-en)?\\.md$" },
         content_hash: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }
       }
     },
@@ -16203,7 +16215,7 @@ var project_map_schema_default = {
   additionalProperties: false,
   required: ["schema_version", "project_id", "identity_lineage", "repositories", "constraints", "domains"],
   properties: {
-    schema_version: { const: 1 },
+    schema_version: { const: 2 },
     project_id: { $ref: "#/$defs/id" },
     knowledge_baseline: { type: "string", minLength: 1 },
     project_identity: { $ref: "#/$defs/projectIdentity" },
@@ -16260,7 +16272,7 @@ var project_map_schema_default = {
         portable_locator: { type: "string", minLength: 1 },
         integration_ref: { type: "string", minLength: 1 },
         domain_ids: { type: "array", uniqueItems: true, items: { $ref: "#/$defs/id" } },
-        knowledge_asset_locators: { type: "array", uniqueItems: true, items: { type: "string", minLength: 1 } },
+        knowledge_asset_locators: { type: "array", uniqueItems: true, items: { $ref: "#/$defs/knowledgeAssetLocator" } },
         accepted_revision: { type: "string", minLength: 1 }
       }
     },
@@ -16285,19 +16297,24 @@ var project_map_schema_default = {
     pairedAssets: {
       type: "object",
       additionalProperties: false,
-      required: ["en", "zh-CN"],
+      required: ["repository_id", "en", "zh-CN"],
       properties: {
-        en: { type: "string", minLength: 1 },
-        "zh-CN": { type: "string", minLength: 1 }
+        repository_id: { anyOf: [{ type: "null" }, { $ref: "#/$defs/id" }] },
+        en: { type: "string", pattern: "^knowledge/(?:[a-z][a-z0-9-]*/)*[a-z][a-z0-9-]*-en\\.md$" },
+        "zh-CN": { type: "string", pattern: "^knowledge/(?:[a-z][a-z0-9-]*/)*[a-z][a-z0-9-]*\\.md$" }
       }
+    },
+    knowledgeAssetLocator: {
+      type: "string",
+      pattern: "^knowledge/(?:[a-z][a-z0-9-]*/)*[a-z][a-z0-9-]*(?:-en)?\\.md$"
     },
     knowledgeRefs: {
       type: "object",
       additionalProperties: false,
       required: ["en", "zh-CN"],
       properties: {
-        en: { type: "string", pattern: "^knowledge/[a-z][a-z0-9-]*-en\\.md#constraint-[a-z][a-z0-9-]*$" },
-        "zh-CN": { type: "string", pattern: "^knowledge/[a-z][a-z0-9-]*\\.md#constraint-[a-z][a-z0-9-]*$" }
+        en: { type: "string", pattern: "^knowledge/(?:[a-z][a-z0-9-]*/)*[a-z][a-z0-9-]*-en\\.md#constraint-[a-z][a-z0-9-]*$" },
+        "zh-CN": { type: "string", pattern: "^knowledge/(?:[a-z][a-z0-9-]*/)*[a-z][a-z0-9-]*\\.md#constraint-[a-z][a-z0-9-]*$" }
       }
     },
     domain: {
@@ -16675,6 +16692,7 @@ var validateProjectMap = (value) => {
   const constraintById = /* @__PURE__ */ new Map();
   const lineagePredecessors = /* @__PURE__ */ new Set();
   const repositoryAssetOwners = /* @__PURE__ */ new Map();
+  const domainRepositoryOwners = /* @__PURE__ */ new Map();
   for (const entry of entries) {
     if (entriesById.has(entry.id)) {
       errors.push(createError(ERROR_CODES.ID_DUPLICATE, `${entry.path}/id`, `Duplicate ID: ${entry.id}`));
@@ -16698,6 +16716,10 @@ var validateProjectMap = (value) => {
       const path = `/repositories/${index}/domain_ids/${domainIndex}`;
       if (!knownDomainIds.has(domainId)) {
         errors.push(createError(ERROR_CODES.REFERENCE_MISSING, path, `Unknown repository domain ID: ${domainId}`));
+      } else if (domainRepositoryOwners.has(domainId)) {
+        errors.push(createError(ERROR_CODES.ID_DUPLICATE, path, `Domain already belongs to repository: ${domainRepositoryOwners.get(domainId)}`));
+      } else {
+        domainRepositoryOwners.set(domainId, repository.id);
       }
     }
     for (const [assetIndex, locator] of repository.knowledge_asset_locators.entries()) {
@@ -16718,6 +16740,16 @@ var validateProjectMap = (value) => {
       }
       if (!domain.baseline) {
         errors.push(createError(ERROR_CODES.STATE_REQUIREMENT_MISSING, `${path}/baseline`, "Materialized domains require a baseline."));
+      }
+    }
+    if (domain.paired_assets) {
+      const expectedRepositoryId = domainRepositoryOwners.get(domain.id) ?? null;
+      if (domain.paired_assets.repository_id !== expectedRepositoryId) {
+        errors.push(createError(
+          ERROR_CODES.SCHEMA_INVALID,
+          `${path}/paired_assets/repository_id`,
+          "Paired asset repository must match the domain canonical repository."
+        ));
       }
     }
     if (domain.domain_state === "retired" && !domain.retirement_reason) {
@@ -17122,6 +17154,13 @@ var validateJson = (kind, value, options = {}) => {
   const validate = getSchemaValidator(kind);
   if (!validate) {
     return fail([createError(ERROR_CODES.SCHEMA_INVALID, "/", `Unknown schema kind: ${kind}`)]);
+  }
+  if (kind === "project-map" && value?.schema_version === 1) {
+    return fail([createError(
+      ERROR_CODES.KNOWLEDGE_LAYOUT_MIGRATION_REQUIRED,
+      "/schema_version",
+      "Project knowledge layout must be migrated to schema version 2 before a durable write."
+    )]);
   }
   if (!validate(value)) return fail(schemaErrors(kind, validate.errors));
   const errors = kind === "project-map" ? validateProjectMap(value) : kind === "project-extensions" ? validateProjectExtensions(value) : kind === "context-receipt" ? validateContextReceipt(value) : kind === "pending-changes" ? validatePendingChanges(value) : kind === "delivery-frontmatter" ? validateDeliveryFrontmatter(value) : kind === "project-pointer" ? validateProjectPointer(value, options) : [];
@@ -17931,7 +17970,7 @@ var validateFixtures = async (rootValue) => {
 };
 
 // scripts/bin/project-lifecycle.mjs
-var version = "0.1.0";
+var version = "0.2.0";
 var command = process.argv[2] ?? "help";
 var cliFailure = (code, path, message) => fail([createError(code, path, message)]);
 var publicDiagnosticMessages = Object.freeze({
