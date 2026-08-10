@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "project_id": "sample-app",
   "knowledge_baseline": "baseline-1",
   "project_identity": {
@@ -48,6 +48,7 @@
       "evidence_refs": ["repo:README.md"],
       "known_gaps": [],
       "paired_assets": {
+        "repository_id": null,
         "en": "knowledge/desktop-experience-en.md",
         "zh-CN": "knowledge/desktop-experience.md"
       },

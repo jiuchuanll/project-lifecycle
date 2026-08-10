@@ -44,6 +44,7 @@ const validateProjectMap = (value) => {
   const constraintById = new Map();
   const lineagePredecessors = new Set();
   const repositoryAssetOwners = new Map();
+  const domainRepositoryOwners = new Map();
 
   for (const entry of entries) {
     if (entriesById.has(entry.id)) {
@@ -73,6 +74,10 @@ const validateProjectMap = (value) => {
       const path = `/repositories/${index}/domain_ids/${domainIndex}`;
       if (!knownDomainIds.has(domainId)) {
         errors.push(createError(ERROR_CODES.REFERENCE_MISSING, path, `Unknown repository domain ID: ${domainId}`));
+      } else if (domainRepositoryOwners.has(domainId)) {
+        errors.push(createError(ERROR_CODES.ID_DUPLICATE, path, `Domain already belongs to repository: ${domainRepositoryOwners.get(domainId)}`));
+      } else {
+        domainRepositoryOwners.set(domainId, repository.id);
       }
     }
     for (const [assetIndex, locator] of repository.knowledge_asset_locators.entries()) {
@@ -95,6 +100,16 @@ const validateProjectMap = (value) => {
       }
       if (!domain.baseline) {
         errors.push(createError(ERROR_CODES.STATE_REQUIREMENT_MISSING, `${path}/baseline`, 'Materialized domains require a baseline.'));
+      }
+    }
+    if (domain.paired_assets) {
+      const expectedRepositoryId = domainRepositoryOwners.get(domain.id) ?? null;
+      if (domain.paired_assets.repository_id !== expectedRepositoryId) {
+        errors.push(createError(
+          ERROR_CODES.SCHEMA_INVALID,
+          `${path}/paired_assets/repository_id`,
+          'Paired asset repository must match the domain canonical repository.',
+        ));
       }
     }
     if (domain.domain_state === 'retired' && !domain.retirement_reason) {
@@ -523,6 +538,13 @@ export const validateJson = (kind, value, options = {}) => {
   const validate = getSchemaValidator(kind);
   if (!validate) {
     return fail([createError(ERROR_CODES.SCHEMA_INVALID, '/', `Unknown schema kind: ${kind}`)]);
+  }
+  if (kind === 'project-map' && value?.schema_version === 1) {
+    return fail([createError(
+      ERROR_CODES.KNOWLEDGE_LAYOUT_MIGRATION_REQUIRED,
+      '/schema_version',
+      'Project knowledge layout must be migrated to schema version 2 before a durable write.',
+    )]);
   }
   if (!validate(value)) return fail(schemaErrors(kind, validate.errors));
 

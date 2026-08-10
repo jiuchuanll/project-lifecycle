@@ -42,6 +42,67 @@ test('accepts the minimal valid project map', async () => {
   assert.deepEqual(result.errors, []);
 });
 
+test('accepts schema v2 with repository-aware recursive paired assets', async () => {
+  const value = await fixture('valid.json');
+  value.schema_version = 2;
+  value.domains[0].domain_state = 'materialized';
+  value.domains[0].baseline = 'baseline:runtime-v2';
+  value.domains[0].paired_assets = {
+    repository_id: null,
+    en: 'knowledge/desktop-experience/desktop-experience-en.md',
+    'zh-CN': 'knowledge/desktop-experience/desktop-experience.md',
+  };
+
+  const result = validateJson('project-map', value);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test('returns a stable migration stop for a schema v1 project map', async () => {
+  const value = await fixture('valid.json');
+  value.schema_version = 1;
+  const result = validateJson('project-map', value);
+
+  assert.deepEqual(result.errors, [{
+    code: 'KNOWLEDGE_LAYOUT_MIGRATION_REQUIRED',
+    path: '/schema_version',
+    message: 'Project knowledge layout must be migrated to schema version 2 before a durable write.',
+  }]);
+});
+
+test('rejects paired asset repository ownership that disagrees with repositories', async () => {
+  const value = await fixture('valid.json');
+  value.schema_version = 2;
+  value.repositories = [{
+    id: 'desktop-repository',
+    purpose: { en: 'Owns desktop knowledge.', 'zh-CN': '负责桌面知识。' },
+    portable_locator: 'github:example/desktop',
+    integration_ref: 'integration:desktop',
+    domain_ids: ['desktop-experience'],
+    knowledge_asset_locators: [
+      'knowledge/desktop-experience/desktop-experience-en.md',
+      'knowledge/desktop-experience/desktop-experience.md',
+    ],
+    accepted_revision: 'revision:desktop-v2',
+  }];
+  value.domains[0].domain_state = 'materialized';
+  value.domains[0].baseline = 'baseline:runtime-v2';
+  value.domains[0].paired_assets = {
+    repository_id: null,
+    en: 'knowledge/desktop-experience/desktop-experience-en.md',
+    'zh-CN': 'knowledge/desktop-experience/desktop-experience.md',
+  };
+
+  const result = validateJson('project-map', value);
+
+  assert.ok(result.errors.some(({ code, path, message }) => (
+    code === 'SCHEMA_INVALID'
+      && path === '/domains/0/paired_assets/repository_id'
+      && message === 'Paired asset repository must match the domain canonical repository.'
+  )));
+});
+
 test('accepts a strict optional canonical project identity and rejects partial or extra identity fields', async () => {
   const value = await fixture('valid.json');
   value.knowledge_baseline = 'baseline:accepted-project';
