@@ -61,6 +61,7 @@ test('builds a deterministic private candidate with the complete explicit releas
     'README.md',
     'README.zh-CN.md',
     'RELEASE-NOTES.md',
+    'LICENSE',
     'docs/migrations/knowledgevault-agent-app.md',
     'support-matrix.json',
     'targeted-regression.json',
