@@ -2,9 +2,10 @@
 
 Status: **NON-RELEASE CANDIDATE**
 
-This private candidate packages the two shared Skills, five thin host
-manifests, bundled Node.js 22+ validator, host tool maps, fixed-root project
-knowledge lifecycle, PRD delivery lifecycle, multi-repository governance,
+This public pre-release evaluation candidate packages the two shared Skills,
+five thin host manifests, bundled Node.js 22+ validator, host tool maps,
+fixed-root project knowledge lifecycle, PRD delivery lifecycle,
+multi-repository governance,
 bounded archive access, retained Gold scenarios, and the read-only
 KnowledgeVault migration recipe.
 

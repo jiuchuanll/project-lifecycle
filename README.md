@@ -2,16 +2,26 @@
 
 [简体中文](README.zh-CN.md)
 
+[![CI](https://github.com/jiuchuanll/project-lifecycle/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/jiuchuanll/project-lifecycle/actions/workflows/ci.yml?query=branch%3Adevelop)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![Status: pre-release](https://img.shields.io/badge/status-pre--release-orange.svg)](#project-status)
+
 Project Lifecycle is a shared, host-neutral plugin for building low-noise,
 traceable project knowledge and running a separate PRD delivery lifecycle. It
 keeps durable knowledge in the project repository and keeps delivery work from
 silently becoming accepted project truth.
 
+## Project status
+
 > [!IMPORTANT]
-> Version `0.1.0` is a private **non-release candidate**. The package and
-> retained conformance evidence are available for evaluation, but no native
-> host currently satisfies the release support gate. Do not create a first
-> release tag or treat the installation guides as production-support claims.
+> This repository is open source, but version `0.1.0` remains a **pre-release
+> evaluation candidate**. It is not published to npm, and no native host
+> currently satisfies the release support gate. Treat the installation guides
+> as evaluation instructions, not production-support claims.
+
+The source, deterministic release archive, and retained conformance evidence
+are public for inspection and contribution. Support claims remain bound to the
+[evidence-backed support matrix](#support-matrix).
 
 ## What the plugin provides
 
@@ -165,6 +175,25 @@ applies the privacy gate. `npm run check:bundle` rebuilds and verifies the
 self-contained validator. On a clean candidate tree,
 `node scripts/package-release.mjs` rebuilds the deterministic archive and
 checksum.
+
+## Contributing
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before
+opening a pull request, and use the
+[issue tracker](https://github.com/jiuchuanll/project-lifecycle/issues) for
+reproducible bugs or bounded feature proposals.
+
+- Target normal contributions at `develop`.
+- Include tests and synchronized English/Chinese documentation when behavior
+  or user-facing guidance changes.
+- Do not commit credentials, private data, generated local state, or
+  machine-specific paths.
+- Protected branches require the `check` status, owner review, and resolved
+  review conversations before merge.
+
+## License
+
+Project Lifecycle is licensed under the [Apache License 2.0](LICENSE).
 
 ## Trust boundaries and known limitations
 

@@ -19,6 +19,8 @@ const RELEASE_FILES = Object.freeze([
   ['.zcode-plugin/plugin.json', '.zcode-plugin/plugin.json'],
   ['README.md', 'README.md'],
   ['README.zh-CN.md', 'README.zh-CN.md'],
+  ['CONTRIBUTING.md', 'CONTRIBUTING.md'],
+  ['CONTRIBUTING.zh-CN.md', 'CONTRIBUTING.zh-CN.md'],
   ['RELEASE-NOTES.md', 'RELEASE-NOTES.md'],
   ['LICENSE', 'LICENSE'],
   ['package.json', 'package.json'],
