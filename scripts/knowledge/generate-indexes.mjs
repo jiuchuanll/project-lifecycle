@@ -302,7 +302,10 @@ const renderDomainEntry = ({
   portableLocator = null,
 }) => {
   const frontmatter = manifest.capabilityPairs.get(domain.id)?.en.frontmatter;
-  const knowledgeState = frontmatter?.knowledge_state ?? 'not-materialized';
+  const knowledgeState = frontmatter?.knowledge_state
+    ?? (domain.domain_state === 'materialized' && layoutDomain.repository_id !== null
+      ? 'remote'
+      : 'not-materialized');
   const target = targetForDomain(layoutDomain, language);
   const portableTarget = target && portableLocator
     ? `${portableLocator}/docs/project-lifecycle/${target}`
@@ -323,6 +326,11 @@ const renderKnowledgeRoot = (map, layout, manifest, repository, language) => {
     manifest,
     language,
     fromDirectory: 'knowledge',
+    portableLocator: repository.repository_id === null
+      ? layout.repositories.find(({ repository_id: repositoryId }) => (
+        repositoryId === layoutById.get(id).repository_id
+      ))?.portable_locator
+      : null,
   }));
   return [
     NOTICE,

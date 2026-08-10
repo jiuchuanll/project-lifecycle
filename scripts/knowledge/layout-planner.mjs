@@ -232,8 +232,8 @@ export const planKnowledgeLayout = ({ map }) => {
       .sort(compareCodePoints);
     const shardEntryIds = domains
       .filter((entry) => {
-        if (entry.repository_id !== repositoryId) return false;
         if (repositoryId === null) return entry.parent_id === null;
+        if (entry.repository_id !== repositoryId) return false;
         if (entry.parent_id === null) return true;
         return (ownership.owners.get(entry.parent_id) ?? null) !== repositoryId;
       })

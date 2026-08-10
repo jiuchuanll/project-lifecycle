@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -846,4 +846,55 @@ test('planner-derived promotion and demotion move a parent pair symmetrically', 
     .then(() => true, () => false), true);
   assert.equal(await readFile(join(lifecycle(root), 'knowledge/runtime/runtime-en.md'), 'utf8')
     .then(() => true, () => false), false);
+});
+
+test('publishes repository-owned topology before advancing the governance map', async (context) => {
+  const root = await setupMaterializedLeaf(context);
+  const shardRoot = await mkdtemp(join(tmpdir(), 'project-lifecycle-topology-shard-'));
+  context.after(() => rm(shardRoot, { force: true, recursive: true }));
+  const shardLifecycle = lifecycle(shardRoot);
+  await mkdir(join(shardLifecycle, 'knowledge'), { recursive: true });
+  const map = await mapAt(root);
+  map.repositories = [{
+    id: 'backend', purpose: { en: 'Owns backend.', 'zh-CN': '负责后端。' },
+    portable_locator: 'github:example/backend', integration_ref: 'refs/heads/main',
+    domain_ids: ['runtime'], knowledge_asset_locators: ['knowledge/runtime-en.md', 'knowledge/runtime.md'],
+    accepted_revision: 'revision:backend',
+  }];
+  map.domains[0].paired_assets.repository_id = 'backend';
+  await writeFile(join(lifecycle(root), 'project-map.json'), `${JSON.stringify(map, null, 2)}\n`);
+  for (const name of ['runtime-en.md', 'runtime.md']) {
+    await rename(join(lifecycle(root), 'knowledge', name), join(shardLifecycle, 'knowledge', name));
+  }
+  const candidate = clone(map);
+  candidate.domains.push({
+    id: 'loop', kind: 'capability', label: { en: 'Loop', 'zh-CN': '循环' },
+    purpose: { en: 'Owns runtime loop.', 'zh-CN': '负责运行循环。' },
+    domain_state: 'confirmed', scope: { includes: ['runtime loop'], excludes: [] },
+    parent_id: 'runtime', relationships: [], evidence_refs: ['repo:src/loop'], known_gaps: [],
+  });
+  candidate.domains.sort((left, right) => left.id < right.id ? -1 : 1);
+  const proposal = semanticProposal(candidate, {
+    change_id: 'change-add-shard-loop', kind: 'topology', trigger_refs: ['decision:add-loop'],
+    source_refs: ['repo:src/loop'], affected_refs: ['loop'], semantic_target_key: 'domain:loop',
+    proposed_patch: { operation: 'ADD_DOMAIN', target_type: 'domain', target_id: 'loop', changed_fields: ['boundary', 'kind', 'lifecycle', 'parentage'], new_ids: [], successor_ids: [] },
+    child_dispositions: [],
+  });
+  assert.equal((await proposeChange({ root, change: proposal })).ok, true);
+
+  const publications = [];
+  const applied = await applyApprovedChange({
+    root, repository_roots: { backend: shardRoot }, change_id: proposal.change_id,
+    approval_ref: 'approval:add-shard-loop',
+    traceability: { knowledge_diff_ref: 'diff:add-shard-loop', history_ref: 'git:add-shard-loop' },
+    candidate_map: candidate, knowledge_updates: [],
+  }, {
+    afterRepositoryPublish: async ({ repository_id: repositoryId }) => publications.push(repositoryId),
+  });
+
+  assert.equal(applied.ok, true, JSON.stringify(applied));
+  assert.equal((await mapAt(root)).domains.find(({ id }) => id === 'runtime').paired_assets.en, 'knowledge/runtime/runtime-en.md');
+  assert.equal((await stat(join(shardLifecycle, 'knowledge/runtime/runtime-en.md'))).isFile(), true);
+  await assert.rejects(stat(join(shardLifecycle, 'knowledge/runtime-en.md')), { code: 'ENOENT' });
+  assert.deepEqual(publications, ['backend', null]);
 });

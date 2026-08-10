@@ -447,6 +447,11 @@ test('collects and renders only the active repository shard from disk', async (c
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.value.files.every(({ repository_id: id }) => id === repositoryId), true);
   assert.equal(result.value.files.some(({ locator }) => locator === 'knowledge/INDEX-en.md'), true);
+  const governance = generateIndexes({ map: crossMap, repository_id: null });
+  assert.equal(governance.ok, true, JSON.stringify(governance));
+  const governanceKnowledge = governance.value.files.find(({ locator }) => locator === 'knowledge/INDEX-en.md').content;
+  assert.match(governanceKnowledge, /github:example\/backend\/docs\/project-lifecycle\/knowledge\/alpha-workspace-en\.md/);
+  assert.match(governanceKnowledge, /knowledge: `remote`/);
 });
 
 test('ships paired index templates as exact output of the inert validated map', async () => {

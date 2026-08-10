@@ -40,7 +40,7 @@ const setupLegacy = async (context) => {
   await rm(join(base, 'knowledge/INDEX-en.md'));
   await rm(join(base, 'knowledge/INDEX.md'));
   const english = join(base, 'knowledge/desktop-experience-en.md');
-  await writeFile(english, `${(await readFile(english, 'utf8')).trimEnd()}\n\n[External guide](https://example.com/guide)\n`);
+  await writeFile(english, `${(await readFile(english, 'utf8')).trimEnd()}\n\n[Delivery](../delivery/item.md)\n\n[External guide](https://example.com/guide)\n`);
   return root;
 };
 
@@ -88,6 +88,7 @@ test('inspects a strict v1 flat layout without writing and reports planned moves
     },
   }]);
   assert.equal(result.value.external_link_risks.length, 1);
+  assert.match(result.value.bodies.find(({ language }) => language === 'en').content, /\(\.\.\/\.\.\/delivery\/item\.md\)/);
   assert.equal(await readFile(join(lifecycle(root), 'project-map.json'), 'utf8'), before);
 });
 

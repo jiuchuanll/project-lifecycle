@@ -184,6 +184,10 @@ test('projects cross-repository descendants as repository-local shard roots', ()
     ['api'],
   );
   assert.deepEqual(
+    result.value.repositories.find(({ repository_id: id }) => id === null).shard_entry_ids,
+    ['runtime'],
+  );
+  assert.deepEqual(
     result.value.domains.find(({ domain_id: id }) => id === 'runtime').direct_children,
     [{ domain_id: 'api', repository_id: 'backend', portable_locator: 'github:example/backend' }],
   );

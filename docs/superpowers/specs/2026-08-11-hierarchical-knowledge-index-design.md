@@ -140,7 +140,7 @@ They do not enumerate domains or descendants.
 
 ### Governance Knowledge index
 
-The governance repository's `knowledge/INDEX.md` and `INDEX-en.md` list only global top-level domains. Each entry contains the localized label, ID, domain state, materialized knowledge state or `not-materialized`, a one-line boundary, and either the domain-directory index or leaf-body link. No descendants are expanded.
+The governance repository's `knowledge/INDEX.md` and `INDEX-en.md` list only global top-level domains, including repository-owned roots through their portable locators. Each entry contains the localized label, ID, domain state, materialized knowledge state, `remote` when the owning shard's accepted Frontmatter is intentionally unavailable locally, or `not-materialized`, plus a one-line boundary and either the domain-directory index or leaf-body link. No descendants are expanded.
 
 ### Repository-shard Knowledge index
 

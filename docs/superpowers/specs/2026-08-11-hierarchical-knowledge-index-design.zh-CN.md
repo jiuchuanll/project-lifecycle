@@ -140,7 +140,7 @@ knowledge/runtime/loop/INDEX-en.md
 
 ### 治理仓 Knowledge INDEX
 
-治理仓 `knowledge/INDEX.md` 与 `INDEX-en.md` 只列全局顶级领域。每项包含本地化名称、ID、领域状态、已物化 knowledge state 或 `not-materialized`、一句边界，以及领域目录 INDEX 或叶子正文链接。不展开后代。
+治理仓 `knowledge/INDEX.md` 与 `INDEX-en.md` 只列全局顶级领域，并通过 portable locator 包含仓库所有的顶层根。每项包含本地化名称、ID、领域状态、已物化 knowledge state；当 owner 分片的已接受 Frontmatter 有意不在本地提供时标记为 `remote`，未物化时标记为 `not-materialized`。每项还包含一句边界，以及领域目录 INDEX 或叶子正文链接。不展开后代。
 
 ### 仓库分片 Knowledge INDEX
 

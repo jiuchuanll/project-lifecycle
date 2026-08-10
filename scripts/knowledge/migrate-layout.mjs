@@ -94,11 +94,10 @@ const relativeLocator = (from, to) => {
 const rewriteLocalLinks = (source, oldLocator, newLocator, moves) => source.replace(
   /(\[[^\]]*\]\()([^)\s]+)((?:\s+[^)]*)?\))/gu,
   (whole, prefix, href, suffix) => {
-    if (/^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith('//') || href.startsWith('#')) return whole;
+    if (/^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith('//') || href.startsWith('/') || href.startsWith('#')) return whole;
     const [path, fragment] = href.split('#');
     const normalized = posix.normalize(posix.join(posix.dirname(oldLocator), path));
-    const target = moves.get(normalized);
-    if (!target) return whole;
+    const target = moves.get(normalized) ?? normalized;
     return `${prefix}${relativeLocator(newLocator, target)}${fragment ? `#${fragment}` : ''}${suffix}`;
   },
 );

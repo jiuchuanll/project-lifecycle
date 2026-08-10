@@ -375,7 +375,14 @@ export async function selectContext(inputValue, operations = {}) {
     ...candidates.filter((id) => id !== input.primary_domain_id),
     ...uniqueSorted([...selectedDomainIds].filter((id) => !candidates.includes(id))),
   ];
-  const requiredRepositories = uniqueSorted(domainOrder
+  const requiredConstraintOwnerIds = map.constraints
+    .filter((constraint) => domainOrder.some((domainId) => applicableConstraint(
+      constraint,
+      domainId,
+      lineageOf(map.domains, domainId),
+    )) || (constraint.lifecycle_state === 'current' && governingOwnerIds.has(constraint.owner_id)))
+    .map(({ owner_id: ownerId }) => ownerId);
+  const requiredRepositories = uniqueSorted([...domainOrder, ...requiredConstraintOwnerIds]
     .map((domainId) => planned.value.domains.find(({ domain_id: id }) => id === domainId)?.repository_id)
     .filter((repositoryId) => repositoryId !== undefined)
     .map((repositoryId) => repositoryId ?? '<governance>'));
