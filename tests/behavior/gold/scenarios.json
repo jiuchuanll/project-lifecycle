@@ -4,6 +4,16 @@
     "family": "RECONNAISSANCE_CALIBRATION",
     "workflow_type": "CODE_SERVICE",
     "summary": "Build a first project map from a bounded evidence packet, then invite project calibration before durable fact materialization.",
+    "v2_behavior_case": {
+      "case_id": "new-two-level-progressive-materialization",
+      "expected_route": "KNOWLEDGE_UPDATE",
+      "expected_stop": null,
+      "selected_context_ids": ["domain:runtime-core", "domain:runtime-tools"],
+      "durable_files_written": ["docs/project-lifecycle/knowledge/INDEX-en.md", "docs/project-lifecycle/knowledge/runtime-core/INDEX-en.md", "docs/project-lifecycle/project-map.json"],
+      "forbidden_writes": ["docs/project-lifecycle/knowledge/runtime-core/runtime-core-en.md"],
+      "archive_paths_read": [],
+      "human_gates": ["INITIAL_CALIBRATION", "DOMAIN_BOUNDARY_CONFIRMATION"]
+    },
     "fixture": {
       "max_entries": 8,
       "files": ["AGENTS.md", "README.md", "docs/architecture/INDEX.md", "package.json", "src/runtime/index.mjs", "test/runtime.test.mjs"]
@@ -52,6 +62,16 @@
     "family": "NOISY_INTENT_ROUTING",
     "workflow_type": "FRONTEND_APPLICATION",
     "summary": "Resolve known aliases from current knowledge, but stop for a user question when two materially different routes remain plausible.",
+    "v2_behavior_case": {
+      "case_id": "three-level-bounded-routing",
+      "expected_route": "KNOWLEDGE_UPDATE",
+      "expected_stop": null,
+      "selected_context_ids": ["domain:article-editor", "constraint:desktop-shell"],
+      "durable_files_written": [],
+      "forbidden_writes": ["docs/project-lifecycle/knowledge/desktop-experience/inbox-workspace-en.md"],
+      "archive_paths_read": [],
+      "human_gates": []
+    },
     "fixture": {
       "max_entries": 6,
       "files": ["docs/project-lifecycle/INDEX-en.md", "docs/project-lifecycle/knowledge/wiki-workspace-en.md", "docs/project-lifecycle/project-map.json", "src/wiki/WikiView.kt"]
@@ -100,6 +120,16 @@
     "family": "PROFESSIONAL_DOMAIN_MATERIALIZATION",
     "workflow_type": "ASSET_MODEL_WORKFLOW",
     "summary": "Materialize verified Live2D rigging knowledge without pretending the generic lifecycle plugin already knows the professional domain.",
+    "v2_behavior_case": {
+      "case_id": "temporary-question-no-write",
+      "expected_route": "OUTSIDE_PLUGIN",
+      "expected_stop": null,
+      "selected_context_ids": ["request:temporary-question"],
+      "durable_files_written": [],
+      "forbidden_writes": ["docs/project-lifecycle/project-map.json", "docs/project-lifecycle/knowledge/INDEX-en.md"],
+      "archive_paths_read": [],
+      "human_gates": []
+    },
     "fixture": {
       "max_entries": 7,
       "files": ["assets/model3.json", "docs/project-lifecycle/INDEX-en.md", "docs/project-lifecycle/project-map.json", "evidence/rig-audit.md", "model/physics3.json"]
@@ -244,6 +274,16 @@
     "family": "TOPOLOGY_CONSTRAINT_EVOLUTION",
     "workflow_type": "CODE_SERVICE",
     "summary": "Change a parent constraint and domain topology through a reviewed candidate while preserving immutable identity and explicit child impact dispositions.",
+    "v2_behavior_case": {
+      "case_id": "existing-flat-layout-migration",
+      "expected_route": "NON_PRD_DELIVERY",
+      "expected_stop": null,
+      "selected_context_ids": ["layout:v1-flat", "layout:v2-recursive"],
+      "durable_files_written": ["docs/project-lifecycle/project-map.json", "docs/project-lifecycle/knowledge/desktop-experience/desktop-experience-en.md", "docs/project-lifecycle/knowledge/desktop-experience/desktop-experience.md"],
+      "forbidden_writes": ["docs/project-lifecycle/knowledge/desktop-experience-en.md", "docs/project-lifecycle/migration-receipt.json"],
+      "archive_paths_read": [],
+      "human_gates": ["LAYOUT_MIGRATION_APPROVAL"]
+    },
     "fixture": {
       "max_entries": 8,
       "files": ["docs/project-lifecycle/INDEX-en.md", "docs/project-lifecycle/knowledge/desktop-experience-en.md", "docs/project-lifecycle/pending-changes.json", "docs/project-lifecycle/project-map.json", "evidence/child-impact.md"]

@@ -29,7 +29,7 @@ const SCENARIO_FIELDS = new Set([
   'expected_route', 'expected_stop', 'explicit_unknowns', 'fact_ownership', 'family',
   'fixture', 'forbidden_archive_paths', 'forbidden_durable_files', 'positive_path',
   'required_durable_files', 'required_human_gates', 'scenario_id', 'summary',
-  'supplied_approval_refs', 'supplied_evidence_refs', 'workflow_type',
+  'supplied_approval_refs', 'supplied_evidence_refs', 'v2_behavior_case', 'workflow_type',
 ]);
 const OBSERVATION_FIELDS = new Set([
   'archive_paths_read', 'completed_scope', 'completed_unit_ids', 'durable_files_written',
@@ -96,12 +96,26 @@ const validateScenario = (scenario, index) => {
   if (!record(scenario) || Object.keys(scenario).some((field) => !SCENARIO_FIELDS.has(field))) {
     return failure('GOLD_SHAPE_INVALID', path, 'Gold scenarios use a closed host-neutral shape.');
   }
-  if ([...SCENARIO_FIELDS].some((field) => !Object.hasOwn(scenario, field))) {
+  if ([...SCENARIO_FIELDS].some((field) => field !== 'v2_behavior_case' && !Object.hasOwn(scenario, field))) {
     return failure('GOLD_FIELD_MISSING', path, 'Every gold semantic contract field is required.');
   }
   if (!ID.test(scenario.scenario_id ?? '') || !FAMILIES.has(scenario.family)
     || !WORKFLOW_TYPES.has(scenario.workflow_type) || !boundedText(scenario.summary)) {
     return failure('GOLD_IDENTITY_INVALID', path, 'Scenario identity, family, workflow, and summary must be bounded.');
+  }
+  if (scenario.v2_behavior_case !== undefined) {
+    const behavior = scenario.v2_behavior_case;
+    const fields = ['archive_paths_read', 'case_id', 'durable_files_written', 'expected_route', 'expected_stop', 'forbidden_writes', 'human_gates', 'selected_context_ids'];
+    if (!record(behavior) || Object.keys(behavior).length !== fields.length
+      || fields.some((field) => !Object.hasOwn(behavior, field))
+      || !ID.test(behavior.case_id ?? '')
+      || ['archive_paths_read', 'durable_files_written', 'forbidden_writes'].some((field) => !safeList(behavior[field], safePath))
+      || ['human_gates', 'selected_context_ids'].some((field) => !safeList(behavior[field]))
+      || ((behavior.expected_route === null) === (behavior.expected_stop === null))
+      || (behavior.expected_route !== null && !ROUTES.has(behavior.expected_route))
+      || (behavior.expected_stop !== null && !STOPS.has(behavior.expected_stop))) {
+      return failure('GOLD_V2_BEHAVIOR_INVALID', `${path}/v2_behavior_case`, 'V2 behavior cases require one bounded route or stop plus explicit context, writes, archive reads, and gates.');
+    }
   }
   if (!record(scenario.fixture) || Object.keys(scenario.fixture).length !== 2
     || !Number.isInteger(scenario.fixture.max_entries) || scenario.fixture.max_entries < 1

@@ -147,6 +147,27 @@ test('makes the five knowledge safety gates explicit', async () => {
   for (const statement of requiredGateStatements) assert.ok(body.includes(statement));
 });
 
+test('defines the recursive v2 layout, migration, and repository-shard contracts', async () => {
+  const { body } = await loadSkill();
+  const context = await readFile(new URL('../../skills/maintain-project-knowledge/references/context-routing.md', import.meta.url), 'utf8');
+  const bootstrap = await readFile(new URL('../../skills/maintain-project-knowledge/references/bootstrap-and-calibration.md', import.meta.url), 'utf8');
+  const materialization = await readFile(new URL('../../skills/maintain-project-knowledge/references/materialization.md', import.meta.url), 'utf8');
+  const topology = await readFile(new URL('../../skills/maintain-project-knowledge/references/topology-and-constraints.md', import.meta.url), 'utf8');
+
+  assert.match(body, /schema v2/);
+  assert.match(body, /`parent_id` is the only vertical-topology source/);
+  assert.match(body, /three bounded classes/);
+  assert.match(context, /repository-local Knowledge root or shard index/);
+  assert.match(context, /`portable_locator`/);
+  assert.match(bootstrap, /ask once for migration approval/);
+  assert.match(bootstrap, /ordinary temporary question performs no migration and no durable write/);
+  assert.match(materialization, /`knowledge\/<id>-en\.md`/);
+  assert.match(materialization, /`paired_assets\.repository_id`/);
+  assert.match(topology, /Adding the first child promotes/);
+  assert.match(topology, /removing or reparenting the last child demotes/);
+  assert.match(topology, /Never synthesize governance ancestor directories/);
+});
+
 test('defines only the narrow knowledge-selection handoff to PRD Lifecycle', async () => {
   const { body } = await loadSkill();
   const handoff = body.match(/<!-- prd-lifecycle-handoff\n([\s\S]*?)\n-->/)?.[1];
