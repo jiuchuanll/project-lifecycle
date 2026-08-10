@@ -14,7 +14,7 @@ const fixture = JSON.parse(await readFile(
   'utf8',
 ));
 const baseMap = () => ({
-  schema_version: 1,
+  schema_version: 2,
   project_id: 'sample-app',
   knowledge_baseline: 'baseline:accepted',
   project_identity: {
@@ -202,10 +202,18 @@ test('creates sorted reviewed repository registrations while locking stable repo
     projectMap: {
       ...baseMap(),
       repositories: [{ ...fixture.repository, id: 'existing-repository' }],
+      domains: [{
+        ...baseMap().domains[0],
+        id: 'backend-service',
+        label: { en: 'Backend service', 'zh-CN': '后端服务' },
+        purpose: { en: 'Owns backend behavior.', 'zh-CN': '负责后端行为。' },
+        scope: { includes: ['backend behavior'], excludes: [] },
+      }, ...baseMap().domains],
     },
     registration: {
       ...fixture.repository,
       id: 'backend-repository',
+      domain_ids: ['backend-service'],
       knowledge_asset_locators: ['knowledge/backend-en.md', 'knowledge/backend.md'],
     },
     approvalRef: 'approval:repository-registration',

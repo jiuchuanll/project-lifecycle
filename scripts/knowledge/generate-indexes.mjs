@@ -305,10 +305,10 @@ const renderDomainEntry = ({
   const portableTarget = target && portableLocator
     ? `${portableLocator}/docs/project-lifecycle/${target}`
     : (target ? posix.relative(fromDirectory, target) : null);
-  const token = portableTarget
+  const domainLink = portableTarget
     ? `[\`domain:${domain.id}\`](${portableTarget})`
     : `\`domain:${domain.id}\``;
-  return `- ${token} — ${inlineMarkdown(domain.label[language])}; state: \`${domain.domain_state}\`; knowledge: \`${knowledgeState}\`; boundary: ${inlineMarkdown(domain.purpose[language])}`;
+  return `- ${domainLink} — ${inlineMarkdown(domain.label[language])}; state: \`${domain.domain_state}\`; knowledge: \`${knowledgeState}\`; boundary: ${inlineMarkdown(domain.purpose[language])}`;
 };
 
 const renderKnowledgeRoot = (map, layout, manifest, repository, language) => {
