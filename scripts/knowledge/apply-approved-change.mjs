@@ -4,7 +4,7 @@ import {
   realpath,
 } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 
 import { validateBilingualPair } from '../lib/bilingual-pair.mjs';
 import { compareCodePoints } from '../lib/deterministic-order.mjs';
@@ -255,6 +255,32 @@ const managedBodySource = (source, { oldId, newId, pairedAsset }) => {
   return `${frontmatter}${source.slice(closing)}`;
 };
 
+const portableRepositoryLocator = (map, repositoryId) => repositoryId === null
+  ? `project:${map.project_id}`
+  : map.repositories.find(({ id }) => id === repositoryId)?.portable_locator;
+
+const relativeLocator = (from, to) => {
+  const path = posix.relative(posix.dirname(from), to);
+  return path.startsWith('.') ? path : `./${path}`;
+};
+
+const rewriteRelocatedLinks = (source, {
+  map, moves, oldLocator, oldRepositoryId, newLocator, newRepositoryId,
+}) => source.replace(
+  /(\[[^\]]*\]\()([^)\s]+)((?:\s+[^)]*)?\))/gu,
+  (whole, prefix, href, suffix) => {
+    if (/^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith('//') || href.startsWith('/') || href.startsWith('#')) return whole;
+    const [path, fragment] = href.split('#');
+    const oldTarget = posix.normalize(posix.join(posix.dirname(oldLocator), path));
+    const target = moves.get(`${oldRepositoryId ?? ''}\0${oldTarget}`)
+      ?? { repository_id: oldRepositoryId, locator: oldTarget };
+    const rewritten = target.repository_id === newRepositoryId
+      ? relativeLocator(newLocator, target.locator)
+      : `${portableRepositoryLocator(map, target.repository_id)}/docs/project-lifecycle/${target.locator}`;
+    return `${prefix}${rewritten}${fragment ? `#${fragment}` : ''}${suffix}`;
+  },
+);
+
 const validatePublishedCandidate = async ({ lifecycleRoot, map, pending, indexFiles, repositoryId }) => {
   try {
     if (repositoryId === null) {
@@ -377,6 +403,20 @@ export async function applyApprovedChange(input, operations = {}) {
   }
 
   const updatesByDomain = new Map(input.knowledge_updates.map((update) => [update.domain_id, update]));
+  const bodyMoves = new Map();
+  for (const currentDomain of currentMap.domains.filter(({ domain_state: state }) => state === 'materialized')) {
+    const candidateDomain = candidateMap.domains.find(({ id }) => id === currentDomain.id)
+      ?? candidateMap.domains.find(({ id }) => (
+        input.candidate_map.domains.find((entry) => entry.id === currentDomain.id)?.successor_id === id
+      ));
+    if (!candidateDomain?.paired_assets) continue;
+    for (const language of ['en', 'zh-CN']) {
+      bodyMoves.set(
+        `${currentDomain.paired_assets.repository_id ?? ''}\0${currentDomain.paired_assets[language]}`,
+        { repository_id: candidateDomain.paired_assets.repository_id, locator: candidateDomain.paired_assets[language] },
+      );
+    }
+  }
   const bodyFilesByRepository = new Map(repositoryIds.map((id) => [id, []]));
   const overlaysByRepository = new Map(repositoryIds.map((id) => [id, {}]));
   try {
@@ -398,6 +438,16 @@ export async function applyApprovedChange(input, operations = {}) {
         }
         if (typeof content !== 'string') {
           return applicationFailure('CHANGE_KNOWLEDGE_UPDATE_INVALID', `/domains/${domain.id}`, 'Every materialized candidate requires a complete localized source pair.');
+        }
+        if (sourceDomain?.paired_assets?.[language]) {
+          content = rewriteRelocatedLinks(content, {
+            map: candidateMap,
+            moves: bodyMoves,
+            oldLocator: sourceDomain.paired_assets[language],
+            oldRepositoryId: sourceDomain.paired_assets.repository_id,
+            newLocator: locator,
+            newRepositoryId: repositoryId,
+          });
         }
         content = managedBodySource(content, {
           oldId: sourceDomain?.id ?? domain.id,

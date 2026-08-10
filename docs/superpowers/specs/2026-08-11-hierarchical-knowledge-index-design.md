@@ -194,7 +194,7 @@ Materializing a child may create required ancestor directories and indexes, but 
 
 When a leaf gains its first child, its localized body moves from the parent directory to `<domain-id>/<domain-id>.md` and `<domain-id>/<domain-id>-en.md`. When a parent loses its last child, the inverse move occurs and obsolete indexes and empty derived directories are removed. Both transformations preserve facts, revisions, baselines, evidence, and knowledge state.
 
-Subtree reparenting requires an accepted pending change and descendant impact analysis. The transaction moves the canonical localized bodies, updates the old and new ancestor chains, updates every locator and exact managed reference affected by the path change, and leaves unrelated branches byte-identical.
+Subtree reparenting requires an accepted pending change and descendant impact analysis. The transaction moves the canonical localized bodies, updates the old and new ancestor chains, rebases local Markdown links (using portable repository locators across ownership boundaries), updates every locator and exact managed reference affected by the path change, and leaves unrelated branches byte-identical.
 
 Localized label changes do not affect paths. A domain-ID replacement creates a new path and requires explicit predecessor/successor handling. Fact IDs remain unchanged unless the facts themselves undergo an independently approved replacement, split, or merge.
 

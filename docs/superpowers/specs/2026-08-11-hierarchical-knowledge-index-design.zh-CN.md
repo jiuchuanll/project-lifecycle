@@ -194,7 +194,7 @@ Bootstrap、materialization、已接受拓扑应用、knowledge absorption、IND
 
 叶子首次产生子领域时，中英文正文从父目录移动到 `<domain-id>/<domain-id>.md` 和 `<domain-id>/<domain-id>-en.md`。父领域失去最后一个子领域时执行逆向移动，并删除失效 INDEX 和空派生目录。两种转换都保持事实、revision、baseline、evidence 和 knowledge state 不变。
 
-子树 reparent 必须先具备已接受 pending change 和后代影响分析。事务移动 canonical 双语正文，更新旧祖先链、新祖先链以及受路径变化影响的所有 locator 和精确插件管理引用，不相关分支保持字节不变。
+子树 reparent 必须先具备已接受 pending change 和后代影响分析。事务移动 canonical 双语正文，更新旧祖先链和新祖先链，重定基于本地的 Markdown 链接（跨所有权边界时使用 portable repository locator），更新受路径变化影响的所有 locator 和精确插件管理引用，不相关分支保持字节不变。
 
 本地化名称变化不改变路径。domain ID replacement 会创建新路径并要求明确 predecessor/successor 处理。事实本身没有独立获批的 replacement、split 或 merge 时，fact ID 保持不变。
 

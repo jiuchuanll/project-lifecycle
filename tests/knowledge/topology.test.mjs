@@ -750,6 +750,10 @@ test('requires a changed bilingual commitment for materialized domain boundary u
 
 test('planner-derived promotion and demotion move a parent pair symmetrically', async (context) => {
   const root = await setupMaterializedLeaf(context);
+  for (const name of ['runtime-en.md', 'runtime.md']) {
+    const path = join(lifecycle(root), 'knowledge', name);
+    await writeFile(path, `${await readFile(path, 'utf8')}\n[Delivery](../delivery/item.md)\n`);
+  }
   const rootIndexPath = join(lifecycle(root), 'INDEX-en.md');
   const rootIndexBefore = await readFile(rootIndexPath, 'utf8');
   const rootIndexTime = (await stat(rootIndexPath)).mtimeMs;
@@ -803,6 +807,8 @@ test('planner-derived promotion and demotion move a parent pair symmetrically', 
     'knowledge/runtime/runtime-en.md#constraint-runtime-rule');
   assert.equal(await readFile(join(lifecycle(root), 'knowledge/runtime/runtime-en.md'), 'utf8')
     .then(() => true, () => false), true);
+  assert.match(await readFile(join(lifecycle(root), 'knowledge/runtime/runtime-en.md'), 'utf8'),
+    /\[Delivery\]\(\.\.\/\.\.\/delivery\/item\.md\)/);
   assert.equal(await readFile(join(lifecycle(root), 'knowledge/runtime-en.md'), 'utf8')
     .then(() => true, () => false), false);
   assert.equal(await readFile(rootIndexPath, 'utf8'), rootIndexBefore);
@@ -845,6 +851,8 @@ test('planner-derived promotion and demotion move a parent pair symmetrically', 
     'knowledge/runtime-en.md#constraint-runtime-rule');
   assert.equal(await readFile(join(lifecycle(root), 'knowledge/runtime-en.md'), 'utf8')
     .then(() => true, () => false), true);
+  assert.match(await readFile(join(lifecycle(root), 'knowledge/runtime-en.md'), 'utf8'),
+    /\[Delivery\]\(\.\.\/delivery\/item\.md\)/);
   assert.equal(await readFile(join(lifecycle(root), 'knowledge/runtime/runtime-en.md'), 'utf8')
     .then(() => true, () => false), false);
   assert.equal(await stat(join(lifecycle(root), 'knowledge/runtime'))

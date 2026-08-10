@@ -253,7 +253,7 @@ test('bounds repository shards and renders portable cross-repository children', 
     domains: [
       makeDomain('api', 'runtime', 'materialized', ['api', 'storage'], 'backend'),
       makeDomain('runtime', null, 'materialized', ['api', 'runtime', 'storage']),
-      makeDomain('storage', 'api', 'retired', ['storage'], 'backend'),
+      { ...makeDomain('storage', 'api', 'merged', ['storage'], 'backend'), successor_id: 'api' },
     ],
   };
   const pairs = crossMap.domains
@@ -285,6 +285,7 @@ test('bounds repository shards and renders portable cross-repository children', 
   assert.match(file(null, 'knowledge/runtime/INDEX-en.md'), /github:example\/backend\/docs\/project-lifecycle\/knowledge\/api\/INDEX-en\.md/);
   const apiIndex = file('backend', 'knowledge/api/INDEX-en.md');
   assert.match(apiIndex, /## Historical direct children[\s\S]*domain:storage/);
+  assert.match(apiIndex, /domain:storage[\s\S]*successor: `domain:api`/);
   assert.doesNotMatch(/## Direct children[\s\S]*?## Historical direct children/u.exec(apiIndex)[0], /domain:storage/);
 });
 

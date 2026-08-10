@@ -313,7 +313,8 @@ const renderDomainEntry = ({
   const domainLink = portableTarget
     ? `[\`domain:${domain.id}\`](${portableTarget})`
     : `\`domain:${domain.id}\``;
-  return `- ${domainLink} — ${inlineMarkdown(domain.label[language])}; state: \`${domain.domain_state}\`; knowledge: \`${knowledgeState}\`; boundary: ${inlineMarkdown(domain.purpose[language])}`;
+  const successor = domain.successor_id ? `; successor: \`domain:${domain.successor_id}\`` : '';
+  return `- ${domainLink} — ${inlineMarkdown(domain.label[language])}; state: \`${domain.domain_state}\`; knowledge: \`${knowledgeState}\`; boundary: ${inlineMarkdown(domain.purpose[language])}${successor}`;
 };
 
 const renderKnowledgeRoot = (map, layout, manifest, repository, language) => {
