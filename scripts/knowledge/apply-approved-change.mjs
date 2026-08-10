@@ -11,6 +11,7 @@ import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
 import { parseFactBlocks } from '../lib/fact-blocks.mjs';
 import { parseFrontmatter } from '../lib/markdown.mjs';
+import { rewriteMarkdownOutsideCode } from '../lib/markdown-links.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
@@ -266,7 +267,7 @@ const relativeLocator = (from, to) => {
 
 const rewriteRelocatedLinks = (source, {
   map, moves, oldLocator, oldRepositoryId, newLocator, newRepositoryId,
-}) => source.replace(
+}) => rewriteMarkdownOutsideCode(source, (text) => text.replace(
   /(\[[^\]]*\]\()([^)\s]+)((?:\s+[^)]*)?\))/gu,
   (whole, prefix, href, suffix) => {
     if (/^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith('//') || href.startsWith('/') || href.startsWith('#')) return whole;
@@ -282,7 +283,7 @@ const rewriteRelocatedLinks = (source, {
       : `${portableRepositoryLocator(map, target.repository_id)}/docs/project-lifecycle/${target.locator}`;
     return `${prefix}${rewritten}${fragment ? `#${fragment}` : ''}${suffix}`;
   },
-);
+));
 
 const validatePublishedCandidate = async ({ lifecycleRoot, map, pending, indexFiles, repositoryId }) => {
   try {

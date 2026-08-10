@@ -455,6 +455,7 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
       if (liveValidation?.ok !== true || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) {
         throw pathError('LAYOUT_TRANSACTION_FAILED');
       }
+      await afterPublish({ lifecycleRoot: paths.lifecycleRoot });
       return ok({
         changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
         unchanged,

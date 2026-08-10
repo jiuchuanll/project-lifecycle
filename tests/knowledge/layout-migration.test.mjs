@@ -221,7 +221,7 @@ test('rewrites a migrated cross-repository body link through the portable projec
   await writeFile(join(lifecycle(governanceRoot), 'knowledge/inbox-workspace-en.md'), frontmatter('inbox-workspace.md'));
   await writeFile(join(lifecycle(governanceRoot), 'knowledge/inbox-workspace.md'), frontmatter('inbox-workspace.md'));
   const shardEnglish = join(lifecycle(shardRoot), 'knowledge/desktop-experience-en.md');
-  await writeFile(shardEnglish, `${await readFile(shardEnglish, 'utf8')}\n[Inbox](./inbox-workspace-en.md)\n`);
+  await writeFile(shardEnglish, `${await readFile(shardEnglish, 'utf8')}\n[Inbox](./inbox-workspace-en.md)\n\n[See \`code\`](./inbox-workspace-en.md)\n\n    [Indented](./inbox-workspace-en.md)\n\nParagraph\n    [Paragraph continuation](./inbox-workspace-en.md)\n\n1. Item\n    [List continuation](./inbox-workspace-en.md)\n\n- ~~~md\n  [List fenced](./inbox-workspace-en.md)\n  ~~~\n\n- Item\n\n    \`\`\`md\n    first\n\n    [Indented list fenced](./inbox-workspace-en.md)\n    \`\`\`\n\n<pre>\n[HTML code](./inbox-workspace-en.md)\n</pre>\n\n<code title=\">\">[Inline HTML](./inbox-workspace-en.md)</code>\n\n<!-- <code> [Comment](./inbox-workspace-en.md) -->\n\\<code> literal [After escaped HTML](./inbox-workspace-en.md)\n\n\`[Blank\n\nline](./inbox-workspace-en.md)\`\n\n\`unmatched\n\n[Between paragraphs](./inbox-workspace-en.md)\n\n\`unmatched\n\n\`[Inline](./inbox-workspace-en.md)\`\n\n${'`[Backslash](./inbox-workspace-en.md)\\`'}\n\n\`[Multiline\n](./inbox-workspace-en.md)\`\n\n\`\`\`md\n- \`\`\`\n[Fenced](./inbox-workspace-en.md)\n\`\`\`\n\n> \`\`\`md\n> [Quoted](./inbox-workspace-en.md)\n> \`\`\`\n\n\\\`[Escaped](./inbox-workspace-en.md)\\\`\n`);
 
   const repository_roots = { backend: shardRoot };
   const inspection = await inspectLegacyKnowledgeLayout({ root: governanceRoot, repository_roots });
@@ -231,6 +231,30 @@ test('rewrites a migrated cross-repository body link through the portable projec
   ));
   assert.match(migrated.content,
     /\[Inbox\]\(project:sample-app\/docs\/project-lifecycle\/knowledge\/inbox-workspace-en\.md\)/);
+  assert.match(migrated.content,
+    /\[See `code`\]\(project:sample-app\/docs\/project-lifecycle\/knowledge\/inbox-workspace-en\.md\)/);
+  assert.match(migrated.content,
+    /\[List continuation\]\(project:sample-app\/docs\/project-lifecycle\/knowledge\/inbox-workspace-en\.md\)/);
+  assert.match(migrated.content,
+    /\[Paragraph continuation\]\(project:sample-app\/docs\/project-lifecycle\/knowledge\/inbox-workspace-en\.md\)/);
+  assert.match(migrated.content, /    \[Indented\]\(\.\/inbox-workspace-en\.md\)/);
+  assert.match(migrated.content, /  \[List fenced\]\(\.\/inbox-workspace-en\.md\)/);
+  assert.match(migrated.content, /    \[Indented list fenced\]\(\.\/inbox-workspace-en\.md\)/);
+  assert.match(migrated.content, /\[HTML code\]\(\.\/inbox-workspace-en\.md\)/);
+  assert.match(migrated.content, /\[Inline HTML\]\(\.\/inbox-workspace-en\.md\)/);
+  assert.match(migrated.content, /\[Comment\]\(\.\/inbox-workspace-en\.md\)/);
+  assert.match(migrated.content,
+    /\[After escaped HTML\]\(project:sample-app\/docs\/project-lifecycle\/knowledge\/inbox-workspace-en\.md\)/);
+  assert.match(migrated.content, /\`\[Blank\n\nline\]\(\.\/inbox-workspace-en\.md\)\`/);
+  assert.match(migrated.content,
+    /\[Between paragraphs\]\(project:sample-app\/docs\/project-lifecycle\/knowledge\/inbox-workspace-en\.md\)/);
+  assert.match(migrated.content, /`\[Inline\]\(\.\/inbox-workspace-en\.md\)`/);
+  assert.match(migrated.content, /`\[Backslash\]\(\.\/inbox-workspace-en\.md\)\\`/);
+  assert.match(migrated.content, /`\[Multiline\n\]\(\.\/inbox-workspace-en\.md\)`/);
+  assert.match(migrated.content, /```md\n- ```\n\[Fenced\]\(\.\/inbox-workspace-en\.md\)\n```/);
+  assert.match(migrated.content, /> \[Quoted\]\(\.\/inbox-workspace-en\.md\)/);
+  assert.match(migrated.content,
+    /\\`\[Escaped\]\(project:sample-app\/docs\/project-lifecycle\/knowledge\/inbox-workspace-en\.md\)\\`/);
 });
 
 test('requires a root for a repository that owns only confirmed domains', async (context) => {

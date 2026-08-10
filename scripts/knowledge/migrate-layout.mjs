@@ -7,6 +7,7 @@ import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
+import { rewriteMarkdownOutsideCode } from '../lib/markdown-links.mjs';
 import { generateIndexesFromRoot } from './generate-indexes.mjs';
 import { pairForDomain, planKnowledgeLayout } from './layout-planner.mjs';
 import {
@@ -105,7 +106,7 @@ const portableRepositoryLocator = (map, repositoryId) => repositoryId === null
 
 const rewriteLocalLinks = (source, {
   map, oldLocator, newLocator, oldRepositoryId, newRepositoryId, moves,
-}) => source.replace(
+}) => rewriteMarkdownOutsideCode(source, (text) => text.replace(
   /(\[[^\]]*\]\()([^)\s]+)((?:\s+[^)]*)?\))/gu,
   (whole, prefix, href, suffix) => {
     if (/^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith('//') || href.startsWith('/') || href.startsWith('#')) return whole;
@@ -117,7 +118,7 @@ const rewriteLocalLinks = (source, {
       : `${portableRepositoryLocator(map, target.repository_id)}/docs/project-lifecycle/${target.locator}`;
     return `${prefix}${rewritten}${fragment ? `#${fragment}` : ''}${suffix}`;
   },
-);
+));
 
 const inspectV1 = async ({ rootsByRepository, map, fingerprint, repositoryFingerprints }) => {
   const governanceRoots = rootsByRepository.get(null);

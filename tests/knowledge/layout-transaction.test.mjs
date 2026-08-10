@@ -107,6 +107,24 @@ test('initializes a complete lifecycle root through the same atomic publication 
   assert.equal(await read(join(root, 'docs/project-lifecycle'), 'knowledge/INDEX-en.md'), 'knowledge\n');
 });
 
+test('rolls back initialization when the post-publish hook fails', async (context) => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-layout-init-hook-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, 'docs'));
+  const result = await applyLayoutTransaction({
+    repositoryRoot: root,
+    initialize: true,
+    candidateFiles: [candidate('project-map.json', '{"schema_version":2}\n')],
+    deleteLocators: [],
+    validateCandidate: async () => ({ ok: true, errors: [] }),
+  }, {
+    afterPublish: async () => { throw new Error('post-publication failure'); },
+  });
+
+  assert.equal(result.ok, false);
+  await assert.rejects(lstat(join(root, 'docs/project-lifecycle')), { code: 'ENOENT' });
+});
+
 test('publishes one changed index while preserving unrelated bytes and mtime', async (context) => {
   const project = await createProject(context);
   const unrelated = join(project.lifecycle, 'knowledge/runtime/INDEX-en.md');
