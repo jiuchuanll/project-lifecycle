@@ -91,7 +91,7 @@ const setup = async (context) => {
     'docs/project-lifecycle/delivery/prd-wiki-refinement.md': '# Wiki 精细化 PRD\n\n两个有边界的交付单元。\n',
   });
   const map = {
-    schema_version: 1,
+    schema_version: 2,
     project_id: fixture.project_id,
     knowledge_baseline: 'baseline:phase4-start',
     project_identity: {
