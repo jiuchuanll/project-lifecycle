@@ -1,6 +1,8 @@
 # Project Lifecycle 0.1.0 candidate notes
 
-Status: **NON-RELEASE CANDIDATE**
+Publication status: **PUBLIC PRE-RELEASE EVALUATION CANDIDATE**
+
+Host support gate: **NON-RELEASE CANDIDATE**
 
 This public pre-release evaluation candidate packages the two shared Skills,
 five thin host manifests, bundled Node.js 22+ validator, host tool maps,
