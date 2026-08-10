@@ -216,7 +216,7 @@ A second run returns `already-v2` with no writes or differences.
 
 ## Multi-Repository Transaction
 
-For a multi-repository migration or topology change, each repository prepares and validates a staged candidate under its accepted baseline and write lease. Publication begins only after every shard and the governance candidate pass validation. The governance map publishes last.
+For a multi-repository migration, topology change, materialization, or accepted Knowledge Diff, each participating repository prepares and validates a staged candidate under its accepted baseline and write lease. Publication begins only after every shard and the governance candidate pass validation. Repository-owned bodies and indexes publish first; the governance map publishes last.
 
 The internal migration call supplies an explicit `repository_roots` mapping for every non-governance owner. Inspection fingerprints every participating lifecycle tree as one approved input. Repository shards retain rollback backups until governance publication succeeds; a shard or governance failure restores every shard already published.
 
@@ -240,7 +240,7 @@ No-change runs perform zero writes. Tests verify both byte equality and unchange
 
 New projects bootstrap directly into v2. Reading a legacy project does not itself cause migration. A durable-write request against legacy layout triggers automatic planning and one human confirmation before the Agent invokes the internal migration operation.
 
-After portable-locator discovery, context selection receives the accepted governance map and an authenticated `currentRepositoryId`. It proceeds only when every selected domain belongs to that current shard; otherwise it returns the next required portable repository locator. This prevents both cross-root reads and an infinite repository-required loop.
+After portable-locator discovery, context selection receives the accepted governance map, an authenticated `currentRepositoryId`, and explicit authenticated `repositoryRoots` for any other selected owners. It reads each locator only against its canonical owner root. If a required owner root is absent, it returns that owner's portable locator; when all required roots are supplied, one bounded call produces the complete receipt without repository-required bouncing.
 
 Context selection starts from the lightweight lifecycle-root index, enters the relevant Knowledge or repository-shard index, and loads only the target domain, applicable ancestor constraints, and required direct dependencies. It does not use the root index to preload every domain.
 

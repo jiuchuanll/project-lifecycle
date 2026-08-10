@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   lstat,
+  mkdir,
   mkdtemp,
   readFile,
   readdir,
@@ -137,6 +138,37 @@ const assertRejectedWithoutMutation = async (context, mutate, expectedCode) => {
   assert.equal(result.errors[0].code, expectedCode);
   assert.deepEqual(await treeSnapshot(project.lifecycleRoot), before);
 };
+
+test('publishes repository-owned materialization before the governance map', async (context) => {
+  const project = await createProject(context);
+  const shardRoot = await mkdtemp(join(tmpdir(), 'project-lifecycle-materialization-shard-'));
+  context.after(() => rm(shardRoot, { recursive: true, force: true }));
+  await mkdir(join(shardRoot, 'docs/project-lifecycle/knowledge'), { recursive: true });
+  const mapPath = join(project.lifecycleRoot, 'project-map.json');
+  const map = await readJson(mapPath);
+  map.repositories = [{
+    id: 'backend', purpose: { en: 'Owns backend.', 'zh-CN': '负责后端。' },
+    portable_locator: 'github:example/backend', integration_ref: 'refs/heads/main',
+    domain_ids: ['wiki-workspace'], knowledge_asset_locators: [], accepted_revision: 'revision:backend',
+  }];
+  await writeFile(mapPath, `${JSON.stringify(map, null, 2)}\n`);
+  const input = await validInput(project.root);
+  input.repository_roots = { backend: shardRoot };
+  const order = [];
+
+  const result = await materializeCapability(input, {
+    afterRepositoryPublish: ({ repository_id: repositoryId }) => order.push(repositoryId),
+  });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(order, ['backend', null]);
+  assert.equal(await readFile(join(shardRoot, 'docs/project-lifecycle/knowledge/wiki-workspace-en.md'), 'utf8')
+    .then(() => true, () => false), true);
+  assert.equal(await readFile(join(project.lifecycleRoot, 'knowledge/wiki-workspace-en.md'), 'utf8')
+    .then(() => true, () => false), false);
+  const publishedMap = await readJson(mapPath);
+  assert.equal(publishedMap.domains.find(({ id }) => id === 'wiki-workspace').paired_assets.repository_id, 'backend');
+});
 
 test('capability templates expose only six Frontmatter fields and exactly eight canonical sections', async () => {
   const expectedFields = [

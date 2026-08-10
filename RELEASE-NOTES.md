@@ -27,9 +27,10 @@ version bump does not upgrade any native-host support claim.
   delivery Frontmatter.
 - Multi-repository governance remains centralized while repository-owned
   implementation knowledge stays in repository-local shards connected by
-  registered portable locators. Index generation is shard-scoped, routing can
-  continue after authenticated shard entry, and migration publishes validated
-  repository shards before the governance map with cross-shard rollback.
+  registered portable locators. Index generation is shard-scoped; routing can
+  combine explicit authenticated owner roots without bouncing; migration,
+  materialization, topology application, and accepted Knowledge Diffs publish
+  validated repository shards before the governance map with cross-shard rollback.
 
 ## Upgrade from 0.1.0
 

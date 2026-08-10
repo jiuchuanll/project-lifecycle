@@ -455,6 +455,13 @@ export async function applyApprovedChange(input, operations = {}) {
     previousIndexes.add('INDEX-en.md');
     previousIndexes.add('INDEX.md');
     const nextIndexes = new Set(indexFiles.map(({ locator }) => locator));
+    const nextDirectories = new Set(candidateLayout.value.directories
+      .filter(({ repository_id: id }) => id === repositoryId)
+      .map(({ locator }) => locator));
+    const obsoleteDirectories = currentLayout.value.directories
+      .filter(({ repository_id: id, locator }) => id === repositoryId && !nextDirectories.has(locator))
+      .map(({ locator }) => locator)
+      .sort((left, right) => right.length - left.length || compareCodePoints(left, right));
     const candidateFiles = [
       ...bodyFiles,
       ...indexFiles.map((file) => ({
@@ -503,8 +510,11 @@ export async function applyApprovedChange(input, operations = {}) {
         .map(({ locator }) => locator),
       candidateFiles,
       deleteLocators: [
-        ...previousBodyLocators.filter((locator) => !nextBodyLocators.has(locator)),
-        ...[...previousIndexes].filter((locator) => !nextIndexes.has(locator)),
+        ...previousBodyLocators.filter((locator) => !nextBodyLocators.has(locator)
+          && !obsoleteDirectories.some((directory) => locator.startsWith(`${directory}/`))),
+        ...[...previousIndexes].filter((locator) => !nextIndexes.has(locator)
+          && !obsoleteDirectories.some((directory) => locator.startsWith(`${directory}/`))),
+        ...obsoleteDirectories,
       ],
       validateCandidate: ({ lifecycleRoot }) => validatePublishedCandidate({
         lifecycleRoot, map: candidateMap, pending: candidatePending, indexFiles, repositoryId,

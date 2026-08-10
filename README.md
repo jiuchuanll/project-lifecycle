@@ -119,8 +119,9 @@ In multi-repository projects, governance identity stays in one map while each
 repository keeps its implementation knowledge in a local Knowledge shard.
 Cross-repository indexes use registered portable locators; bodies are not
 copied into governance. Filesystem-backed index generation reads only the
-active shard, and an Agent continues routing with the accepted governance map
-plus the authenticated current repository identity.
+active shard. An Agent routes with the accepted governance map, the authenticated
+current repository identity, and explicit authenticated roots for additional
+selected owners; missing roots remain portable-locator handoffs.
 
 Existing `0.1.0` flat knowledge trees require one explicit migration approval.
 The Agent previews moves and external-link risks, then invokes the internal

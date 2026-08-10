@@ -5,7 +5,7 @@ Use this reference to select the smallest accepted knowledge context for a task 
 ## Inputs and Source Order
 
 1. Resolve `docs/project-lifecycle/project-map.json`, or a compact project pointer whose governance locator resolves to a matching accepted v2 map. A v1 map stops with migration required before any knowledge body is read.
-2. When the selected owner is another repository, follow its registered portable locator and continue with the accepted governance map plus the authenticated current repository ID. Read only indexes and bodies owned by that shard; if the selection spans another owner, stop again with that owner's locator instead of resolving its paths locally.
+2. When the selected owner is another repository, follow its registered portable locator and continue with the accepted governance map plus the authenticated current repository ID. For a selection spanning owners, provide each discovered owner as an explicit authenticated `repositoryRoots` entry; read every index and body only against its canonical owner root. If any owner root is missing, stop with that owner's locator.
 3. Verify map-declared paired assets against the canonical layout, then read the English lifecycle-root index, repository-local Knowledge root or shard index, and only the direct-child indexes on the selected branch. Treat Chinese files as user-facing mirrors.
 4. Route to the most specific confirmed node matching the user's language, purpose, scope, stable aliases, and current facts.
 5. Add only applicable global principles, exact propagated constraint sections, declared dependencies, coordination seams touched by the task, and task-linked active delivery.

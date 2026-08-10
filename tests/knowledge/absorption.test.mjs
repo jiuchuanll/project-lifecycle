@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { cp, mkdtemp, readFile, readdir, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -9,6 +9,7 @@ import {
   applyKnowledgeDiff,
   computeKnowledgeDiffCommitment,
 } from '../../scripts/knowledge/apply-knowledge-diff.mjs';
+import { generateIndexesFromRoot } from '../../scripts/knowledge/generate-indexes.mjs';
 import { parseFactBlocks } from '../../scripts/lib/fact-blocks.mjs';
 
 const fixtureRoot = new URL('../fixtures/knowledge/topology/base/', import.meta.url);
@@ -155,6 +156,49 @@ test('applies a disjoint accepted ADD and atomically advances pair, owner, map, 
     ['desktop-theme-fact', 1],
   ]);
   assert.match(await readFile(join(lifecycle(root), 'INDEX-en.md'), 'utf8'), /baseline-2/);
+});
+
+test('publishes an accepted Knowledge Diff in its owning repository before governance', async (context) => {
+  const root = await setup(context);
+  const envelope = await accepted(root, 'ADD', addBlock);
+  const shardRoot = await mkdtemp(join(tmpdir(), 'project-lifecycle-absorption-shard-'));
+  context.after(() => rm(shardRoot, { force: true, recursive: true }));
+  const shardLifecycle = lifecycle(shardRoot);
+  await mkdir(join(shardLifecycle, 'knowledge/desktop-experience'), { recursive: true });
+  const mapPath = join(lifecycle(root), 'project-map.json');
+  const map = await readJson(mapPath);
+  map.repositories = [{
+    id: 'desktop', purpose: { en: 'Owns desktop.', 'zh-CN': '负责桌面。' },
+    portable_locator: 'github:example/desktop', integration_ref: 'refs/heads/main',
+    domain_ids: ['desktop-experience'], knowledge_asset_locators: [], accepted_revision: 'revision:desktop',
+  }];
+  const desktop = map.domains.find(({ id }) => id === 'desktop-experience');
+  desktop.paired_assets.repository_id = 'desktop';
+  for (const language of ['en', 'zh-CN']) {
+    const locator = desktop.paired_assets[language];
+    await rename(join(lifecycle(root), locator), join(shardLifecycle, locator));
+  }
+  await writeFile(mapPath, `${JSON.stringify(map, null, 2)}\n`);
+  for (const [repositoryId, lifecycleRoot] of [[null, lifecycle(root)], ['desktop', shardLifecycle]]) {
+    const generated = await generateIndexesFromRoot({ map, lifecycleRoot, repository_id: repositoryId });
+    assert.equal(generated.ok, true, JSON.stringify(generated));
+    for (const file of generated.value.files) {
+      await mkdir(join(lifecycleRoot, file.locator, '..'), { recursive: true });
+      await writeFile(join(lifecycleRoot, file.locator), file.content);
+    }
+  }
+  envelope.repository_roots = { desktop: shardRoot };
+  const order = [];
+
+  const result = await applyKnowledgeDiff(envelope, {
+    afterRepositoryPublish: ({ repository_id: repositoryId }) => order.push(repositoryId),
+  });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(order, ['desktop', null]);
+  assert.match(await readFile(join(shardLifecycle, desktop.paired_assets.en), 'utf8'), /desktop-theme-fact/);
+  assert.doesNotMatch(await readFile(join(lifecycle(root), desktop.paired_assets.en), 'utf8').catch(() => ''), /desktop-theme-fact/);
+  assert.equal((await readJson(mapPath)).knowledge_baseline, 'baseline-2');
 });
 
 test('accepted knowledge absorption preserves unrelated relative symlinks during root publication', async (context) => {

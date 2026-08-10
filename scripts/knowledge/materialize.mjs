@@ -22,7 +22,12 @@ import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 import { generateIndexesFromRoot } from './generate-indexes.mjs';
 import { pairForDomain, planKnowledgeLayout } from './layout-planner.mjs';
-import { applyLayoutTransaction, inspectLifecycleTree } from './layout-transaction.mjs';
+import {
+  applyLayoutTransaction,
+  finalizeRetainedLayout,
+  inspectLifecycleTree,
+  rollbackRetainedLayout,
+} from './layout-transaction.mjs';
 
 const englishTemplateUrl = new URL(
   '../../skills/maintain-project-knowledge/assets/capability-en.md',
@@ -405,19 +410,21 @@ const inspectCandidate = async ({
   expectedMap,
   expectedFiles,
   expectedDirectories,
+  repositoryId = null,
 }) => {
   try {
-    const [map, pending, deliveryState] = await Promise.all([
-      readJson(join(lifecycleRoot, 'project-map.json')),
-      readJson(join(lifecycleRoot, 'pending-changes.json')),
-      fileState(join(lifecycleRoot, 'delivery')),
-    ]);
-    if (!same(map, expectedMap)
-      || !deliveryState?.isDirectory()
-      || deliveryState.isSymbolicLink()) return false;
-    const mapValidation = validateJson('project-map', map);
-    const pendingValidation = validateJson('pending-changes', pending);
-    if (!mapValidation.ok || !pendingValidation.ok) return false;
+    if (repositoryId === null) {
+      const [map, pending, deliveryState] = await Promise.all([
+        readJson(join(lifecycleRoot, 'project-map.json')),
+        readJson(join(lifecycleRoot, 'pending-changes.json')),
+        fileState(join(lifecycleRoot, 'delivery')),
+      ]);
+      if (!same(map, expectedMap)
+        || !deliveryState?.isDirectory()
+        || deliveryState.isSymbolicLink()
+        || !validateJson('project-map', map).ok
+        || !validateJson('pending-changes', pending).ok) return false;
+    }
     for (const directory of expectedDirectories) {
       const state = await fileState(join(lifecycleRoot, directory));
       if (!state?.isDirectory() || state.isSymbolicLink()) return false;
@@ -427,11 +434,13 @@ const inspectCandidate = async ({
       if (!state?.isFile() || state.isSymbolicLink()
         || await readFile(join(lifecycleRoot, file.locator), 'utf8') !== file.content) return false;
     }
-    for (const domain of map.domains.filter(({ domain_state: state }) => state === 'materialized')) {
+    for (const domain of expectedMap.domains.filter(({ domain_state: state, paired_assets: pair }) => (
+      state === 'materialized' && pair.repository_id === repositoryId
+    ))) {
       const pairValidation = await validateBilingualPair(
         join(lifecycleRoot, domain.paired_assets.en),
         join(lifecycleRoot, domain.paired_assets['zh-CN']),
-        map,
+        expectedMap,
       );
       if (!pairValidation.ok) return false;
     }
@@ -455,7 +464,7 @@ const validateInputShape = (input) => {
     'targets',
     'pair',
   ];
-  const allowed = new Set([...required, 'approval_ref']);
+  const allowed = new Set([...required, 'approval_ref', 'repository_roots']);
   if (!isRecord(input)
     || required.some((field) => !Object.hasOwn(input, field))
     || Object.keys(input).some((field) => !allowed.has(field))
@@ -474,6 +483,10 @@ const validateInputShape = (input) => {
       '/arguments',
       'Complete canonical materialization inputs are required.',
     );
+  }
+  if (Object.hasOwn(input, 'repository_roots') && (!isRecord(input.repository_roots)
+    || Object.values(input.repository_roots).some((root) => typeof root !== 'string' || !isAbsolute(root)))) {
+    return materializationFailure('MATERIALIZATION_INPUT_INVALID', '/repository_roots', 'Repository roots must be explicit absolute project directories.');
   }
   if (input.knowledge_state === 'current' && !isNonEmptyString(input.approval_ref)) {
     return materializationFailure(
@@ -615,8 +628,25 @@ export async function materializeCapability(input, operations = {}) {
   const planned = planKnowledgeLayout({ map: candidateMap });
   if (!planned.ok) return planned;
   const canonicalPair = pairForDomain(planned.value, input.domain_id);
+  const ownerRepositoryId = canonicalPair.repository_id;
+  let ownerRoots = { projectRoot: input.root, lifecycleRoot };
+  if (ownerRepositoryId !== null) {
+    const ownerRoot = input.repository_roots?.[ownerRepositoryId];
+    if (!isNonEmptyString(ownerRoot)) {
+      return materializationFailure('MATERIALIZATION_ROOT_INVALID', `/repository_roots/${ownerRepositoryId}`, 'The owning repository requires one explicit local root.');
+    }
+    try {
+      ownerRoots = await resolveLifecyclePaths(ownerRoot);
+    } catch (error) {
+      return materializationFailure(
+        stableWriteCodes.has(error?.code) ? error.code : 'MATERIALIZATION_ROOT_INVALID',
+        `/repository_roots/${ownerRepositoryId}`,
+        'The owning repository root is invalid.',
+      );
+    }
+  }
   const expectedTargets = { en: canonicalPair.en, 'zh-CN': canonicalPair['zh-CN'] };
-  const targetResult = await validateTargets(lifecycleRoot, input.targets, expectedTargets);
+  const targetResult = await validateTargets(ownerRoots.lifecycleRoot, input.targets, expectedTargets);
   if (!targetResult.ok) return targetResult;
   candidateNode.paired_assets = canonicalPair;
   const candidateMapValidation = validateJson('project-map', candidateMap);
@@ -680,93 +710,123 @@ export async function materializeCapability(input, operations = {}) {
     if (!validation.ok) return validation;
   }
 
-  const indexes = await generateIndexesFromRoot({
-    map: candidateMap,
-    lifecycleRoot,
-    overlays: {
-      [input.targets.en]: englishDocument,
-      [input.targets['zh-CN']]: chineseDocument,
-    },
-  });
-  if (!indexes.ok) {
-    return materializationFailure(
-      'MATERIALIZATION_INDEX_INVALID',
-      '/',
-      'Generated indexes cannot be rebuilt from validated navigation Frontmatter.',
-    );
-  }
-  const expectedFiles = indexes.value.files.filter(({ repository_id: repositoryId }) => repositoryId === null);
-  const expectedDirectories = [...new Set([
-    'delivery',
-    ...indexes.value.layout.directories
-      .filter(({ repository_id: repositoryId }) => repositoryId === null)
-      .map(({ locator }) => locator),
-  ])].sort(compareCodePoints);
-  const candidateFiles = [
-    {
-      repository_id: null,
-      locator: input.targets.en,
-      content: englishDocument,
-      validate: async (source) => validateRenderedDocument(source),
-    },
-    {
-      repository_id: null,
-      locator: input.targets['zh-CN'],
-      content: chineseDocument,
-      validate: async (source) => validateRenderedDocument(source),
-    },
-    {
-      repository_id: null,
-      locator: 'project-map.json',
-      content: jsonContent(candidateMap),
-      validate: async (source) => {
-        try {
-          return validateJson('project-map', JSON.parse(source));
-        } catch {
-          return materializationFailure('SCHEMA_INVALID', '/', 'Invalid project-map candidate.');
-        }
-      },
-    },
-    ...expectedFiles.map((file) => ({
-      repository_id: null,
-      locator: file.locator,
-      content: file.content,
-      validate: async (source) => validateIndex(source, file.content, file.language),
-    })),
-  ];
-  const published = await applyLayoutTransaction({
-    repositoryRoot: input.root,
-    expectedFingerprint: originalFingerprint,
-    candidateFiles,
-    candidateDirectories: expectedDirectories,
-    deleteLocators: [],
-    validateCandidate: async ({ lifecycleRoot: candidateRoot }) => ({
-      ok: await inspectCandidate({
-        lifecycleRoot: candidateRoot,
-        expectedMap: candidateMap,
-        expectedFiles,
-        expectedDirectories,
-      }),
-      errors: [],
-    }),
-  }, operations);
-  if (!published.ok) {
-    const error = published.errors[0];
-    if (error.code === 'LAYOUT_RESTORE_FAILED') {
-      return materializationFailure('MATERIALIZATION_RESTORE_FAILED', error.path, error.message);
+  const repositoryIds = ownerRepositoryId === null ? [null] : [ownerRepositoryId, null];
+  const rootsByRepository = new Map([[null, { projectRoot: input.root, lifecycleRoot }], [ownerRepositoryId, ownerRoots]]);
+  const indexesByRepository = new Map();
+  const fingerprints = new Map([[null, originalFingerprint]]);
+  for (const repositoryId of repositoryIds) {
+    const repositoryRoots = rootsByRepository.get(repositoryId);
+    const indexes = await generateIndexesFromRoot({
+      map: candidateMap,
+      lifecycleRoot: repositoryRoots.lifecycleRoot,
+      repository_id: repositoryId,
+      overlays: repositoryId === ownerRepositoryId ? {
+        [input.targets.en]: englishDocument,
+        [input.targets['zh-CN']]: chineseDocument,
+      } : {},
+    });
+    if (!indexes.ok) {
+      return materializationFailure('MATERIALIZATION_INDEX_INVALID', '/', 'Generated indexes cannot be rebuilt from validated navigation Frontmatter.');
     }
-    return materializationFailure(
-      stableWriteCodes.has(error.code) ? error.code : 'MATERIALIZATION_WRITE_FAILED',
-      '/',
-      'Capability materialization could not be completed.',
-    );
+    indexesByRepository.set(repositoryId, indexes.value.files);
+    if (!fingerprints.has(repositoryId)) {
+      const inspected = await inspectLifecycleTree({ repositoryRoot: repositoryRoots.projectRoot });
+      if (!inspected.ok) return materializationFailure('MATERIALIZATION_ROOT_INVALID', '/', 'The owning repository changed before publication.');
+      fingerprints.set(repositoryId, inspected.value.fingerprint);
+    }
+  }
+
+  const retained = [];
+  let cleanupPending = false;
+  const recoveryArtifacts = [];
+  for (const repositoryId of repositoryIds) {
+    const repositoryRoots = rootsByRepository.get(repositoryId);
+    const expectedFiles = indexesByRepository.get(repositoryId);
+    const expectedDirectories = [...new Set([
+      ...(repositoryId === null ? ['delivery'] : []),
+      ...planned.value.directories
+        .filter(({ repository_id: id }) => id === repositoryId)
+        .map(({ locator }) => locator),
+    ])].sort(compareCodePoints);
+    const candidateFiles = [
+      ...(repositoryId === ownerRepositoryId ? [{
+        repository_id: repositoryId,
+        locator: input.targets.en,
+        content: englishDocument,
+        validate: async (source) => validateRenderedDocument(source),
+      }, {
+        repository_id: repositoryId,
+        locator: input.targets['zh-CN'],
+        content: chineseDocument,
+        validate: async (source) => validateRenderedDocument(source),
+      }] : []),
+      ...(repositoryId === null ? [{
+        repository_id: null,
+        locator: 'project-map.json',
+        content: jsonContent(candidateMap),
+        validate: async (source) => {
+          try { return validateJson('project-map', JSON.parse(source)); } catch { return materializationFailure('SCHEMA_INVALID', '/', 'Invalid project-map candidate.'); }
+        },
+      }] : []),
+      ...expectedFiles.map((file) => ({
+        repository_id: repositoryId,
+        locator: file.locator,
+        content: file.content,
+        validate: async (source) => validateIndex(source, file.content, file.language),
+      })),
+    ];
+    const published = await applyLayoutTransaction({
+      repositoryRoot: repositoryRoots.projectRoot,
+      expectedFingerprint: fingerprints.get(repositoryId),
+      candidateFiles,
+      candidateDirectories: expectedDirectories,
+      deleteLocators: [],
+      validateCandidate: async ({ lifecycleRoot: candidateRoot }) => ({
+        ok: await inspectCandidate({
+          lifecycleRoot: candidateRoot,
+          expectedMap: candidateMap,
+          expectedFiles,
+          expectedDirectories,
+          repositoryId,
+        }),
+        errors: [],
+      }),
+    }, {
+      ...operations,
+      retainBackup: repositoryId !== null,
+      afterPublish: async (context) => {
+        await operations.afterPublish?.({ ...context, repository_id: repositoryId });
+        await operations.afterRepositoryPublish?.({ ...context, repository_id: repositoryId });
+      },
+    });
+    if (!published.ok) {
+      for (const prior of retained.reverse()) {
+        const restored = await rollbackRetainedLayout(prior, operations);
+        if (!restored.ok) return materializationFailure('MATERIALIZATION_RESTORE_FAILED', '/', 'The owning repository could not be restored.');
+      }
+      const error = published.errors[0];
+      if (error.code === 'LAYOUT_RESTORE_FAILED') return materializationFailure('MATERIALIZATION_RESTORE_FAILED', error.path, error.message);
+      return materializationFailure(stableWriteCodes.has(error.code) ? error.code : 'MATERIALIZATION_WRITE_FAILED', '/', 'Capability materialization could not be completed.');
+    }
+    if (published.value.retained_publication) retained.push(published.value);
+    else {
+      cleanupPending ||= published.value.cleanup_pending;
+      recoveryArtifacts.push(...published.value.recovery_artifacts);
+    }
+  }
+  for (const prior of retained) {
+    const finalized = await finalizeRetainedLayout(prior, operations);
+    if (!finalized.ok) {
+      cleanupPending = true;
+      recoveryArtifacts.push('backup');
+    }
   }
   return ok({
     baseline: input.baseline,
     domain_id: input.domain_id,
     knowledge_state: input.knowledge_state,
     status: 'materialized',
-    cleanup_state: published.value.cleanup_pending ? 'pending' : 'complete',
-    ...(published.value.cleanup_pending ? { recovery_artifacts: published.value.recovery_artifacts } : {}),
+    cleanup_state: cleanupPending ? 'pending' : 'complete',
+    ...(recoveryArtifacts.length > 0 ? { recovery_artifacts: [...new Set(recoveryArtifacts)] } : {}),
   });
 }

@@ -299,6 +299,18 @@ export async function selectContext(inputValue, operations = {}) {
     || map.repositories.some(({ id }) => id === currentRepositoryId))) {
     return failure('CONTEXT_REPOSITORY_INVALID', '/currentRepositoryId', 'The authenticated current repository is not registered by the governance map.');
   }
+  const lifecycleRootsByRepository = new Map([[currentRepositoryId, lifecycleRoot]]);
+  try {
+    for (const [key, root] of Object.entries(operations.repositoryRoots ?? {})) {
+      const repositoryId = key === '<governance>' ? null : key;
+      if (!(repositoryId === null || map.repositories.some(({ id }) => id === repositoryId))) {
+        return failure('CONTEXT_REPOSITORY_INVALID', `/repositoryRoots/${key}`, 'Repository roots must belong to the validated governance map.');
+      }
+      lifecycleRootsByRepository.set(repositoryId, await resolveLifecycleRoot(root));
+    }
+  } catch (error) {
+    return failure(error?.code ?? 'CONTEXT_ROOT_INVALID', '/repositoryRoots', 'Repository roots must be bounded project directories.');
+  }
   const planned = planKnowledgeLayout({ map });
   if (!planned.ok) return planned;
   for (const domain of map.domains) {
@@ -387,7 +399,10 @@ export async function selectContext(inputValue, operations = {}) {
     .filter((repositoryId) => repositoryId !== undefined)
     .map((repositoryId) => repositoryId ?? '<governance>'));
   const currentRepositoryKey = currentRepositoryId ?? '<governance>';
-  const requiredRepositoryKey = requiredRepositories.find((repositoryId) => repositoryId !== currentRepositoryKey);
+  const requiredRepositoryKey = requiredRepositories.find((repositoryId) => (
+    repositoryId !== currentRepositoryKey
+      && !lifecycleRootsByRepository.has(repositoryId === '<governance>' ? null : repositoryId)
+  ));
   if (requiredRepositoryKey !== undefined) {
     const requiredRepositoryId = requiredRepositoryKey === '<governance>' ? null : requiredRepositoryKey;
     const repository = map.repositories.find(({ id }) => id === requiredRepositoryId);
@@ -399,10 +414,14 @@ export async function selectContext(inputValue, operations = {}) {
   }
 
   try {
-    for (const locator of navigationLocatorsFor(planned.value, domainOrder, currentRepositoryId)) {
-      const path = await resolveReadable(lifecycleRoot, locator);
-      const bytesRead = await readBoundedNavigationIndex(path);
-      onRead({ level: 'L0', locator, section: 'navigation-index', bytes_read: bytesRead });
+    for (const repositoryKey of requiredRepositories) {
+      const repositoryId = repositoryKey === '<governance>' ? null : repositoryKey;
+      const repositoryLifecycleRoot = lifecycleRootsByRepository.get(repositoryId);
+      for (const locator of navigationLocatorsFor(planned.value, domainOrder, repositoryId)) {
+        const path = await resolveReadable(repositoryLifecycleRoot, locator);
+        const bytesRead = await readBoundedNavigationIndex(path);
+        onRead({ level: 'L0', locator, repository_id: repositoryId, section: 'navigation-index', bytes_read: bytesRead });
+      }
     }
   } catch (error) {
     return failure(error?.code ?? 'CONTEXT_INDEX_INVALID', '/indexes', 'Canonical bounded navigation indexes are required before knowledge reads.');
@@ -447,7 +466,8 @@ export async function selectContext(inputValue, operations = {}) {
       return failure('CONTEXT_CONSTRAINT_INVALID', `/constraints/${constraint.id}`, 'Constraint knowledge reference must resolve to its exact current owner asset and anchor.');
     }
     try {
-      const path = await resolveReadable(lifecycleRoot, owner.paired_assets.en);
+      const ownerRoot = lifecycleRootsByRepository.get(owner.paired_assets.repository_id);
+      const path = await resolveReadable(ownerRoot, owner.paired_assets.en);
       const section = await readBoundedConstraintSection(path, constraint.id, constraint.semantic_revision);
       onRead({
         level: 'L1', locator: owner.paired_assets.en, section: 'constraint-anchor', bytes_read: section.bytesRead,
@@ -470,7 +490,8 @@ export async function selectContext(inputValue, operations = {}) {
     }
     let frontmatter;
     try {
-      const path = await resolveReadable(lifecycleRoot, domain.paired_assets.en);
+      const domainRoot = lifecycleRootsByRepository.get(domain.paired_assets.repository_id);
+      const path = await resolveReadable(domainRoot, domain.paired_assets.en);
       const source = await readFrontmatterPrefix(path);
       onRead({ level: index === 0 ? 'L2' : 'L3', locator: domain.paired_assets.en, section: 'frontmatter' });
       const parsed = parseFrontmatter(source, 'capability-frontmatter');
@@ -503,7 +524,9 @@ export async function selectContext(inputValue, operations = {}) {
     deliveryIds.add(reference.artifact_id);
     let frontmatter;
     try {
-      const path = await resolveReadable(lifecycleRoot, reference.locator);
+      const governanceRoot = lifecycleRootsByRepository.get(null);
+      if (!governanceRoot) return failure('CONTEXT_REPOSITORY_REQUIRED', '/repositories/governance', 'Task delivery routing requires the governance repository.');
+      const path = await resolveReadable(governanceRoot, reference.locator);
       const source = await readFrontmatterPrefix(path);
       const parsed = parseFrontmatter(source, 'delivery-frontmatter');
       if (!parsed.ok) return parsed;

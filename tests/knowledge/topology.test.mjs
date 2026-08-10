@@ -846,6 +846,8 @@ test('planner-derived promotion and demotion move a parent pair symmetrically', 
     .then(() => true, () => false), true);
   assert.equal(await readFile(join(lifecycle(root), 'knowledge/runtime/runtime-en.md'), 'utf8')
     .then(() => true, () => false), false);
+  assert.equal(await stat(join(lifecycle(root), 'knowledge/runtime'))
+    .then(() => true, () => false), false);
 });
 
 test('publishes repository-owned topology before advancing the governance map', async (context) => {

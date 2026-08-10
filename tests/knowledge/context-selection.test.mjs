@@ -523,6 +523,62 @@ test('continues bounded routing after the agent enters the authenticated owning 
   assert.deepEqual(result.value.selected_context.map(({ id }) => id), ['wiki-workspace']);
 });
 
+test('converges a selection spanning two authenticated repository shards', async (context) => {
+  const map = structuredClone(projectMap);
+  map.constraints = [];
+  map.domains = [
+    map.domains.find(({ id }) => id === 'wiki-workspace'),
+    map.domains.find(({ id }) => id === 'unrelated-workspace'),
+  ];
+  for (const domain of map.domains) {
+    domain.parent_id = null;
+    domain.relationships = [];
+    domain.paired_assets = {
+      repository_id: domain.id === 'wiki-workspace' ? 'backend' : 'frontend',
+      en: `knowledge/${domain.id}-en.md`,
+      'zh-CN': `knowledge/${domain.id}.md`,
+    };
+  }
+  map.domains[0].relationships = [{ kind: 'depends_on', target_id: 'unrelated-workspace' }];
+  map.domains.sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+  map.repositories = ['backend', 'frontend'].map((id) => ({
+    id, purpose: { en: `Owns ${id}.`, 'zh-CN': `负责 ${id}。` },
+    portable_locator: `github:example/${id}`, integration_ref: 'refs/heads/main',
+    domain_ids: [id === 'backend' ? 'wiki-workspace' : 'unrelated-workspace'],
+    knowledge_asset_locators: [], accepted_revision: `revision:${id}`,
+  }));
+  const roots = {};
+  for (const repositoryId of ['backend', 'frontend']) {
+    const root = await mkdtemp(join(tmpdir(), `project-lifecycle-context-${repositoryId}-`));
+    context.after(() => rm(root, { recursive: true, force: true }));
+    const lifecycleRoot = join(root, 'docs/project-lifecycle');
+    await mkdir(join(lifecycleRoot, 'knowledge'), { recursive: true });
+    const domain = map.domains.find(({ paired_assets: pair }) => pair.repository_id === repositoryId);
+    await writeFile(join(lifecycleRoot, domain.paired_assets.en), capability(domain.id, `${domain.id}.md`));
+    await writeFile(join(lifecycleRoot, domain.paired_assets['zh-CN']), capability(domain.id, `${domain.id}.md`));
+    const generated = await generateIndexesFromRoot({ map, lifecycleRoot, repository_id: repositoryId });
+    assert.equal(generated.ok, true, JSON.stringify(generated));
+    for (const file of generated.value.files) {
+      await mkdir(dirname(join(lifecycleRoot, file.locator)), { recursive: true });
+      await writeFile(join(lifecycleRoot, file.locator), file.content);
+    }
+    roots[repositoryId] = root;
+  }
+
+  const result = await selectContext({
+    ...baseInput(roots.backend), primary_domain_id: 'wiki-workspace', candidate_domain_ids: ['wiki-workspace'],
+    applicable_relationships: [{ source_id: 'wiki-workspace', kind: 'depends_on', target_id: 'unrelated-workspace' }],
+    task_delivery_refs: [],
+  }, {
+    governanceMap: map,
+    currentRepositoryId: 'backend',
+    repositoryRoots: { frontend: roots.frontend },
+  });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(result.value.selected_context.map(({ id }) => id), ['unrelated-workspace', 'wiki-workspace']);
+});
+
 test('accepts CRLF and reordered Frontmatter keys without reading the body', async (context) => {
   const root = await setup(context);
   const path = join(root, 'docs/project-lifecycle/knowledge/desktop-experience/wiki-workspace-en.md');

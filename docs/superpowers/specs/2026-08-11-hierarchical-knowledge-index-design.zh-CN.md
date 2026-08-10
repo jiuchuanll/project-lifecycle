@@ -216,7 +216,7 @@ Skill 指示 Agent 识别旧布局，在不写入的情况下勘察，解释完�
 
 ## 多仓事务
 
-多仓迁移或拓扑变化时，每个仓在已接受 baseline 和 write lease 下准备并验证 staged candidate。只有所有分片和治理 candidate 全部通过后才开始发布，治理 map 最后发布。
+多仓迁移、拓扑变化、知识物化或已接受 Knowledge Diff 时，每个参与仓都在已接受 baseline 和 write lease 下准备并验证 staged candidate。只有所有分片和治理 candidate 全部通过后才开始发布；仓库所有的正文与 INDEX 先发布，治理 map 最后发布。
 
 内部迁移调用为每个非治理 owner 提供显式 `repository_roots` 映射。勘察会将所有参与的 lifecycle tree 指纹绑定为一个已批准输入。仓库分片在治理发布成功前保留回滚备份；任一分片或治理发布失败都会恢复所有已发布分片。
 
@@ -240,7 +240,7 @@ No-change 运行零写入。测试同时验证无关 INDEX 的字节和修改时
 
 新项目直接 bootstrap 为 v2。读取旧项目本身不触发迁移。对旧布局提出持久写请求时，自动产生迁移规划并经过一次人工确认，然后 Agent 调用内部迁移操作。
 
-通过 portable locator 完成发现后，上下文选择会接收已接受的治理 map 与已验证的 `currentRepositoryId`。只有当所有已选领域都归属当前分片时才继续；否则返回下一个所需仓库的 portable locator。这同时防止跨 root 读取与无限的 repository-required 循环。
+通过 portable locator 完成发现后，上下文选择会接收已接受的治理 map、已验证的 `currentRepositoryId`，以及其他已选 owner 的显式已验证 `repositoryRoots`。每个 locator 只相对其 canonical owner root 读取。若缺少所需 owner root，则返回该 owner 的 portable locator；全部所需 root 到位后，一次有界调用即可生成完整 receipt，不会在仓库要求之间往返。
 
 上下文选择从轻量生命周期根 INDEX 开始，进入相关 Knowledge 或仓库分片 INDEX，只加载目标领域、适用祖先约束和必要直接依赖。不能通过根 INDEX 预加载所有领域。
 
