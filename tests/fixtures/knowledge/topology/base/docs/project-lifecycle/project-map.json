@@ -17,8 +17,8 @@
       "semantic_revision": 1,
       "lifecycle_state": "current",
       "knowledge_refs": {
-        "en": "knowledge/desktop-experience-en.md#constraint-desktop-privacy",
-        "zh-CN": "knowledge/desktop-experience.md#constraint-desktop-privacy"
+        "en": "knowledge/desktop-experience/desktop-experience-en.md#constraint-desktop-privacy",
+        "zh-CN": "knowledge/desktop-experience/desktop-experience.md#constraint-desktop-privacy"
       },
       "exceptions": []
     },
@@ -29,8 +29,8 @@
       "semantic_revision": 1,
       "lifecycle_state": "current",
       "knowledge_refs": {
-        "en": "knowledge/desktop-experience-en.md#constraint-desktop-shell",
-        "zh-CN": "knowledge/desktop-experience.md#constraint-desktop-shell"
+        "en": "knowledge/desktop-experience/desktop-experience-en.md#constraint-desktop-shell",
+        "zh-CN": "knowledge/desktop-experience/desktop-experience.md#constraint-desktop-shell"
       },
       "exceptions": []
     }
@@ -49,8 +49,8 @@
       "known_gaps": [],
       "paired_assets": {
         "repository_id": null,
-        "en": "knowledge/desktop-experience-en.md",
-        "zh-CN": "knowledge/desktop-experience.md"
+        "en": "knowledge/desktop-experience/desktop-experience-en.md",
+        "zh-CN": "knowledge/desktop-experience/desktop-experience.md"
       },
       "baseline": "baseline-1"
     },

@@ -1,19 +1,11 @@
 import {
-  cp,
   lstat,
-  mkdtemp,
   readFile,
-  readdir,
-  readlink,
   realpath,
-  rename,
-  rm,
-  rmdir,
 } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
-import { atomicWriteValidated } from '../lib/atomic-write.mjs';
 import { validateBilingualPair } from '../lib/bilingual-pair.mjs';
 import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
@@ -24,6 +16,8 @@ import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 import { analyzeImpact, hashProjectMap } from './impact.mjs';
 import { generateIndexesFromRoot } from './generate-indexes.mjs';
+import { pairForDomain, planKnowledgeLayout } from './layout-planner.mjs';
+import { applyLayoutTransaction, inspectLifecycleTree } from './layout-transaction.mjs';
 
 const applicationFailure = (code, path, message) => fail([createError(code, path, message)]);
 const jsonContent = (value) => `${JSON.stringify(value, null, 2)}\n`;
@@ -33,15 +27,6 @@ const contentHash = (source) => `sha256:${createHash('sha256').update(source).di
 const inside = (root, candidate) => {
   const path = relative(root, candidate);
   return path === '' || (!path.startsWith(`..${sep}`) && path !== '..' && !isAbsolute(path));
-};
-
-const fileState = async (path) => {
-  try {
-    return await lstat(path);
-  } catch (error) {
-    if (error.code === 'ENOENT') return null;
-    throw error;
-  }
 };
 
 const resolveRoots = async (inputRoot) => {
@@ -69,7 +54,6 @@ const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'));
 const validateIndex = (source, expected, map) => (
   source === expected
   && source.endsWith('\n')
-  && map.domains.every(({ id }) => source.includes(`\`${id}\``))
     ? ok(source)
     : applicationFailure('CHANGE_INDEX_INVALID', '/', 'Generated indexes are incomplete.')
 );
@@ -104,38 +88,6 @@ const validateConstraintKnowledge = async (root, map) => {
     }
   }
   return ok(null);
-};
-
-const validateCandidateRoot = async ({ lifecycleRoot, expectedMap, expectedPending, expectedIndexes }) => {
-  try {
-    const [map, pending, englishIndex, chineseIndex] = await Promise.all([
-      readJson(join(lifecycleRoot, 'project-map.json')),
-      readJson(join(lifecycleRoot, 'pending-changes.json')),
-      readFile(join(lifecycleRoot, 'INDEX-en.md'), 'utf8'),
-      readFile(join(lifecycleRoot, 'INDEX.md'), 'utf8'),
-    ]);
-    if (JSON.stringify(map) !== JSON.stringify(expectedMap)
-      || JSON.stringify(pending) !== JSON.stringify(expectedPending)
-      || englishIndex !== expectedIndexes.en
-      || chineseIndex !== expectedIndexes['zh-CN']) {
-      return applicationFailure('CHANGE_CANDIDATE_INVALID', '/', 'Candidate root differs from the reviewed change.');
-    }
-    const mapValidation = validateJson('project-map', map);
-    if (!mapValidation.ok) return mapValidation;
-    const pendingValidation = validateJson('pending-changes', pending);
-    if (!pendingValidation.ok) return pendingValidation;
-    for (const domain of map.domains.filter(({ domain_state: state }) => state === 'materialized')) {
-      const pair = await validateBilingualPair(
-        join(lifecycleRoot, domain.paired_assets.en),
-        join(lifecycleRoot, domain.paired_assets['zh-CN']),
-        map,
-      );
-      if (!pair.ok) return pair;
-    }
-    return validateConstraintKnowledge(lifecycleRoot, map);
-  } catch {
-    return applicationFailure('CHANGE_CANDIDATE_INVALID', '/', 'Candidate root validation failed.');
-  }
 };
 
 const validateApplicationInput = (input) => {
@@ -259,147 +211,71 @@ const validateKnowledgeUpdates = (updates, map, entry) => {
   return ok(null);
 };
 
-const cleanupOwned = async (projectRoot, path) => {
-  if (!path || !await fileState(path)) return;
-  const physical = await realpath(path);
-  if (!inside(projectRoot, physical)) throw new Error('Transaction path escaped project root.');
-  await rm(path, { recursive: true, force: true });
-};
-
-const directoryFingerprint = async (root) => {
-  const entries = [];
-  const visit = async (directory, prefix = '') => {
-    const children = await readdir(directory, { withFileTypes: true });
-    children.sort((left, right) => compareCodePoints(left.name, right.name));
-    for (const child of children) {
-      const path = join(directory, child.name);
-      const locator = prefix ? `${prefix}/${child.name}` : child.name;
-      const state = await lstat(path);
-      if (state.isDirectory() && !state.isSymbolicLink()) {
-        entries.push({ locator: `${locator}/`, type: 'directory' });
-        await visit(path, locator);
-      } else if (state.isFile()) {
-        entries.push({ locator, type: 'file', hash: createHash('sha256').update(await readFile(path)).digest('hex') });
-      } else if (state.isSymbolicLink()) {
-        entries.push({ locator, type: 'symlink', target: await readlink(path) });
-      } else {
-        throw new Error('Unsupported lifecycle filesystem entry.');
-      }
+const normalizedLayoutMap = (candidateMap, layout) => {
+  const normalized = JSON.parse(JSON.stringify(candidateMap));
+  for (const domain of normalized.domains) {
+    if (domain.domain_state === 'materialized') domain.paired_assets = pairForDomain(layout, domain.id);
+    else {
+      delete domain.paired_assets;
+      delete domain.baseline;
     }
-  };
-  const state = await lstat(root);
-  if (!state.isDirectory() || state.isSymbolicLink()) throw new Error('Regular lifecycle root required.');
-  await visit(root);
-  return JSON.stringify(entries);
+  }
+  for (const constraint of normalized.constraints) {
+    if (!constraint.owner_id || !constraint.knowledge_refs) continue;
+    const pair = pairForDomain(layout, constraint.owner_id);
+    if (!pair) continue;
+    constraint.knowledge_refs = {
+      en: `${pair.en}#constraint-${constraint.id}`,
+      'zh-CN': `${pair['zh-CN']}#constraint-${constraint.id}`,
+    };
+  }
+  for (const repository of normalized.repositories) {
+    repository.knowledge_asset_locators = normalized.domains
+      .filter((domain) => domain.domain_state === 'materialized'
+        && domain.paired_assets?.repository_id === repository.id)
+      .flatMap((domain) => [domain.paired_assets.en, domain.paired_assets['zh-CN']])
+      .sort(compareCodePoints);
+  }
+  return normalized;
 };
 
-const fingerprintMatches = async (path, expected) => {
-  try { return await directoryFingerprint(path) === expected; } catch { return false; }
+const managedBodySource = (source, { oldId, newId, pairedAsset }) => {
+  if (oldId === newId) return source;
+  const closing = source.indexOf('\n---\n', 4);
+  if (!source.startsWith('---\n') || closing === -1) return source;
+  const frontmatter = source.slice(0, closing)
+    .replace(new RegExp(`(^|\\n)id: ${oldId}(?=\\n|$)`, 'u'), `$1id: ${newId}`)
+    .replace(/(^|\n)paired_asset: [^\n]+/u, `$1paired_asset: ${pairedAsset}`);
+  return `${frontmatter}${source.slice(closing)}`;
 };
 
-const boundedDirectory = async (projectRoot, path) => {
+const validatePublishedCandidate = async ({ lifecycleRoot, map, pending, indexFiles }) => {
   try {
-    const state = await lstat(path);
-    const physical = await realpath(path);
-    return state.isDirectory() && !state.isSymbolicLink() && inside(projectRoot, physical);
-  } catch {
-    return false;
-  }
-};
-
-const inspectTransitionState = async ({
-  phase,
-  projectRoot,
-  lifecycleRoot,
-  stageRoot,
-  backupRoot,
-  originalFingerprint,
-  expectedCandidate,
-}) => {
-  if (phase === 'backup-moved') {
-    const [live, stageBounded, backupBounded, backupOriginal] = await Promise.all([
-      fileState(lifecycleRoot),
-      boundedDirectory(projectRoot, stageRoot),
-      boundedDirectory(projectRoot, backupRoot),
-      fingerprintMatches(backupRoot, originalFingerprint),
+    const [publishedMap, publishedPending] = await Promise.all([
+      readJson(join(lifecycleRoot, 'project-map.json')),
+      readJson(join(lifecycleRoot, 'pending-changes.json')),
     ]);
-    return { ok: live === null && stageBounded && backupBounded && backupOriginal };
-  }
-  if (phase === 'candidate-moved') {
-    const [stage, liveBounded, backupBounded, backupOriginal, liveCandidate] = await Promise.all([
-      fileState(stageRoot),
-      boundedDirectory(projectRoot, lifecycleRoot),
-      boundedDirectory(projectRoot, backupRoot),
-      fingerprintMatches(backupRoot, originalFingerprint),
-      validateCandidateRoot({ lifecycleRoot, ...expectedCandidate }),
-    ]);
-    return { ok: stage === null && liveBounded && backupBounded && backupOriginal && liveCandidate.ok };
-  }
-  return { ok: false };
-};
-
-const recoveryArtifactLabels = async ({ lifecycleRoot, stageRoot, backupRoot }) => {
-  const labels = [];
-  for (const [label, path] of [['backup', backupRoot], ['live', lifecycleRoot], ['stage', stageRoot]]) {
-    if (!path) continue;
-    try { if (await fileState(path)) labels.push(label); } catch { labels.push(label); }
-  }
-  return labels;
-};
-
-const restoreFailure = async (paths) => {
-  const labels = await recoveryArtifactLabels(paths);
-  return applicationFailure(
-    'CHANGE_RESTORE_FAILED',
-    '/recovery',
-    `Recovery required; preserved artifacts: ${labels.length > 0 ? labels.join(', ') : 'unknown'}.`,
-  );
-};
-
-const reconcileOriginal = async ({
-  projectRoot,
-  lifecycleRoot,
-  stageRoot,
-  backupRoot,
-  originalFingerprint,
-  expectedCandidate,
-  restoreRename,
-}) => {
-  try {
-    if (await fingerprintMatches(lifecycleRoot, originalFingerprint)) {
-      await cleanupOwned(projectRoot, stageRoot);
-      return { ok: true };
+    if (JSON.stringify(publishedMap) !== JSON.stringify(map)
+      || JSON.stringify(publishedPending) !== JSON.stringify(pending)) {
+      return applicationFailure('CHANGE_CANDIDATE_INVALID', '/', 'Published governance files differ from the reviewed candidate.');
     }
-    if (!backupRoot || !await fingerprintMatches(backupRoot, originalFingerprint)
-      || !await boundedDirectory(projectRoot, backupRoot)) {
-      return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
-    }
-    const live = await fileState(lifecycleRoot);
-    if (live) {
-      const liveCandidate = await validateCandidateRoot({ lifecycleRoot, ...expectedCandidate });
-      if (!liveCandidate.ok || await fileState(stageRoot)) {
-        return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
-      }
-      await rename(lifecycleRoot, stageRoot);
-      const preservedCandidate = await validateCandidateRoot({ lifecycleRoot: stageRoot, ...expectedCandidate });
-      if (await fileState(lifecycleRoot) || !preservedCandidate.ok) {
-        return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
+    for (const file of indexFiles) {
+      if (await readFile(join(lifecycleRoot, file.locator), 'utf8') !== file.content) {
+        return applicationFailure('CHANGE_INDEX_INVALID', '/', 'Published hierarchical indexes are incomplete.');
       }
     }
-    try {
-      await restoreRename(backupRoot, lifecycleRoot);
-    } catch {
-      if (!await fingerprintMatches(lifecycleRoot, originalFingerprint) || await fileState(backupRoot)) {
-        return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
-      }
+    for (const domain of map.domains.filter(({ domain_state: state }) => state === 'materialized')) {
+      if (domain.paired_assets.repository_id !== null) continue;
+      const pair = await validateBilingualPair(
+        join(lifecycleRoot, domain.paired_assets.en),
+        join(lifecycleRoot, domain.paired_assets['zh-CN']),
+        map,
+      );
+      if (!pair.ok) return pair;
     }
-    if (!await fingerprintMatches(lifecycleRoot, originalFingerprint) || await fileState(backupRoot)) {
-      return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
-    }
-    await cleanupOwned(projectRoot, stageRoot);
-    return { ok: true };
+    return validateConstraintKnowledge(lifecycleRoot, map);
   } catch {
-    return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
+    return applicationFailure('CHANGE_CANDIDATE_INVALID', '/', 'Published hierarchical candidate validation failed.');
   }
 };
 
@@ -416,14 +292,12 @@ export async function applyApprovedChange(input, operations = {}) {
   let roots;
   let currentMap;
   let pending;
-  let originalFingerprint;
   try {
     roots = await resolveRoots(input.root);
     [currentMap, pending] = await Promise.all([
       readJson(join(roots.lifecycleRoot, 'project-map.json')),
       readJson(join(roots.lifecycleRoot, 'pending-changes.json')),
     ]);
-    originalFingerprint = await directoryFingerprint(roots.lifecycleRoot);
   } catch (error) {
     return applicationFailure(error?.code === 'PATH_SYMLINK_ESCAPE' ? error.code : 'CHANGE_ROOT_INVALID', '/', 'A complete bounded lifecycle root is required.');
   }
@@ -464,134 +338,155 @@ export async function applyApprovedChange(input, operations = {}) {
   };
   const pendingCandidateValidation = validateJson('pending-changes', candidatePending);
   if (!pendingCandidateValidation.ok) return pendingCandidateValidation;
-  const overlays = Object.fromEntries(input.knowledge_updates.flatMap((update) => (
-    ['en', 'zh-CN'].map((language) => [update[language].locator, update[language].content])
-  )));
+
+  const [currentLayout, candidateLayout] = [
+    planKnowledgeLayout({ map: currentMap }),
+    planKnowledgeLayout({ map: input.candidate_map }),
+  ];
+  if (!currentLayout.ok || !candidateLayout.ok) {
+    return applicationFailure('CHANGE_INDEX_INVALID', '/', 'Current and candidate topology must have canonical layouts.');
+  }
+  const candidateMap = normalizedLayoutMap(input.candidate_map, candidateLayout.value);
+  const normalizedValidation = validateJson('project-map', candidateMap);
+  if (!normalizedValidation.ok) return normalizedValidation;
+
+  const updatesByDomain = new Map(input.knowledge_updates.map((update) => [update.domain_id, update]));
+  const bodyFiles = [];
+  const overlays = {};
+  try {
+    for (const domain of candidateMap.domains.filter(({ domain_state: state }) => state === 'materialized')) {
+      if (domain.paired_assets.repository_id !== null) continue;
+      const currentDomain = currentMap.domains.find(({ id }) => id === domain.id);
+      const predecessor = currentDomain ? null : currentMap.domains.find((entry) => (
+        input.candidate_map.domains.find(({ id }) => id === entry.id)?.successor_id === domain.id
+      ));
+      const sourceDomain = currentDomain ?? predecessor;
+      const reviewedUpdate = updatesByDomain.get(domain.id) ?? (predecessor ? updatesByDomain.get(predecessor.id) : null);
+      for (const language of ['en', 'zh-CN']) {
+        const locator = domain.paired_assets[language];
+        let content = reviewedUpdate?.[language]?.content;
+        if (content === undefined && sourceDomain?.paired_assets?.[language]) {
+          content = await readFile(join(roots.lifecycleRoot, sourceDomain.paired_assets[language]), 'utf8');
+        }
+        if (typeof content !== 'string') {
+          return applicationFailure('CHANGE_KNOWLEDGE_UPDATE_INVALID', `/domains/${domain.id}`, 'Every materialized candidate requires a complete localized source pair.');
+        }
+        content = managedBodySource(content, {
+          oldId: sourceDomain?.id ?? domain.id,
+          newId: domain.id,
+          pairedAsset: domain.paired_assets[language === 'en' ? 'zh-CN' : 'en'].split('/').at(-1),
+        });
+        overlays[locator] = content;
+        bodyFiles.push({
+          repository_id: null,
+          locator,
+          content,
+          validate: async (source) => source === content
+            ? ok(source)
+            : applicationFailure('CHANGE_KNOWLEDGE_UPDATE_INVALID', '/', 'Localized knowledge body changed during staging.'),
+        });
+      }
+    }
+  } catch {
+    return applicationFailure('CHANGE_KNOWLEDGE_UPDATE_INVALID', '/', 'A canonical source body could not be loaded.');
+  }
   const generatedIndexes = await generateIndexesFromRoot({
-    map: input.candidate_map,
+    map: candidateMap,
     lifecycleRoot: roots.lifecycleRoot,
     overlays,
   });
   if (!generatedIndexes.ok) {
     return applicationFailure('CHANGE_INDEX_INVALID', '/', 'Generated indexes cannot be regenerated.');
   }
-  const indexes = { en: generatedIndexes.value.en, 'zh-CN': generatedIndexes.value['zh-CN'] };
-
-  const write = operations.atomicWriteValidated ?? atomicWriteValidated;
-  const publish = operations.rename ?? rename;
-  const afterPublish = operations.afterPublish ?? (async () => {});
-  const inspectTransition = operations.inspectTransition ?? inspectTransitionState;
-  const restoreRename = operations.restoreRename ?? rename;
-  const removeBackup = operations.removeBackup
-    ?? ((path) => cleanupOwned(roots.projectRoot, path));
-  let stageRoot;
-  let backupRoot;
-  const expectedCandidate = {
-    expectedMap: input.candidate_map,
-    expectedPending: candidatePending,
-    expectedIndexes: indexes,
-  };
-  try {
-    stageRoot = await mkdtemp(join(roots.docsRoot, '.project-lifecycle-change-stage-'));
-    await cp(roots.lifecycleRoot, stageRoot, { recursive: true, force: false, verbatimSymlinks: true });
-    for (const update of input.knowledge_updates) {
-      for (const language of ['en', 'zh-CN']) {
-        await write({
-          root: stageRoot,
-          target: update[language].locator,
-          content: update[language].content,
-          validate: async (source) => source === update[language].content
-            ? ok(source)
-            : applicationFailure('CHANGE_KNOWLEDGE_UPDATE_INVALID', '/', 'Localized knowledge update changed during validation.'),
-        });
-      }
-    }
-    await write({
-      root: stageRoot,
-      target: 'project-map.json',
-      content: jsonContent(input.candidate_map),
+  const indexFiles = generatedIndexes.value.files.filter(({ repository_id: repositoryId }) => repositoryId === null);
+  const previousBodyLocators = currentLayout.value.bodies
+    .filter(({ repository_id: repositoryId }) => repositoryId === null)
+    .map(({ locator }) => locator);
+  const nextBodyLocators = new Set(bodyFiles.map(({ locator }) => locator));
+  const previousIndexes = new Set(currentLayout.value.indexes
+    .filter(({ repository_id: repositoryId }) => repositoryId === null)
+    .map(({ locator }) => locator));
+  previousIndexes.add('INDEX-en.md');
+  previousIndexes.add('INDEX.md');
+  const nextIndexes = new Set(indexFiles.map(({ locator }) => locator));
+  const inspected = await inspectLifecycleTree({ repositoryRoot: roots.projectRoot });
+  if (!inspected.ok) return applicationFailure('CHANGE_ROOT_INVALID', '/', 'The lifecycle root changed before publication.');
+  const candidateFiles = [
+    ...bodyFiles,
+    ...indexFiles.map((file) => ({
+      repository_id: null,
+      locator: file.locator,
+      content: file.content,
+      validate: async (source) => validateIndex(source, file.content, candidateMap),
+    })),
+    {
+      repository_id: null,
+      locator: 'project-map.json',
+      content: jsonContent(candidateMap),
       validate: async (source) => {
         try { return validateJson('project-map', JSON.parse(source)); } catch { return applicationFailure('SCHEMA_INVALID', '/', 'Invalid candidate map.'); }
       },
-    });
-    await write({
-      root: stageRoot,
-      target: 'pending-changes.json',
+    },
+    {
+      repository_id: null,
+      locator: 'pending-changes.json',
       content: jsonContent(candidatePending),
       validate: async (source) => {
         try { return validateJson('pending-changes', JSON.parse(source)); } catch { return applicationFailure('SCHEMA_INVALID', '/', 'Invalid pending candidate.'); }
       },
-    });
-    await write({ root: stageRoot, target: 'INDEX-en.md', content: indexes.en, validate: async (source) => validateIndex(source, indexes.en, input.candidate_map) });
-    await write({ root: stageRoot, target: 'INDEX.md', content: indexes['zh-CN'], validate: async (source) => validateIndex(source, indexes['zh-CN'], input.candidate_map) });
-    const staged = await validateCandidateRoot({ lifecycleRoot: stageRoot, expectedMap: input.candidate_map, expectedPending: candidatePending, expectedIndexes: indexes });
-    if (!staged.ok) throw Object.assign(new Error('Staged candidate validation failed.'), { result: staged });
-
-    backupRoot = await mkdtemp(join(roots.docsRoot, '.project-lifecycle-change-backup-'));
-    await rmdir(backupRoot);
-    await publish(roots.lifecycleRoot, backupRoot);
-    const backupTransition = await inspectTransition({
-      phase: 'backup-moved',
-      projectRoot: roots.projectRoot,
-      lifecycleRoot: roots.lifecycleRoot,
-      stageRoot,
-      backupRoot,
-      originalFingerprint,
-      expectedCandidate,
-    });
-    if (backupTransition?.ok !== true) throw new Error('Original publication transition failed.');
-
-    await publish(stageRoot, roots.lifecycleRoot);
-    const candidateTransition = await inspectTransition({
-      phase: 'candidate-moved',
-      projectRoot: roots.projectRoot,
-      lifecycleRoot: roots.lifecycleRoot,
-      stageRoot,
-      backupRoot,
-      originalFingerprint,
-      expectedCandidate,
-    });
-    if (candidateTransition?.ok !== true) throw new Error('Candidate publication transition failed.');
-    const live = await validateCandidateRoot({ lifecycleRoot: roots.lifecycleRoot, expectedMap: input.candidate_map, expectedPending: candidatePending, expectedIndexes: indexes });
-    if (!live.ok) throw Object.assign(new Error('Published candidate validation failed.'), { result: live });
-    await afterPublish({ lifecycleRoot: roots.lifecycleRoot });
-    let cleanupComplete = false;
-    try {
-      await removeBackup(backupRoot);
-    } catch {}
-    try {
-      cleanupComplete = await fileState(backupRoot) === null;
-    } catch {}
-    stageRoot = null;
-    if (!cleanupComplete) {
-      return ok({
-        approval_ref: input.approval_ref,
-        change_id: input.change_id,
-        cleanup_state: 'pending',
-        recovery_artifacts: ['backup'],
-        status: 'applied',
-        traceability: input.traceability,
-      });
-    }
-    backupRoot = null;
-    return ok({
-      approval_ref: input.approval_ref,
-      change_id: input.change_id,
-      cleanup_state: 'complete',
-      status: 'applied',
-      traceability: input.traceability,
-    });
-  } catch (error) {
-    const recovery = await reconcileOriginal({
-      projectRoot: roots.projectRoot,
-      lifecycleRoot: roots.lifecycleRoot,
-      stageRoot,
-      backupRoot,
-      originalFingerprint,
-      expectedCandidate,
-      restoreRename,
-    });
-    if (!recovery.ok) return recovery.result;
-    return error?.result ?? applicationFailure('CHANGE_WRITE_FAILED', '/', 'Approved change could not be applied.');
+    },
+  ];
+  let publicationRejected = null;
+  const transactionOperations = {
+    ...operations,
+    ...(operations.rename ? {
+      rename: async (...args) => {
+        try {
+          return await operations.rename(...args);
+        } catch (error) {
+          publicationRejected = error;
+          throw error;
+        }
+      },
+    } : {}),
+    afterPublish: async (context) => {
+      if (publicationRejected) throw publicationRejected;
+      await (operations.afterPublish ?? (async () => {}))(context);
+    },
+  };
+  const transaction = await applyLayoutTransaction({
+    repositoryRoot: roots.projectRoot,
+    expectedFingerprint: inspected.value.fingerprint,
+    candidateDirectories: candidateLayout.value.directories
+      .filter(({ repository_id: repositoryId }) => repositoryId === null)
+      .map(({ locator }) => locator),
+    candidateFiles,
+    deleteLocators: [
+      ...previousBodyLocators.filter((locator) => !nextBodyLocators.has(locator)),
+      ...[...previousIndexes].filter((locator) => !nextIndexes.has(locator)),
+    ],
+    validateCandidate: ({ lifecycleRoot }) => validatePublishedCandidate({
+      lifecycleRoot,
+      map: candidateMap,
+      pending: candidatePending,
+      indexFiles,
+    }),
+  }, transactionOperations);
+  if (!transaction.ok) {
+    const code = transaction.errors[0]?.code === 'LAYOUT_RESTORE_FAILED'
+      ? 'CHANGE_RESTORE_FAILED'
+      : 'CHANGE_WRITE_FAILED';
+    return applicationFailure(code, transaction.errors[0]?.path ?? '/', transaction.errors[0]?.message ?? 'Approved change could not be applied.');
   }
+  return ok({
+    approval_ref: input.approval_ref,
+    change_id: input.change_id,
+    cleanup_state: transaction.value.cleanup_pending ? 'pending' : 'complete',
+    ...(transaction.value.recovery_artifacts.length > 0
+      ? { recovery_artifacts: transaction.value.recovery_artifacts }
+      : {}),
+    changed: transaction.value.changed,
+    status: 'applied',
+    traceability: input.traceability,
+  });
 }

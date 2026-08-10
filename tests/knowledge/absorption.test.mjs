@@ -72,7 +72,7 @@ const supersedeBlock = (source, language, baseline = 'baseline-2') => replaceBas
 const updateFor = async (root, transform) => {
   const update = { domain_id: 'desktop-experience' };
   for (const [language, name] of [['en', 'desktop-experience-en.md'], ['zh-CN', 'desktop-experience.md']]) {
-    const locator = `knowledge/${name}`;
+    const locator = `knowledge/desktop-experience/${name}`;
     update[language] = {
       locator,
       content: transform(await readFile(join(lifecycle(root), locator), 'utf8'), language),
@@ -149,7 +149,7 @@ test('applies a disjoint accepted ADD and atomically advances pair, owner, map, 
   const map = await readJson(join(lifecycle(root), 'project-map.json'));
   assert.equal(map.knowledge_baseline, 'baseline-2');
   assert.equal(map.domains[0].baseline, 'baseline-2');
-  const english = await readFile(join(lifecycle(root), 'knowledge/desktop-experience-en.md'), 'utf8');
+  const english = await readFile(join(lifecycle(root), 'knowledge/desktop-experience/desktop-experience-en.md'), 'utf8');
   assert.deepEqual(parseFactBlocks(english).value.map(({ fact_id: id, revision }) => [id, revision]), [
     ['desktop-shell-fact', 1],
     ['desktop-theme-fact', 1],
@@ -176,7 +176,7 @@ test('applies accepted same-subject REWRITE with the same fact ID and exactly on
   const result = await applyKnowledgeDiff(await resolvePending(envelope, pending));
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.deepEqual(result.value.applied_facts, [{ fact_id: 'desktop-shell-fact', owner_domain_id: 'desktop-experience', revision: 2 }]);
-  const facts = parseFactBlocks(await readFile(join(lifecycle(root), 'knowledge/desktop-experience-en.md'), 'utf8'));
+  const facts = parseFactBlocks(await readFile(join(lifecycle(root), 'knowledge/desktop-experience/desktop-experience-en.md'), 'utf8'));
   assert.equal(facts.value[0].fact_id, 'desktop-shell-fact');
   assert.equal(facts.value[0].revision, 2);
   assert.match(facts.value[0].statement, /workspace frame and rail/);
@@ -189,7 +189,7 @@ test('applies approved SUPERSEDE with a fresh successor identity and removes pre
   const result = await applyKnowledgeDiff(await resolvePending(envelope, pending));
   assert.equal(result.ok, true);
   assert.deepEqual(result.value.superseded_facts, [{ fact_id: 'desktop-shell-fact', successor_fact_id: 'desktop-frame-contract' }]);
-  const source = await readFile(join(lifecycle(root), 'knowledge/desktop-experience-en.md'), 'utf8');
+  const source = await readFile(join(lifecycle(root), 'knowledge/desktop-experience/desktop-experience-en.md'), 'utf8');
   assert.doesNotMatch(source, /fact_id: desktop-shell-fact/);
   assert.match(source, /fact_id: desktop-frame-contract/);
 });
@@ -269,7 +269,7 @@ test('an unresolved same-fact change writes only one deduplicated bounded pendin
   const root = await setup(context);
   const envelope = await accepted(root, 'REWRITE', rewriteBlock);
   delete envelope.approval_receipt;
-  const beforePair = await readFile(join(lifecycle(root), 'knowledge/desktop-experience-en.md'), 'utf8');
+  const beforePair = await readFile(join(lifecycle(root), 'knowledge/desktop-experience/desktop-experience-en.md'), 'utf8');
   const first = await applyKnowledgeDiff(envelope, { now: () => '2026-08-09T00:00:00.000Z' });
   const second = await applyKnowledgeDiff(envelope, { now: () => '2026-08-10T00:00:00.000Z' });
   assert.equal(first.ok, true);
@@ -280,7 +280,7 @@ test('an unresolved same-fact change writes only one deduplicated bounded pendin
   assert.equal(pending.changes[0].opened_at, '2026-08-09T00:00:00.000Z');
   assert.equal(pending.changes[0].conflict_revision, 1);
   assert.doesNotMatch(JSON.stringify(pending), /workspace frame and rail/);
-  assert.equal(await readFile(join(lifecycle(root), 'knowledge/desktop-experience-en.md'), 'utf8'), beforePair);
+  assert.equal(await readFile(join(lifecycle(root), 'knowledge/desktop-experience/desktop-experience-en.md'), 'utf8'), beforePair);
   assert.equal((await readJson(join(lifecycle(root), 'project-map.json'))).knowledge_baseline, 'baseline-1');
 });
 
@@ -496,14 +496,18 @@ test('rejects duplicate fact identity across canonical domains without mutation'
   const map = await readJson(mapPath);
   const duplicate = map.domains.find(({ id }) => id === 'wiki-workspace');
   duplicate.domain_state = 'materialized';
-  duplicate.paired_assets = { en: 'knowledge/wiki-workspace-en.md', 'zh-CN': 'knowledge/wiki-workspace.md' };
+  duplicate.paired_assets = {
+    repository_id: null,
+    en: 'knowledge/desktop-experience/wiki-workspace-en.md',
+    'zh-CN': 'knowledge/desktop-experience/wiki-workspace.md',
+  };
   duplicate.baseline = 'baseline-1';
   for (const [language, name] of [['en', 'desktop-experience-en.md'], ['zh-CN', 'desktop-experience.md']]) {
-    const source = await readFile(join(lifecycle(root), 'knowledge', name), 'utf8');
+    const source = await readFile(join(lifecycle(root), 'knowledge/desktop-experience', name), 'utf8');
     const localized = source
       .replaceAll('desktop-experience', 'wiki-workspace')
       .replaceAll(language === 'en' ? 'Desktop experience' : '桌面体验', language === 'en' ? 'Wiki workspace' : 'Wiki 工作区');
-    await writeFile(join(lifecycle(root), 'knowledge', language === 'en' ? 'wiki-workspace-en.md' : 'wiki-workspace.md'), localized);
+    await writeFile(join(lifecycle(root), 'knowledge/desktop-experience', language === 'en' ? 'wiki-workspace-en.md' : 'wiki-workspace.md'), localized);
   }
   await writeFile(mapPath, `${JSON.stringify(map, null, 2)}\n`);
   const before = await snapshot(lifecycle(root));
@@ -591,7 +595,7 @@ test('requires substantive payload change in both localized REWRITE candidates',
   const root = await setup(context);
   const envelope = await accepted(root, 'REWRITE', rewriteBlock);
   envelope.knowledge_updates[0]['zh-CN'].content = replaceBaseline(
-    await readFile(join(lifecycle(root), 'knowledge/desktop-experience.md'), 'utf8'),
+    await readFile(join(lifecycle(root), 'knowledge/desktop-experience/desktop-experience.md'), 'utf8'),
     'baseline-2',
   ).replace('revision: 1', 'revision: 2');
   refreshCommitment(envelope.knowledge_updates[0]);
@@ -668,7 +672,7 @@ test('binds accepted implementation entry-point additions to the Knowledge Diff'
   envelope.approval_receipt = approvalReceipt(envelope);
   const result = await applyKnowledgeDiff(envelope);
   assert.equal(result.ok, true);
-  assert.match(await readFile(join(lifecycle(root), 'knowledge/desktop-experience-en.md'), 'utf8'), /repo:src\/theme/);
+  assert.match(await readFile(join(lifecycle(root), 'knowledge/desktop-experience/desktop-experience-en.md'), 'utf8'), /repo:src\/theme/);
 });
 
 test('rejects an implementation entry point absent from the accepted Knowledge Diff', async (context) => {
@@ -769,7 +773,7 @@ test('does not copy delivery prose or test logs from the Knowledge Diff into cap
   envelope.approval_receipt = approvalReceipt(envelope);
   const result = await applyKnowledgeDiff(envelope);
   assert.equal(result.ok, true);
-  const source = await readFile(join(lifecycle(root), 'knowledge/desktop-experience-en.md'), 'utf8');
+  const source = await readFile(join(lifecycle(root), 'knowledge/desktop-experience/desktop-experience-en.md'), 'utf8');
   assert.doesNotMatch(source, /internal chronology/);
   assert.doesNotMatch(source, /prd-desktop-theme/);
 });

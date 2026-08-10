@@ -324,7 +324,7 @@
       "additionalProperties": false,
       "required": ["locator", "content_hash"],
       "properties": {
-        "locator": { "type": "string", "pattern": "^knowledge/[a-z][a-z0-9-]*(?:-en)?\\.md$" },
+        "locator": { "type": "string", "pattern": "^knowledge/(?:[a-z][a-z0-9-]*/)*[a-z][a-z0-9-]*(?:-en)?\\.md$" },
         "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
       }
     },

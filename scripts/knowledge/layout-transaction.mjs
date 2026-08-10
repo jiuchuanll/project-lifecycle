@@ -455,6 +455,9 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
       if (await fileState(paths.lifecycleRoot) || !await fingerprintAt(backupRoot, current.fingerprint)) throw pathError('LAYOUT_TRANSACTION_FAILED');
     }
     publicationStarted = true;
+    if (await fileState(paths.lifecycleRoot) || !await fingerprintAt(backupRoot, current.fingerprint)) {
+      throw pathError('LAYOUT_TRANSACTION_FAILED');
+    }
     if ((await inspectTransition({
       phase: 'backup-moved',
       lifecycleRoot: paths.lifecycleRoot,

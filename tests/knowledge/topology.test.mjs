@@ -1,19 +1,88 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
 import { applyApprovedChange } from '../../scripts/knowledge/apply-approved-change.mjs';
+import { bootstrap } from '../../scripts/knowledge/bootstrap.mjs';
 import { analyzeImpact, hashProjectMap } from '../../scripts/knowledge/impact.mjs';
+import { materializeCapability } from '../../scripts/knowledge/materialize.mjs';
 import { proposeChange } from '../../scripts/knowledge/propose-change.mjs';
 
 const fixtureRoot = new URL('../fixtures/knowledge/topology/base/', import.meta.url);
+const materializationFixture = new URL('../fixtures/knowledge/materialization/valid-input.json', import.meta.url);
 const lifecycle = (root) => join(root, 'docs/project-lifecycle');
 const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'));
 const mapAt = (root) => readJson(join(lifecycle(root), 'project-map.json'));
 const pendingAt = (root) => readJson(join(lifecycle(root), 'pending-changes.json'));
 const clone = (value) => JSON.parse(JSON.stringify(value));
+
+const setupMaterializedLeaf = async (context) => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-topology-leaf-'));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const domain = {
+    id: 'runtime',
+    kind: 'domain',
+    label: { en: 'Runtime', 'zh-CN': '运行时' },
+    purpose: { en: 'Owns runtime behavior.', 'zh-CN': '负责运行时行为。' },
+    domain_state: 'confirmed',
+    scope: { includes: ['runtime', 'runtime loop'], excludes: [] },
+    parent_id: null,
+    relationships: [],
+    evidence_refs: ['repo:src/runtime'],
+    known_gaps: [],
+  };
+  const bootstrapped = await bootstrap({
+    root,
+    project_id: 'topology-sample',
+    label: { en: 'Topology sample', 'zh-CN': '拓扑示例' },
+    purpose: { en: 'Exercises governed topology.', 'zh-CN': '用于测试受治理拓扑。' },
+    calibration_ref: 'approval:topology-calibration',
+    calibration_approved: true,
+    domains: [domain],
+  });
+  assert.equal(bootstrapped.ok, true, JSON.stringify(bootstrapped));
+  const input = clone(await readJson(materializationFixture));
+  Object.assign(input, {
+    root,
+    domain_id: 'runtime',
+    owner_id: 'runtime',
+    baseline: 'baseline-runtime',
+    approval_ref: 'approval:runtime',
+    dependency_ids: [],
+    authoritative_evidence_refs: ['repo:src/runtime', 'test:runtime'],
+    implementation_refs: ['repo:src/runtime'],
+    verification_refs: ['test:runtime'],
+    targets: { en: 'knowledge/runtime-en.md', 'zh-CN': 'knowledge/runtime.md' },
+  });
+  for (const language of ['en', 'zh-CN']) {
+    input.pair[language].facts[0].fact_id = 'fact-runtime';
+    input.pair[language].facts[0].evidence_refs = ['repo:src/runtime', 'test:runtime'];
+  }
+  const materialized = await materializeCapability(input);
+  assert.equal(materialized.ok, true, JSON.stringify(materialized));
+  const lifecycleRoot = lifecycle(root);
+  const map = await mapAt(root);
+  map.constraints.push({
+    id: 'runtime-rule',
+    scope: 'self',
+    owner_id: 'runtime',
+    semantic_revision: 1,
+    lifecycle_state: 'current',
+    knowledge_refs: {
+      en: 'knowledge/runtime-en.md#constraint-runtime-rule',
+      'zh-CN': 'knowledge/runtime.md#constraint-runtime-rule',
+    },
+    exceptions: [],
+  });
+  await writeFile(join(lifecycleRoot, 'project-map.json'), `${JSON.stringify(map, null, 2)}\n`);
+  for (const locator of ['knowledge/runtime-en.md', 'knowledge/runtime.md']) {
+    const source = await readFile(join(lifecycleRoot, locator), 'utf8');
+    await writeFile(join(lifecycleRoot, locator), `${source.trimEnd()}\n\n<a id="constraint-runtime-rule"></a>\n<!-- project-lifecycle:constraint id=runtime-rule revision=1 -->\nRuntime rule.\n<!-- /project-lifecycle:constraint -->\n`);
+  }
+  return root;
+};
 
 const updateDomainPurpose = async (root) => {
   const update = { domain_id: 'desktop-experience' };
@@ -21,9 +90,9 @@ const updateDomainPurpose = async (root) => {
     ['en', 'desktop-experience-en.md', 'Owns accepted desktop interaction.', 'Owns revised desktop interaction.'],
     ['zh-CN', 'desktop-experience.md', '负责已验收的桌面交互。', '负责修订后的桌面交互。'],
   ]) {
-    const source = await readFile(join(lifecycle(root), 'knowledge', name), 'utf8');
+    const source = await readFile(join(lifecycle(root), 'knowledge/desktop-experience', name), 'utf8');
     update[language] = {
-      locator: `knowledge/${name}`,
+      locator: `knowledge/desktop-experience/${name}`,
       content: source.replace(currentPurpose, nextPurpose),
     };
   }
@@ -180,7 +249,8 @@ test('rejects a persisted WORDING operation bypass before approved apply', async
     proposed_patch: { operation: 'UPDATE_DOMAIN', target_type: 'domain', target_id: 'desktop-experience', changed_fields: ['label'], new_ids: [], successor_ids: [] },
     child_dispositions: [],
   });
-  assert.equal((await proposeChange({ root, change: proposal })).ok, true);
+  const proposed = await proposeChange({ root, change: proposal });
+  assert.equal(proposed.ok, true, JSON.stringify(proposed));
   const pending = await pendingAt(root);
   pending.changes[0].proposed_patch.operation = 'ADD_DOMAIN';
   await writeFile(join(lifecycle(root), 'pending-changes.json'), `${JSON.stringify(pending, null, 2)}\n`);
@@ -226,7 +296,7 @@ test('writes or updates one pending semantic target without changing current map
   candidate.constraints[0].selected_descendants = ['wiki-workspace'];
   candidate.constraints[0].semantic_revision = 2;
   const beforeMap = await readFile(join(lifecycle(root), 'project-map.json'), 'utf8');
-  const beforeKnowledge = await readFile(join(lifecycle(root), 'knowledge/desktop-experience-en.md'), 'utf8');
+  const beforeKnowledge = await readFile(join(lifecycle(root), 'knowledge/desktop-experience/desktop-experience-en.md'), 'utf8');
 
   const first = await proposeChange({ root, change: semanticProposal(candidate) });
   const second = await proposeChange({ root, change: semanticProposal(candidate, { proposed_disposition: 'Updated review summary.' }) });
@@ -239,7 +309,7 @@ test('writes or updates one pending semantic target without changing current map
   assert.equal(pending.changes[0].proposed_disposition, 'Updated review summary.');
   assert.equal(pending.changes[0].baseline.map_hash, hashProjectMap(map));
   assert.equal(await readFile(join(lifecycle(root), 'project-map.json'), 'utf8'), beforeMap);
-  assert.equal(await readFile(join(lifecycle(root), 'knowledge/desktop-experience-en.md'), 'utf8'), beforeKnowledge);
+  assert.equal(await readFile(join(lifecycle(root), 'knowledge/desktop-experience/desktop-experience-en.md'), 'utf8'), beforeKnowledge);
 });
 
 test('rejects parent merge until every active child has a reviewed disposition', async () => {
@@ -568,7 +638,8 @@ test('applies an exact topology-only revalidation marker without constraint revi
     ],
     knowledge_candidates: updates,
   });
-  assert.equal((await proposeChange({ root, change: proposal })).ok, true);
+  const proposed = await proposeChange({ root, change: proposal });
+  assert.equal(proposed.ok, true, JSON.stringify(proposed));
   const result = await applyApprovedChange({
     root,
     change_id: proposal.change_id,
@@ -652,8 +723,8 @@ test('requires a changed bilingual commitment for materialized domain boundary u
   const unchangedPair = { domain_id: 'desktop-experience' };
   for (const [language, name] of [['en', 'desktop-experience-en.md'], ['zh-CN', 'desktop-experience.md']]) {
     unchangedPair[language] = {
-      locator: `knowledge/${name}`,
-      content: await readFile(join(lifecycle(unchangedRoot), 'knowledge', name), 'utf8'),
+      locator: `knowledge/desktop-experience/${name}`,
+      content: await readFile(join(lifecycle(unchangedRoot), 'knowledge/desktop-experience', name), 'utf8'),
     };
   }
   const unchangedProposal = semanticProposal(unchangedCandidate, {
@@ -674,4 +745,105 @@ test('requires a changed bilingual commitment for materialized domain boundary u
   const duplicate = await proposeChange({ root: unchangedRoot, change: duplicateProposal });
   assert.equal(duplicate.ok, false);
   assert.equal(duplicate.errors[0].code, 'CHANGE_KNOWLEDGE_COMMITMENT_INVALID');
+});
+
+test('planner-derived promotion and demotion move a parent pair symmetrically', async (context) => {
+  const root = await setupMaterializedLeaf(context);
+  const rootIndexPath = join(lifecycle(root), 'INDEX-en.md');
+  const rootIndexBefore = await readFile(rootIndexPath, 'utf8');
+  const rootIndexTime = (await stat(rootIndexPath)).mtimeMs;
+  const current = await mapAt(root);
+  const promotedCandidate = clone(current);
+  promotedCandidate.domains.push({
+    id: 'loop',
+    kind: 'capability',
+    label: { en: 'Loop', 'zh-CN': '循环' },
+    purpose: { en: 'Owns the runtime loop.', 'zh-CN': '负责运行循环。' },
+    domain_state: 'confirmed',
+    scope: { includes: ['runtime loop'], excludes: [] },
+    parent_id: 'runtime',
+    relationships: [],
+    evidence_refs: ['repo:src/loop'],
+    known_gaps: [],
+  });
+  promotedCandidate.domains.sort((left, right) => left.id < right.id ? -1 : 1);
+  const promotion = semanticProposal(promotedCandidate, {
+    change_id: 'change-add-loop',
+    kind: 'topology',
+    trigger_refs: ['decision:add-loop'],
+    source_refs: ['repo:src/loop'],
+    affected_refs: ['loop'],
+    semantic_target_key: 'domain:loop',
+    proposed_patch: {
+      operation: 'ADD_DOMAIN',
+      target_type: 'domain',
+      target_id: 'loop',
+      changed_fields: ['boundary', 'kind', 'lifecycle', 'parentage'],
+      new_ids: [],
+      successor_ids: [],
+    },
+    child_dispositions: [],
+  });
+  const proposedPromotion = await proposeChange({ root, change: promotion });
+  assert.equal(proposedPromotion.ok, true, JSON.stringify(proposedPromotion));
+  const promoted = await applyApprovedChange({
+    root,
+    change_id: promotion.change_id,
+    approval_ref: 'approval:add-loop',
+    traceability: { knowledge_diff_ref: 'diff:add-loop', history_ref: 'git:add-loop' },
+    candidate_map: promotedCandidate,
+    knowledge_updates: [],
+  });
+  assert.equal(promoted.ok, true, JSON.stringify(promoted));
+  const promotedMap = await mapAt(root);
+  assert.equal(promotedMap.domains.find(({ id }) => id === 'runtime').paired_assets.en,
+    'knowledge/runtime/runtime-en.md');
+  assert.equal(promotedMap.constraints[0].knowledge_refs.en,
+    'knowledge/runtime/runtime-en.md#constraint-runtime-rule');
+  assert.equal(await readFile(join(lifecycle(root), 'knowledge/runtime/runtime-en.md'), 'utf8')
+    .then(() => true, () => false), true);
+  assert.equal(await readFile(join(lifecycle(root), 'knowledge/runtime-en.md'), 'utf8')
+    .then(() => true, () => false), false);
+  assert.equal(await readFile(rootIndexPath, 'utf8'), rootIndexBefore);
+  assert.equal(Math.abs((await stat(rootIndexPath)).mtimeMs - rootIndexTime) < 0.001, true);
+
+  const demotedCandidate = clone(promotedMap);
+  demotedCandidate.domains.find(({ id }) => id === 'loop').parent_id = null;
+  const demotion = semanticProposal(demotedCandidate, {
+    change_id: 'change-reparent-loop',
+    kind: 'topology',
+    trigger_refs: ['decision:reparent-loop'],
+    source_refs: ['repo:src/loop'],
+    affected_refs: ['loop'],
+    semantic_target_key: 'domain:loop',
+    proposed_patch: {
+      operation: 'UPDATE_DOMAIN',
+      target_type: 'domain',
+      target_id: 'loop',
+      changed_fields: ['parentage'],
+      new_ids: [],
+      successor_ids: [],
+    },
+    child_dispositions: [],
+  });
+  const proposedDemotion = await proposeChange({ root, change: demotion });
+  assert.equal(proposedDemotion.ok, true, JSON.stringify(proposedDemotion));
+  const demoted = await applyApprovedChange({
+    root,
+    change_id: demotion.change_id,
+    approval_ref: 'approval:reparent-loop',
+    traceability: { knowledge_diff_ref: 'diff:reparent-loop', history_ref: 'git:reparent-loop' },
+    candidate_map: demotedCandidate,
+    knowledge_updates: [],
+  });
+  assert.equal(demoted.ok, true, JSON.stringify(demoted));
+  const demotedMap = await mapAt(root);
+  assert.equal(demotedMap.domains.find(({ id }) => id === 'runtime').paired_assets.en,
+    'knowledge/runtime-en.md');
+  assert.equal(demotedMap.constraints[0].knowledge_refs.en,
+    'knowledge/runtime-en.md#constraint-runtime-rule');
+  assert.equal(await readFile(join(lifecycle(root), 'knowledge/runtime-en.md'), 'utf8')
+    .then(() => true, () => false), true);
+  assert.equal(await readFile(join(lifecycle(root), 'knowledge/runtime/runtime-en.md'), 'utf8')
+    .then(() => true, () => false), false);
 });
