@@ -89,6 +89,24 @@ test('performs zero writes and zero renames for an identical candidate', async (
   assert.equal(renames, 0);
 });
 
+test('initializes a complete lifecycle root through the same atomic publication boundary', async (context) => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-layout-init-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, 'docs'));
+  const result = await applyLayoutTransaction({
+    repositoryRoot: root,
+    initialize: true,
+    candidateFiles: [candidate('knowledge/INDEX-en.md', 'knowledge\n')],
+    deleteLocators: [],
+    validateCandidate: async ({ lifecycleRoot }) => ({
+      ok: await read(lifecycleRoot, 'knowledge/INDEX-en.md') === 'knowledge\n',
+      errors: [],
+    }),
+  });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(await read(join(root, 'docs/project-lifecycle'), 'knowledge/INDEX-en.md'), 'knowledge\n');
+});
+
 test('publishes one changed index while preserving unrelated bytes and mtime', async (context) => {
   const project = await createProject(context);
   const unrelated = join(project.lifecycle, 'knowledge/runtime/INDEX-en.md');

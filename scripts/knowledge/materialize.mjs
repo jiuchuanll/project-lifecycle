@@ -1,15 +1,7 @@
-import { createHash } from 'node:crypto';
 import {
-  cp,
   lstat,
-  mkdtemp,
   readFile,
-  readdir,
-  readlink,
   realpath,
-  rename,
-  rm,
-  rmdir,
 } from 'node:fs/promises';
 import {
   basename,
@@ -20,7 +12,6 @@ import {
   sep,
 } from 'node:path';
 
-import { atomicWriteValidated } from '../lib/atomic-write.mjs';
 import { validateBilingualPair } from '../lib/bilingual-pair.mjs';
 import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
@@ -30,6 +21,8 @@ import { fail, ok } from '../lib/result.mjs';
 import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 import { generateIndexesFromRoot } from './generate-indexes.mjs';
+import { pairForDomain, planKnowledgeLayout } from './layout-planner.mjs';
+import { applyLayoutTransaction, inspectLifecycleTree } from './layout-transaction.mjs';
 
 const englishTemplateUrl = new URL(
   '../../skills/maintain-project-knowledge/assets/capability-en.md',
@@ -96,48 +89,6 @@ const inside = (root, candidate) => {
     || (!fromRoot.startsWith(`..${sep}`) && fromRoot !== '..' && !isAbsolute(fromRoot));
 };
 
-const directoryFingerprint = async (root) => {
-  const entries = [];
-  const visit = async (directory, prefix = '') => {
-    const children = await readdir(directory, { withFileTypes: true });
-    children.sort((left, right) => compareCodePoints(left.name, right.name));
-    for (const child of children) {
-      const path = join(directory, child.name);
-      const locator = prefix ? `${prefix}/${child.name}` : child.name;
-      const state = await lstat(path);
-      if (state.isDirectory() && !state.isSymbolicLink()) {
-        entries.push({ locator: `${locator}/`, type: 'directory' });
-        await visit(path, locator);
-      } else if (state.isFile()) {
-        const hash = createHash('sha256').update(await readFile(path)).digest('hex');
-        entries.push({ locator, type: 'file', hash });
-      } else if (state.isSymbolicLink()) {
-        entries.push({ locator, type: 'symlink', target: await readlink(path) });
-      } else {
-        const error = new Error('Unsupported lifecycle filesystem entry.');
-        error.code = 'MATERIALIZATION_ROOT_INVALID';
-        throw error;
-      }
-    }
-  };
-  const state = await lstat(root);
-  if (!state.isDirectory() || state.isSymbolicLink()) {
-    const error = new Error('Lifecycle root must be a regular directory.');
-    error.code = 'MATERIALIZATION_ROOT_INVALID';
-    throw error;
-  }
-  await visit(root);
-  return JSON.stringify(entries);
-};
-
-const fingerprintMatches = async (path, expected) => {
-  try {
-    return await directoryFingerprint(path) === expected;
-  } catch {
-    return false;
-  }
-};
-
 const boundedDirectory = async (projectRoot, path) => {
   const state = await lstat(path);
   const real = await realpath(path);
@@ -172,14 +123,6 @@ const resolveLifecyclePaths = async (inputRoot) => {
     docsRoot: await realpath(docsRoot),
     lifecycleRoot: await realpath(lifecycleRoot),
   };
-};
-
-const verifyOwnedTransactionDirectory = async (projectRoot, path) => {
-  if (!await boundedDirectory(projectRoot, path)) {
-    const error = new Error('Transaction directory escaped the project root.');
-    error.code = 'PATH_SYMLINK_ESCAPE';
-    throw error;
-  }
 };
 
 const replaceOnce = (source, needle, replacement) => {
@@ -387,7 +330,7 @@ const validatePairInput = (pair, authoritativeEvidenceRefs, baseline) => {
   return ok(normalized);
 };
 
-const validateTargets = async (lifecycleRoot, domainId, targets) => {
+const validateTargets = async (lifecycleRoot, targets, expected) => {
   if (!exactKeys(targets, pairLanguages)
     || pairLanguages.some((language) => !isNonEmptyString(targets[language]))) {
     return materializationFailure(
@@ -421,15 +364,11 @@ const validateTargets = async (lifecycleRoot, domainId, targets) => {
       'Capability target is already occupied.',
     );
   }
-  const expected = {
-    en: `knowledge/${domainId}-en.md`,
-    'zh-CN': `knowledge/${domainId}.md`,
-  };
   if (!same(targets, expected)) {
     return materializationFailure(
       'MATERIALIZATION_TARGET_INVALID',
       '/targets',
-      'Capability targets must use the canonical fixed-root locators.',
+      'Capability targets must match the canonical recursive layout.',
     );
   }
   return ok(targets);
@@ -450,7 +389,7 @@ const validateRenderedDocument = (source) => {
     );
 };
 
-const validateIndex = (source, expected, map, language) => {
+const validateIndex = (source, expected, language) => {
   if (source !== expected || !source.endsWith('\n')) {
     return materializationFailure(
       'MATERIALIZATION_INDEX_INVALID',
@@ -458,43 +397,36 @@ const validateIndex = (source, expected, map, language) => {
       'Generated capability index is invalid.',
     );
   }
-  for (const domain of map.domains) {
-    if (!source.includes(`\`${domain.id}\``)) {
-      return materializationFailure(
-        'MATERIALIZATION_INDEX_INVALID',
-        '/',
-        'Generated capability index is incomplete.',
-      );
-    }
-  }
   return ok(source);
 };
 
 const inspectCandidate = async ({
   lifecycleRoot,
   expectedMap,
-  expectedEnglishIndex,
-  expectedChineseIndex,
+  expectedFiles,
+  expectedDirectories,
 }) => {
   try {
-    const [map, pending, englishIndex, chineseIndex, knowledgeState, deliveryState] = await Promise.all([
+    const [map, pending, deliveryState] = await Promise.all([
       readJson(join(lifecycleRoot, 'project-map.json')),
       readJson(join(lifecycleRoot, 'pending-changes.json')),
-      readFile(join(lifecycleRoot, 'INDEX-en.md'), 'utf8'),
-      readFile(join(lifecycleRoot, 'INDEX.md'), 'utf8'),
-      fileState(join(lifecycleRoot, 'knowledge')),
       fileState(join(lifecycleRoot, 'delivery')),
     ]);
     if (!same(map, expectedMap)
-      || englishIndex !== expectedEnglishIndex
-      || chineseIndex !== expectedChineseIndex
-      || !knowledgeState?.isDirectory()
-      || knowledgeState.isSymbolicLink()
       || !deliveryState?.isDirectory()
       || deliveryState.isSymbolicLink()) return false;
     const mapValidation = validateJson('project-map', map);
     const pendingValidation = validateJson('pending-changes', pending);
     if (!mapValidation.ok || !pendingValidation.ok) return false;
+    for (const directory of expectedDirectories) {
+      const state = await fileState(join(lifecycleRoot, directory));
+      if (!state?.isDirectory() || state.isSymbolicLink()) return false;
+    }
+    for (const file of expectedFiles) {
+      const state = await fileState(join(lifecycleRoot, file.locator));
+      if (!state?.isFile() || state.isSymbolicLink()
+        || await readFile(join(lifecycleRoot, file.locator), 'utf8') !== file.content) return false;
+    }
     for (const domain of map.domains.filter(({ domain_state: state }) => state === 'materialized')) {
       const pairValidation = await validateBilingualPair(
         join(lifecycleRoot, domain.paired_assets.en),
@@ -508,159 +440,6 @@ const inspectCandidate = async ({
     return false;
   }
 };
-
-const candidateError = () => {
-  const error = new Error('Complete materialization candidate validation failed.');
-  error.code = 'MATERIALIZATION_WRITE_FAILED';
-  return error;
-};
-
-const requireCandidate = async (options) => {
-  if (!await inspectCandidate(options)) throw candidateError();
-};
-
-const inspectTransitionState = async ({
-  phase,
-  projectRoot,
-  lifecycleRoot,
-  stagingRoot,
-  backupRoot,
-  originalFingerprint,
-  expectedCandidate,
-}) => {
-  if (phase === 'backup-moved') {
-    const [liveState, stageBounded, backupBounded, backupOriginal] = await Promise.all([
-      fileState(lifecycleRoot),
-      boundedDirectory(projectRoot, stagingRoot),
-      boundedDirectory(projectRoot, backupRoot),
-      fingerprintMatches(backupRoot, originalFingerprint),
-    ]);
-    return {
-      ok: liveState === null && stageBounded && backupBounded && backupOriginal,
-    };
-  }
-  if (phase === 'candidate-moved') {
-    const [stageState, liveBounded, backupBounded, backupOriginal, liveCandidate] = await Promise.all([
-      fileState(stagingRoot),
-      boundedDirectory(projectRoot, lifecycleRoot),
-      boundedDirectory(projectRoot, backupRoot),
-      fingerprintMatches(backupRoot, originalFingerprint),
-      inspectCandidate({ lifecycleRoot, ...expectedCandidate }),
-    ]);
-    return {
-      ok: stageState === null
-        && liveBounded
-        && backupBounded
-        && backupOriginal
-        && liveCandidate,
-    };
-  }
-  return { ok: false };
-};
-
-const recoveryArtifactLabels = async ({ lifecycleRoot, stagingRoot, backupRoot }) => {
-  const labels = [];
-  for (const [label, path] of [
-    ['backup', backupRoot],
-    ['live', lifecycleRoot],
-    ['stage', stagingRoot],
-  ]) {
-    if (!path) continue;
-    try {
-      if (await fileState(path)) labels.push(label);
-    } catch {
-      labels.push(label);
-    }
-  }
-  return labels;
-};
-
-const restoreFailure = async (paths) => {
-  const artifacts = await recoveryArtifactLabels(paths);
-  const label = artifacts.length > 0 ? artifacts.join(', ') : 'unknown';
-  return materializationFailure(
-    'MATERIALIZATION_RESTORE_FAILED',
-    '/recovery',
-    `Recovery required; preserved artifacts: ${label}.`,
-  );
-};
-
-const cleanupOwnedStage = async ({ projectRoot, stagingRoot }) => {
-  if (!stagingRoot || !await fileState(stagingRoot)) return;
-  await verifyOwnedTransactionDirectory(projectRoot, stagingRoot);
-  // The accepted original has already been verified live. This exact sibling is the
-  // transaction-owned candidate stage, so it is neither original nor authoritative.
-  await rm(stagingRoot, { recursive: true, force: true });
-};
-
-const reconcileOriginal = async ({
-  projectRoot,
-  lifecycleRoot,
-  stagingRoot,
-  backupRoot,
-  originalFingerprint,
-  expectedCandidate,
-  restoreRename,
-}) => {
-  try {
-    if (await fingerprintMatches(lifecycleRoot, originalFingerprint)) {
-      await cleanupOwnedStage({ projectRoot, stagingRoot });
-      return { ok: true };
-    }
-
-    const backupIsOriginal = backupRoot
-      && await fingerprintMatches(backupRoot, originalFingerprint);
-    if (!backupIsOriginal) {
-      return { ok: false, result: await restoreFailure({ lifecycleRoot, stagingRoot, backupRoot }) };
-    }
-    await verifyOwnedTransactionDirectory(projectRoot, backupRoot);
-
-    const liveState = await fileState(lifecycleRoot);
-    if (liveState) {
-      const liveIsCandidate = await inspectCandidate({ lifecycleRoot, ...expectedCandidate });
-      const stageState = stagingRoot ? await fileState(stagingRoot) : null;
-      if (!liveIsCandidate || stageState) {
-        return { ok: false, result: await restoreFailure({ lifecycleRoot, stagingRoot, backupRoot }) };
-      }
-      // Do not delete a possibly recoverable live candidate. Move it back to its
-      // transaction-owned stage locator so both original and candidate survive a
-      // subsequent restore failure.
-      await rename(lifecycleRoot, stagingRoot);
-      if (await fileState(lifecycleRoot)
-        || !await inspectCandidate({ lifecycleRoot: stagingRoot, ...expectedCandidate })) {
-        return { ok: false, result: await restoreFailure({ lifecycleRoot, stagingRoot, backupRoot }) };
-      }
-    }
-
-    try {
-      await restoreRename(backupRoot, lifecycleRoot);
-    } catch {
-      // A rename can move and still reject. Trust the filesystem postcondition,
-      // not the promise result.
-      if (!await fingerprintMatches(lifecycleRoot, originalFingerprint)
-        || await fileState(backupRoot)) {
-        return { ok: false, result: await restoreFailure({ lifecycleRoot, stagingRoot, backupRoot }) };
-      }
-    }
-
-    if (!await fingerprintMatches(lifecycleRoot, originalFingerprint)
-      || await fileState(backupRoot)) {
-      return { ok: false, result: await restoreFailure({ lifecycleRoot, stagingRoot, backupRoot }) };
-    }
-    await cleanupOwnedStage({ projectRoot, stagingRoot });
-    return { ok: true };
-  } catch {
-    // Recovery failures preserve backup/stage/live as found. In particular, this
-    // path never recursively removes backup or attempts speculative cleanup.
-    return { ok: false, result: await restoreFailure({ lifecycleRoot, stagingRoot, backupRoot }) };
-  }
-};
-
-const asWriteFailure = (error) => materializationFailure(
-  stableWriteCodes.has(error?.code) ? error.code : 'MATERIALIZATION_WRITE_FAILED',
-  '/',
-  'Capability materialization could not be completed.',
-);
 
 const validateInputShape = (input) => {
   const required = [
@@ -730,13 +509,13 @@ export async function materializeCapability(input, operations = {}) {
   const shapeResult = validateInputShape(input);
   if (!shapeResult.ok) return shapeResult;
 
-  let projectRoot;
   let lifecycleRoot;
-  let docsRoot;
   let originalFingerprint;
   try {
-    ({ projectRoot, lifecycleRoot, docsRoot } = await resolveLifecyclePaths(input.root));
-    originalFingerprint = await directoryFingerprint(lifecycleRoot);
+    ({ lifecycleRoot } = await resolveLifecyclePaths(input.root));
+    const inspected = await inspectLifecycleTree({ repositoryRoot: input.root });
+    if (!inspected.ok) throw Object.assign(new Error('Invalid lifecycle root.'), { code: inspected.errors[0].code });
+    originalFingerprint = inspected.value.fingerprint;
   } catch (error) {
     return materializationFailure(
       stableWriteCodes.has(error?.code) ? error.code : 'MATERIALIZATION_ROOT_INVALID',
@@ -824,8 +603,24 @@ export async function materializeCapability(input, operations = {}) {
     input.baseline,
   );
   if (!pairResult.ok) return pairResult;
-  const targetResult = await validateTargets(lifecycleRoot, input.domain_id, input.targets);
+  const candidateMap = clone(map);
+  if (input.knowledge_state === 'current') candidateMap.knowledge_baseline = input.baseline;
+  const candidateNode = candidateMap.domains.find(({ id }) => id === input.domain_id);
+  candidateNode.domain_state = 'materialized';
+  candidateNode.baseline = input.baseline;
+  candidateNode.evidence_refs = [...new Set([
+    ...candidateNode.evidence_refs,
+    ...input.authoritative_evidence_refs,
+  ])].sort(compareCodePoints);
+  const planned = planKnowledgeLayout({ map: candidateMap });
+  if (!planned.ok) return planned;
+  const canonicalPair = pairForDomain(planned.value, input.domain_id);
+  const expectedTargets = { en: canonicalPair.en, 'zh-CN': canonicalPair['zh-CN'] };
+  const targetResult = await validateTargets(lifecycleRoot, input.targets, expectedTargets);
   if (!targetResult.ok) return targetResult;
+  candidateNode.paired_assets = canonicalPair;
+  const candidateMapValidation = validateJson('project-map', candidateMap);
+  if (!candidateMapValidation.ok) return candidateMapValidation;
 
   let templates;
   try {
@@ -885,19 +680,6 @@ export async function materializeCapability(input, operations = {}) {
     if (!validation.ok) return validation;
   }
 
-  const candidateMap = clone(map);
-  if (input.knowledge_state === 'current') candidateMap.knowledge_baseline = input.baseline;
-  const candidateNode = candidateMap.domains.find(({ id }) => id === input.domain_id);
-  candidateNode.domain_state = 'materialized';
-  candidateNode.paired_assets = clone(input.targets);
-  candidateNode.baseline = input.baseline;
-  candidateNode.evidence_refs = [...new Set([
-    ...candidateNode.evidence_refs,
-    ...input.authoritative_evidence_refs,
-  ])].sort(compareCodePoints);
-  const candidateMapValidation = validateJson('project-map', candidateMap);
-  if (!candidateMapValidation.ok) return candidateMapValidation;
-
   const indexes = await generateIndexesFromRoot({
     map: candidateMap,
     lifecycleRoot,
@@ -913,42 +695,29 @@ export async function materializeCapability(input, operations = {}) {
       'Generated indexes cannot be rebuilt from validated navigation Frontmatter.',
     );
   }
-  const englishIndex = indexes.value.en;
-  const chineseIndex = indexes.value['zh-CN'];
-
-  const writeArtifact = operations.atomicWriteValidated ?? atomicWriteValidated;
-  const publish = operations.rename ?? rename;
-  const afterPublish = operations.afterPublish ?? (async () => {});
-  const inspectTransition = operations.inspectTransition ?? inspectTransitionState;
-  const restoreRename = operations.restoreRename ?? rename;
-  const removeBackup = operations.removeBackup
-    ?? ((path) => rm(path, { recursive: true, force: true }));
-  let stagingRoot;
-  let backupRoot;
-  const expectedCandidate = {
-    expectedMap: candidateMap,
-    expectedEnglishIndex: englishIndex,
-    expectedChineseIndex: chineseIndex,
-  };
-  try {
-    stagingRoot = await mkdtemp(join(docsRoot, '.project-lifecycle-materialize-stage-'));
-    await verifyOwnedTransactionDirectory(projectRoot, stagingRoot);
-    await cp(lifecycleRoot, stagingRoot, { recursive: true, force: false, verbatimSymlinks: true });
-    await writeArtifact({
-      root: stagingRoot,
-      target: input.targets.en,
+  const expectedFiles = indexes.value.files.filter(({ repository_id: repositoryId }) => repositoryId === null);
+  const expectedDirectories = [...new Set([
+    'delivery',
+    ...indexes.value.layout.directories
+      .filter(({ repository_id: repositoryId }) => repositoryId === null)
+      .map(({ locator }) => locator),
+  ])].sort(compareCodePoints);
+  const candidateFiles = [
+    {
+      repository_id: null,
+      locator: input.targets.en,
       content: englishDocument,
       validate: async (source) => validateRenderedDocument(source),
-    });
-    await writeArtifact({
-      root: stagingRoot,
-      target: input.targets['zh-CN'],
+    },
+    {
+      repository_id: null,
+      locator: input.targets['zh-CN'],
       content: chineseDocument,
       validate: async (source) => validateRenderedDocument(source),
-    });
-    await writeArtifact({
-      root: stagingRoot,
-      target: 'project-map.json',
+    },
+    {
+      repository_id: null,
+      locator: 'project-map.json',
       content: jsonContent(candidateMap),
       validate: async (source) => {
         try {
@@ -957,89 +726,47 @@ export async function materializeCapability(input, operations = {}) {
           return materializationFailure('SCHEMA_INVALID', '/', 'Invalid project-map candidate.');
         }
       },
-    });
-    await writeArtifact({
-      root: stagingRoot,
-      target: 'INDEX-en.md',
-      content: englishIndex,
-      validate: async (source) => validateIndex(source, englishIndex, candidateMap, 'en'),
-    });
-    await writeArtifact({
-      root: stagingRoot,
-      target: 'INDEX.md',
-      content: chineseIndex,
-      validate: async (source) => validateIndex(source, chineseIndex, candidateMap, 'zh-CN'),
-    });
-    await requireCandidate({ lifecycleRoot: stagingRoot, ...expectedCandidate });
-
-    backupRoot = await mkdtemp(join(docsRoot, '.project-lifecycle-materialize-backup-'));
-    await verifyOwnedTransactionDirectory(projectRoot, backupRoot);
-    await rmdir(backupRoot);
-    await publish(lifecycleRoot, backupRoot);
-    const backupTransition = await inspectTransition({
-      phase: 'backup-moved',
-      projectRoot,
-      lifecycleRoot,
-      stagingRoot,
-      backupRoot,
-      originalFingerprint,
-      expectedCandidate,
-    });
-    if (backupTransition?.ok !== true) throw candidateError();
-
-    await publish(stagingRoot, lifecycleRoot);
-    const candidateTransition = await inspectTransition({
-      phase: 'candidate-moved',
-      projectRoot,
-      lifecycleRoot,
-      stagingRoot,
-      backupRoot,
-      originalFingerprint,
-      expectedCandidate,
-    });
-    if (candidateTransition?.ok !== true) throw candidateError();
-    await requireCandidate({ lifecycleRoot, ...expectedCandidate });
-    await afterPublish({ lifecycleRoot });
-
-    // The candidate is now verified live and becomes authoritative. Only from this
-    // point may the original backup be recursively cleaned. A partial cleanup never
-    // triggers rollback through a backup that may no longer be intact.
-    let cleanupComplete = false;
-    try {
-      await removeBackup(backupRoot);
-    } catch {}
-    try {
-      cleanupComplete = await fileState(backupRoot) === null;
-    } catch {}
-    if (!cleanupComplete) {
-      return ok({
-        baseline: input.baseline,
-        domain_id: input.domain_id,
-        knowledge_state: input.knowledge_state,
-        status: 'materialized',
-        cleanup_state: 'pending',
-        recovery_artifacts: ['backup'],
-      });
+    },
+    ...expectedFiles.map((file) => ({
+      repository_id: null,
+      locator: file.locator,
+      content: file.content,
+      validate: async (source) => validateIndex(source, file.content, file.language),
+    })),
+  ];
+  const published = await applyLayoutTransaction({
+    repositoryRoot: input.root,
+    expectedFingerprint: originalFingerprint,
+    candidateFiles,
+    candidateDirectories: expectedDirectories,
+    deleteLocators: [],
+    validateCandidate: async ({ lifecycleRoot: candidateRoot }) => ({
+      ok: await inspectCandidate({
+        lifecycleRoot: candidateRoot,
+        expectedMap: candidateMap,
+        expectedFiles,
+        expectedDirectories,
+      }),
+      errors: [],
+    }),
+  }, operations);
+  if (!published.ok) {
+    const error = published.errors[0];
+    if (error.code === 'LAYOUT_RESTORE_FAILED') {
+      return materializationFailure('MATERIALIZATION_RESTORE_FAILED', error.path, error.message);
     }
-    backupRoot = null;
-    return ok({
-      baseline: input.baseline,
-      domain_id: input.domain_id,
-      knowledge_state: input.knowledge_state,
-      status: 'materialized',
-      cleanup_state: 'complete',
-    });
-  } catch (error) {
-    const recovery = await reconcileOriginal({
-      projectRoot,
-      lifecycleRoot,
-      stagingRoot,
-      backupRoot,
-      originalFingerprint,
-      expectedCandidate,
-      restoreRename,
-    });
-    if (!recovery.ok) return recovery.result;
-    return asWriteFailure(error);
+    return materializationFailure(
+      stableWriteCodes.has(error.code) ? error.code : 'MATERIALIZATION_WRITE_FAILED',
+      '/',
+      'Capability materialization could not be completed.',
+    );
   }
+  return ok({
+    baseline: input.baseline,
+    domain_id: input.domain_id,
+    knowledge_state: input.knowledge_state,
+    status: 'materialized',
+    cleanup_state: published.value.cleanup_pending ? 'pending' : 'complete',
+    ...(published.value.cleanup_pending ? { recovery_artifacts: published.value.recovery_artifacts } : {}),
+  });
 }

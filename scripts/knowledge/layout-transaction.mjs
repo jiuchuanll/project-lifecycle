@@ -39,7 +39,7 @@ const fileState = async (path) => {
 
 const pathError = (code) => Object.assign(new Error(code), { code });
 
-const lifecyclePaths = async (repositoryRoot) => {
+const lifecyclePaths = async (repositoryRoot, { allowMissing = false } = {}) => {
   if (typeof repositoryRoot !== 'string' || !isAbsolute(repositoryRoot)) throw pathError('LAYOUT_ROOT_INVALID');
   const lexicalRoot = resolve(repositoryRoot);
   const rootState = await lstat(lexicalRoot);
@@ -52,12 +52,21 @@ const lifecyclePaths = async (repositoryRoot) => {
     throw pathError('PATH_SYMLINK_ESCAPE');
   }
   const lifecycleLexical = join(docsRoot, 'project-lifecycle');
-  const lifecycleState = await lstat(lifecycleLexical);
+  const lifecycleState = await fileState(lifecycleLexical);
+  if (lifecycleState === null && allowMissing) {
+    return {
+      projectRoot: physicalRoot,
+      docsRoot,
+      lifecycleRoot: lifecycleLexical,
+      exists: false,
+    };
+  }
+  if (lifecycleState === null) throw pathError('LAYOUT_ROOT_INVALID');
   const lifecycleRoot = await realpath(lifecycleLexical);
   if (!lifecycleState.isDirectory() || lifecycleState.isSymbolicLink() || !inside(physicalRoot, lifecycleRoot)) {
     throw pathError('PATH_SYMLINK_ESCAPE');
   }
-  return { projectRoot: physicalRoot, docsRoot, lifecycleRoot };
+  return { projectRoot: physicalRoot, docsRoot, lifecycleRoot, exists: true };
 };
 
 const snapshotTree = async (lifecycleRoot) => {
@@ -156,9 +165,16 @@ export const diffLayout = ({ current, candidate }) => {
   };
 };
 
-const validateInputs = ({ repositoryRoot, candidateFiles, deleteLocators, validateCandidate }) => {
+const validateInputs = ({
+  repositoryRoot,
+  candidateFiles,
+  candidateDirectories = [],
+  deleteLocators,
+  validateCandidate,
+}) => {
   if (typeof repositoryRoot !== 'string' || !isAbsolute(repositoryRoot)
-    || !Array.isArray(candidateFiles) || !Array.isArray(deleteLocators)
+    || !Array.isArray(candidateFiles) || !Array.isArray(candidateDirectories)
+    || !Array.isArray(deleteLocators)
     || typeof validateCandidate !== 'function') {
     return failure('LAYOUT_INPUT_INVALID', '/', 'A bounded repository transaction input is required.');
   }
@@ -181,6 +197,13 @@ const validateInputs = ({ repositoryRoot, candidateFiles, deleteLocators, valida
       if (locators.has(locator)) return failure('LAYOUT_INPUT_INVALID', `/deleteLocators/${index}`, 'A locator cannot be written and deleted together.');
       if (deleteLocators.indexOf(locator) !== index) return failure('LAYOUT_INPUT_INVALID', `/deleteLocators/${index}`, 'Delete locators must be unique.');
     }
+    for (const [index, locator] of candidateDirectories.entries()) {
+      assertBoundedRelativePath(locator);
+      if (candidateDirectories.indexOf(locator) !== index) return failure('LAYOUT_INPUT_INVALID', `/candidateDirectories/${index}`, 'Candidate directories must be unique.');
+      if (locators.has(locator) || deleteLocators.includes(locator)) {
+        return failure('LAYOUT_INPUT_INVALID', `/candidateDirectories/${index}`, 'Candidate directories cannot overlap file writes or deletes.');
+      }
+    }
   } catch {
     return failure('PATH_ESCAPE', '/', 'Every layout locator must be a bounded portable relative path.');
   }
@@ -188,6 +211,27 @@ const validateInputs = ({ repositoryRoot, candidateFiles, deleteLocators, valida
     return failure('LAYOUT_INPUT_INVALID', '/candidateFiles', 'One transaction may publish only one repository shard.');
   }
   return ok();
+};
+
+const rollbackInitialization = async ({ lifecycleRoot, stagingRoot, candidateFingerprint }) => {
+  try {
+    if (await fingerprintAt(lifecycleRoot, candidateFingerprint)) {
+      if (await fileState(stagingRoot)) return recoveryFailure({ lifecycleRoot, stagingRoot });
+      try {
+        await rename(lifecycleRoot, stagingRoot);
+      } catch {
+        if (await fileState(lifecycleRoot) || !await fingerprintAt(stagingRoot, candidateFingerprint)) {
+          return recoveryFailure({ lifecycleRoot, stagingRoot });
+        }
+      }
+    } else if (await fileState(lifecycleRoot)) {
+      return recoveryFailure({ lifecycleRoot, stagingRoot });
+    }
+    await cleanupStage(stagingRoot);
+    return ok();
+  } catch {
+    return recoveryFailure({ lifecycleRoot, stagingRoot });
+  }
 };
 
 const ensureParentDirectories = async (root, locator) => {
@@ -233,7 +277,7 @@ const preserveTreeTimestamps = async (sourceRoot, targetRoot, entries) => {
 
 const recoveryFailure = async ({ lifecycleRoot, stagingRoot, backupRoot }) => {
   const labels = [];
-  for (const [label, path] of [['live', lifecycleRoot], ['stage', stagingRoot], ['backup', backupRoot]]) {
+  for (const [label, path] of [['backup', backupRoot], ['live', lifecycleRoot], ['stage', stagingRoot]]) {
     if (path && await fileState(path).catch(() => true)) labels.push(label);
   }
   return failure(
@@ -292,12 +336,16 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
   const publishRename = operations.rename ?? rename;
   const restoreRename = operations.restoreRename ?? rename;
   const copyTree = operations.copy ?? cp;
+  const afterPublish = operations.afterPublish ?? (async () => {});
+  const inspectTransition = operations.inspectTransition ?? (async () => ({ ok: true }));
   const removeBackup = operations.removeBackup ?? ((path) => rm(path, { recursive: true, force: true }));
   let paths;
   let current;
   try {
-    paths = await lifecyclePaths(input.repositoryRoot);
-    current = await snapshotTree(paths.lifecycleRoot);
+    paths = await lifecyclePaths(input.repositoryRoot, { allowMissing: input.initialize === true });
+    current = paths.exists
+      ? await snapshotTree(paths.lifecycleRoot)
+      : { fingerprint: hash(JSON.stringify([])), entries: [] };
   } catch (error) {
     return failure(error?.code ?? 'LAYOUT_ROOT_INVALID', '/', 'The lifecycle tree could not be inspected safely.');
   }
@@ -305,17 +353,22 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
     return failure('LAYOUT_FINGERPRINT_STALE', '/expectedFingerprint', 'The lifecycle tree changed before publication.');
   }
   const currentByLocator = new Map(current.entries.map((entry) => [entry.locator, entry]));
+  const candidateDirectories = input.candidateDirectories ?? [];
   const writes = input.candidateFiles
     .filter((entry) => currentByLocator.get(entry.locator)?.hash !== hash(entry.content))
     .sort((left, right) => compareCodePoints(left.locator, right.locator));
   const deletes = input.deleteLocators
     .filter((locator) => currentByLocator.has(locator) || currentByLocator.has(`${locator}/`))
     .sort(compareCodePoints);
+  const directoriesToCreate = candidateDirectories
+    .filter((locator) => currentByLocator.get(`${locator}/`)?.type !== 'directory')
+    .sort(compareCodePoints);
   const unchanged = [
     ...input.candidateFiles.filter((entry) => !writes.includes(entry)).map(({ locator }) => locator),
     ...input.deleteLocators.filter((locator) => !deletes.includes(locator)),
+    ...candidateDirectories.filter((locator) => !directoriesToCreate.includes(locator)).map((locator) => `${locator}/`),
   ].sort(compareCodePoints);
-  if (writes.length === 0 && deletes.length === 0) {
+  if (writes.length === 0 && deletes.length === 0 && directoriesToCreate.length === 0) {
     try {
       const validation = await input.validateCandidate({ lifecycleRoot: paths.lifecycleRoot });
       if (validation?.ok !== true) return failure('LAYOUT_CANDIDATE_INVALID', '/', 'The complete lifecycle candidate is invalid.');
@@ -329,16 +382,27 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
   let backupRoot;
   let candidateFingerprint;
   let publicationStarted = false;
+  let initializationPublished = false;
   try {
     stagingRoot = await mkdtemp(join(paths.docsRoot, '.project-lifecycle-layout-stage-'));
-    await copyTree(paths.lifecycleRoot, stagingRoot, {
-      recursive: true,
-      dereference: false,
+    if (paths.exists) {
+      await copyTree(paths.lifecycleRoot, stagingRoot, {
+        recursive: true,
+        dereference: false,
       preserveTimestamps: true,
       force: false,
-    });
-    await preserveTreeTimestamps(paths.lifecycleRoot, stagingRoot, current.entries);
+      verbatimSymlinks: true,
+      });
+      await preserveTreeTimestamps(paths.lifecycleRoot, stagingRoot, current.entries);
+    }
     await snapshotTree(stagingRoot);
+    for (const locator of directoriesToCreate) {
+      await ensureParentDirectories(stagingRoot, `${locator}/placeholder`);
+      const target = join(stagingRoot, locator);
+      const state = await fileState(target);
+      if (state === null) await mkdir(target);
+      else if (!state.isDirectory() || state.isSymbolicLink()) throw pathError('PATH_SYMLINK_ESCAPE');
+    }
     for (const locator of deletes) {
       const target = await resolveInside(stagingRoot, locator);
       await rm(target, { recursive: true, force: true });
@@ -353,9 +417,34 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
       return failure('LAYOUT_CANDIDATE_INVALID', '/', 'The complete lifecycle candidate is invalid.');
     }
     candidateFingerprint = (await snapshotTree(stagingRoot)).fingerprint;
-    if (!await fingerprintAt(paths.lifecycleRoot, current.fingerprint)) {
+    const originalIsCurrent = paths.exists
+      ? await fingerprintAt(paths.lifecycleRoot, current.fingerprint)
+      : await fileState(paths.lifecycleRoot) === null;
+    if (!originalIsCurrent) {
       await cleanupStage(stagingRoot);
       return failure('LAYOUT_FINGERPRINT_STALE', '/expectedFingerprint', 'The lifecycle tree changed before publication.');
+    }
+
+    if (!paths.exists) {
+      try {
+        await publishRename(stagingRoot, paths.lifecycleRoot);
+      } catch {
+        if (await fileState(stagingRoot) || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) {
+          throw pathError('LAYOUT_TRANSACTION_FAILED');
+        }
+      }
+      publicationStarted = true;
+      initializationPublished = true;
+      const liveValidation = await input.validateCandidate({ lifecycleRoot: paths.lifecycleRoot });
+      if (liveValidation?.ok !== true || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) {
+        throw pathError('LAYOUT_TRANSACTION_FAILED');
+      }
+      return ok({
+        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+        unchanged,
+        cleanup_pending: false,
+        recovery_artifacts: [],
+      });
     }
 
     backupRoot = await mkdtemp(join(paths.docsRoot, '.project-lifecycle-layout-backup-'));
@@ -366,20 +455,34 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
       if (await fileState(paths.lifecycleRoot) || !await fingerprintAt(backupRoot, current.fingerprint)) throw pathError('LAYOUT_TRANSACTION_FAILED');
     }
     publicationStarted = true;
+    if ((await inspectTransition({
+      phase: 'backup-moved',
+      lifecycleRoot: paths.lifecycleRoot,
+      stagingRoot,
+      backupRoot,
+    }))?.ok !== true) throw pathError('LAYOUT_TRANSACTION_FAILED');
     try {
       await publishRename(stagingRoot, paths.lifecycleRoot);
     } catch {
       if (await fileState(stagingRoot) || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) throw pathError('LAYOUT_TRANSACTION_FAILED');
     }
+    if ((await inspectTransition({
+      phase: 'candidate-moved',
+      lifecycleRoot: paths.lifecycleRoot,
+      stagingRoot,
+      backupRoot,
+    }))?.ok !== true) throw pathError('LAYOUT_TRANSACTION_FAILED');
     const liveValidation = await input.validateCandidate({ lifecycleRoot: paths.lifecycleRoot });
     if (liveValidation?.ok !== true || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) {
       throw pathError('LAYOUT_TRANSACTION_FAILED');
     }
+    await afterPublish({ lifecycleRoot: paths.lifecycleRoot });
     try {
       await removeBackup(backupRoot);
-    } catch {
+    } catch {}
+    if (await fileState(backupRoot)) {
       return ok({
-        changed: [...writes.map(({ locator }) => locator), ...deletes].sort(compareCodePoints),
+        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
         unchanged,
         cleanup_pending: true,
         recovery_artifacts: ['backup'],
@@ -387,21 +490,27 @@ export const applyLayoutTransaction = async (input = {}, operations = {}) => {
     }
     backupRoot = null;
     return ok({
-      changed: [...writes.map(({ locator }) => locator), ...deletes].sort(compareCodePoints),
+      changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
       unchanged,
       cleanup_pending: false,
       recovery_artifacts: [],
     });
   } catch (error) {
     if (publicationStarted) {
-      const restored = await restoreOriginal({
-        lifecycleRoot: paths.lifecycleRoot,
-        stagingRoot,
-        backupRoot,
-        originalFingerprint: current.fingerprint,
-        candidateFingerprint,
-        restoreRename,
-      });
+      const restored = initializationPublished
+        ? await rollbackInitialization({
+          lifecycleRoot: paths.lifecycleRoot,
+          stagingRoot,
+          candidateFingerprint,
+        })
+        : await restoreOriginal({
+          lifecycleRoot: paths.lifecycleRoot,
+          stagingRoot,
+          backupRoot,
+          originalFingerprint: current.fingerprint,
+          candidateFingerprint,
+          restoreRename,
+        });
       if (!restored.ok) return restored;
     } else {
       await cleanupStage(stagingRoot).catch(() => {});

@@ -438,6 +438,8 @@ test('bootstrap creates only the calibrated fixed-root skeleton and paired index
     'INDEX-en.md',
     'INDEX.md',
     'knowledge/',
+    'knowledge/INDEX-en.md',
+    'knowledge/INDEX.md',
     'pending-changes.json',
     'project-map.json',
   ]);
@@ -446,6 +448,8 @@ test('bootstrap creates only the calibrated fixed-root skeleton and paired index
   const pending = await readJson(join(lifecycleRoot, 'pending-changes.json'));
   const englishIndex = await readFile(join(lifecycleRoot, 'INDEX-en.md'), 'utf8');
   const chineseIndex = await readFile(join(lifecycleRoot, 'INDEX.md'), 'utf8');
+  const englishKnowledgeIndex = await readFile(join(lifecycleRoot, 'knowledge/INDEX-en.md'), 'utf8');
+  const chineseKnowledgeIndex = await readFile(join(lifecycleRoot, 'knowledge/INDEX.md'), 'utf8');
   assert.equal(validateJson('project-map', map).ok, true);
   assert.equal(validateJson('pending-changes', pending).ok, true);
   assert.equal(map.project_id, input.project_id);
@@ -464,8 +468,45 @@ test('bootstrap creates only the calibrated fixed-root skeleton and paired index
     assert.equal(index.includes(language), true);
     assert.equal(index.includes(language === 'Sample Application' ? input.purpose.en : input.purpose['zh-CN']), true);
     assert.equal(index.includes(input.calibration_ref), true);
-    assert.equal(index.includes('desktop-experience'), true);
+    assert.equal(index.includes('desktop-experience'), false);
   }
+  assert.equal(englishKnowledgeIndex.includes('domain:desktop-experience'), true);
+  assert.equal(chineseKnowledgeIndex.includes('domain:desktop-experience'), true);
+});
+
+test('bootstrap creates confirmed parent navigation without fabricating parent knowledge', async (context) => {
+  const root = await createTemporaryRoot(context);
+  const input = validBootstrapInput(root);
+  input.domains = [
+    {
+      ...input.domains[0],
+      id: 'runtime',
+      label: { en: 'Runtime', 'zh-CN': '运行时' },
+      purpose: { en: 'Owns runtime.', 'zh-CN': '负责运行时。' },
+      scope: { includes: ['runtime', 'tools'], excludes: [] },
+    },
+    {
+      ...input.domains[0],
+      id: 'tools',
+      label: { en: 'Tools', 'zh-CN': '工具' },
+      purpose: { en: 'Owns tools.', 'zh-CN': '负责工具。' },
+      scope: { includes: ['tools'], excludes: [] },
+      parent_id: 'runtime',
+    },
+  ];
+
+  const result = await bootstrap(input);
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  const lifecycleRoot = join(root, 'docs/project-lifecycle');
+  const tree = await listTree(lifecycleRoot);
+  assert.ok(tree.includes('knowledge/runtime/INDEX-en.md'));
+  assert.ok(tree.includes('knowledge/runtime/INDEX.md'));
+  assert.equal(tree.some((path) => /runtime(?:-en)?\.md$/u.test(path)), false);
+  assert.equal(tree.some((path) => /tools(?:-en)?\.md$/u.test(path)), false);
+  const runtimeIndex = await readFile(join(lifecycleRoot, 'knowledge/runtime/INDEX-en.md'), 'utf8');
+  assert.match(runtimeIndex, /Not materialized\./);
+  assert.match(runtimeIndex, /domain:tools/);
 });
 
 test('bootstrap is idempotent for an identical map and rejects a conflicting map', async (context) => {
