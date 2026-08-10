@@ -28,6 +28,21 @@ function hasRawParentSegment(candidate) {
   return candidate.split(/[\\/]/u).includes('..');
 }
 
+export function isBoundedRelativePath(candidate) {
+  if (typeof candidate !== 'string' || candidate.length === 0 || candidate.includes('\0')) return false;
+  if (candidate.includes('\\') || isRawAbsolute(candidate) || hasRawParentSegment(candidate)) return false;
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/u.test(candidate)) return false;
+  const segments = candidate.split('/');
+  return segments.every((segment) => segment.length > 0 && segment !== '.');
+}
+
+export function assertBoundedRelativePath(candidate) {
+  if (!isBoundedRelativePath(candidate)) {
+    throw pathError('PATH_ESCAPE', 'Path must be a bounded portable relative target.');
+  }
+  return candidate;
+}
+
 /**
  * Resolves a relative target beneath an explicit governance root.
  *
@@ -37,9 +52,7 @@ function hasRawParentSegment(candidate) {
  * replacing entries in the same directory tree.
  */
 export async function resolveInside(root, candidate) {
-  if (isRawAbsolute(candidate) || hasRawParentSegment(candidate)) {
-    throw pathError('PATH_ESCAPE', `Path must be a bounded relative target: ${candidate}`);
-  }
+  assertBoundedRelativePath(candidate);
 
   const rootPath = resolve(root);
   const rootRealPath = await realpath(rootPath);
