@@ -756,7 +756,6 @@ test('planner-derived promotion and demotion move a parent pair symmetrically', 
   }
   const rootIndexPath = join(lifecycle(root), 'INDEX-en.md');
   const rootIndexBefore = await readFile(rootIndexPath, 'utf8');
-  const rootIndexTime = (await stat(rootIndexPath)).mtimeMs;
   const current = await mapAt(root);
   const promotedCandidate = clone(current);
   promotedCandidate.domains.push({
@@ -812,7 +811,8 @@ test('planner-derived promotion and demotion move a parent pair symmetrically', 
   assert.equal(await readFile(join(lifecycle(root), 'knowledge/runtime-en.md'), 'utf8')
     .then(() => true, () => false), false);
   assert.equal(await readFile(rootIndexPath, 'utf8'), rootIndexBefore);
-  assert.equal(Math.abs((await stat(rootIndexPath)).mtimeMs - rootIndexTime) < 0.001, true);
+  assert.equal(promoted.value.changed.some(({ repository_id: id, locator }) =>
+    id === null && locator === 'INDEX-en.md'), false);
 
   const demotedCandidate = clone(promotedMap);
   demotedCandidate.domains.find(({ id }) => id === 'loop').parent_id = null;
