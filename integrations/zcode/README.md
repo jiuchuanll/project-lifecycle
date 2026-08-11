@@ -1,6 +1,6 @@
 # ZCode installation
 
-Candidate version: `0.3.0`. Evidence status: `NOT_TESTED` until the native matrix is complete. Retained `0.1.0` traces are historical evidence, not validation of this candidate.
+Candidate version: `0.3.1`. Evidence status: `NOT_TESTED` until the native matrix is complete. Retained `0.1.0` traces are historical evidence, not validation of this candidate.
 
 Add `https://github.com/jiuchuanll/project-lifecycle` as a marketplace, then install the `project-lifecycle` package discovered through `.zcode-plugin/plugin.json` in a disposable profile.
 

@@ -15065,7 +15065,7 @@ var require_dist2 = __commonJS({
   }
 });
 
-// scripts/bin/project-lifecycle.mjs
+// scripts/bin/project-lifecycle-source.mjs
 import { createHash as createHash2 } from "node:crypto";
 import { readFile as readFile4, realpath as realpath5 } from "node:fs/promises";
 import { basename as basename3, dirname as dirname4, isAbsolute as isAbsolute5, relative as relative4, resolve as resolve4, sep as sep4 } from "node:path";
@@ -17969,8 +17969,8 @@ var validateFixtures = async (rootValue) => {
   }
 };
 
-// scripts/bin/project-lifecycle.mjs
-var version = "0.3.0";
+// scripts/bin/project-lifecycle-source.mjs
+var version = "0.3.1";
 var command = process.argv[2] ?? "help";
 var cliFailure = (code, path, message) => fail([createError(code, path, message)]);
 var publicDiagnosticMessages = Object.freeze({

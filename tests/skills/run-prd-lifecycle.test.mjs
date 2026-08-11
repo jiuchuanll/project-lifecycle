@@ -43,6 +43,19 @@ test('declares the canonical PRD lifecycle Skill identity and delivery triggers'
   }
 });
 
+test('routes installed validator calls through the dependency-free plugin runtime', async () => {
+  const { body } = await loadSkill();
+  const runtime = body.match(/<!-- plugin-runtime-contract\n([\s\S]*?)\n-->/)?.[1];
+
+  assert.ok(runtime, 'root Skill must expose the installed plugin runtime contract');
+  assert.deepEqual(parseYaml(runtime), {
+    installed_cli: 'bin/project-lifecycle',
+    node_fallback: 'dist/project-lifecycle.mjs',
+    source_cli: 'repository-development-only',
+    cache_dependency_install: 'forbidden',
+  });
+});
+
 test('links exactly six focused one-level references', async () => {
   const { body } = await loadSkill();
   const references = [...body.matchAll(/\]\(references\/([^)]+\.md)\)/g)]

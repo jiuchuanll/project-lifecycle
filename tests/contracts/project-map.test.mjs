@@ -30,7 +30,7 @@ const run = (command, args, { timeoutMs = 5_000, ...options } = {}) => new Promi
 });
 
 const runCli = (args) => run(process.execPath, [
-  'scripts/bin/project-lifecycle.mjs',
+  'scripts/bin/project-lifecycle-source.mjs',
   'validate-json',
   ...args,
 ], { cwd: new URL('../..', import.meta.url) });

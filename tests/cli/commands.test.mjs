@@ -17,7 +17,7 @@ const validMap = fileURLToPath(new URL(
 ));
 
 const runCli = (args) => new Promise((resolve, reject) => {
-  const child = spawn(process.execPath, ['scripts/bin/project-lifecycle.mjs', ...args], {
+  const child = spawn(process.execPath, ['scripts/bin/project-lifecycle-source.mjs', ...args], {
     cwd: repositoryRoot,
   });
   let stdout = '';

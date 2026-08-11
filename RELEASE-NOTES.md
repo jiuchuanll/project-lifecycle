@@ -1,17 +1,27 @@
-# Project Lifecycle 0.3.0 candidate notes
+# Project Lifecycle 0.3.1 candidate notes
 
 Publication status: **PUBLIC PRE-RELEASE EVALUATION CANDIDATE**
 
 Host support gate: **NON-RELEASE CANDIDATE**
 
-Version `0.3.0` builds on the deterministic schema-v2 hierarchy and adds
-user-controlled deep domain calibration plus stronger semantic quality gates
-for durable capability knowledge. It remains private npm metadata and is
-published as repository source plus a deterministic release archive; the
-version bump does not upgrade any native-host support claim.
+Version `0.3.1` keeps the deterministic schema-v2 hierarchy and
+user-controlled deep domain calibration from `0.3.0`, while repairing installed
+plugin validation so no npm dependency installation is required inside a host
+cache. It remains private npm metadata and is published as repository source
+plus a deterministic release archive; the version bump does not upgrade any
+native-host support claim.
 
 ## What changed
 
+- Installed Agents now receive one explicit runtime contract: execute
+  `bin/project-lifecycle`, use `node dist/project-lifecycle.mjs` only as a
+  fallback, and never invoke source scripts or install dependencies in a plugin
+  cache.
+- The legacy source-looking CLI path is now a dependency-free compatibility
+  wrapper over the bundle. Repository development and bundle construction use
+  the separately named `scripts/bin/project-lifecycle-source.mjs` entry.
+- A cache-shaped regression test runs without `node_modules` and protects the
+  exact path that previously failed while resolving `yaml`.
 - Candidate domains are assessed independently using boundary, dependency,
   uncertainty, risk, and extensibility signals instead of one project-wide
   depth level.
@@ -46,6 +56,12 @@ version bump does not upgrade any native-host support claim.
   materialization, topology application, and accepted Knowledge Diffs publish
   validated repository shards before the governance map with cross-shard rollback.
 
+## Upgrade from 0.3.0
+
+No knowledge schema or layout migration is required. Refresh the marketplace
+and installed plugin so validator calls use the `0.3.1` runtime contract. Do
+not repair the old cache by installing npm packages or editing cached files.
+
 ## Upgrade from 0.2.0
 
 No schema or layout migration is required. Existing accepted maps and paired
@@ -72,9 +88,8 @@ approval before invoking migration. A successful migration:
 There is no public migration CLI, migration receipt, schema-v1 registry,
 redirect stub, symlink, or duplicate knowledge body. External Markdown links
 that cannot be proven safe to rewrite are reported as compatibility risks.
-Real project migration and local global-plugin installation are deliberately
-outside this release branch; update the develop-bound local plugin only after
-the PR is merged.
+Real project migration remains outside this release. Update a develop-bound
+local plugin only after the release PR is merged.
 
 ## Evidence boundary
 
@@ -86,7 +101,7 @@ the PR is merged.
   and temporary questions with no durable write.
 - Codex `0.147.0-alpha.6.5` and Kimi Code `0.29.2` retained traces were produced
   for `0.1.0`. Their recorded failures and bounded remediation results remain
-  historical evidence and are not relabeled as `0.3.0` runs.
+  historical evidence and are not relabeled as `0.3.1` runs.
 - Claude Code, Cursor, and ZCode remain `NOT_TESTED` because native executables
   were unavailable. Structural passes never produce a `SUPPORTED` claim.
 

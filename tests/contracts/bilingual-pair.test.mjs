@@ -68,7 +68,7 @@ const withConstraintPair = async (context, editEn = (value) => value, editZh = (
 };
 
 const runCli = (args) => new Promise((resolve, reject) => {
-  const child = spawn(process.execPath, ['scripts/bin/project-lifecycle.mjs', ...args], {
+  const child = spawn(process.execPath, ['scripts/bin/project-lifecycle-source.mjs', ...args], {
     cwd: new URL('../..', import.meta.url),
   });
   let stdout = '';
