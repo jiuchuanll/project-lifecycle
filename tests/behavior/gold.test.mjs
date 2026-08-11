@@ -41,6 +41,24 @@ test('keeps every fixture bounded and every scenario positive plus adversarial',
   }
 });
 
+test('covers the four v2 hierarchical knowledge behaviors with explicit outcomes', () => {
+  const cases = scenarios.map(({ v2_behavior_case: behavior }) => behavior).filter(Boolean);
+  assert.deepEqual(cases.map(({ case_id: caseId }) => caseId).sort(), [
+    'existing-flat-layout-migration',
+    'new-two-level-progressive-materialization',
+    'temporary-question-no-write',
+    'three-level-bounded-routing',
+  ]);
+  for (const behavior of cases) {
+    assert.equal((behavior.expected_route === null) !== (behavior.expected_stop === null), true);
+    assert.ok(Array.isArray(behavior.selected_context_ids));
+    assert.ok(Array.isArray(behavior.durable_files_written));
+    assert.ok(Array.isArray(behavior.archive_paths_read));
+    assert.ok(Array.isArray(behavior.human_gates));
+    assert.ok(Array.isArray(behavior.forbidden_writes));
+  }
+});
+
 test('accepts the declared positive observation for every scenario', () => {
   for (const scenario of scenarios) {
     const result = evaluateGoldObservation(scenario, scenario.positive_path.observation);

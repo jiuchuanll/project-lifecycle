@@ -184,6 +184,26 @@ test('rejects an absolute path outside the allowed root without changing it', as
   }
 });
 
+for (const candidate of ['knowledge\\project-map.json', 'https://example.test/project-map.json']) {
+  test(`rejects non-portable target ${JSON.stringify(candidate)}`, async () => {
+    const sandbox = await createSandbox();
+    try {
+      const allowedRoot = await sandbox.directory('allowed');
+      await assert.rejects(
+        atomicWriteValidated({
+          root: allowedRoot,
+          target: candidate,
+          content: 'replacement\n',
+          validate: acceptsContent('replacement\n'),
+        }),
+        { code: 'PATH_ESCAPE' },
+      );
+    } finally {
+      await sandbox.cleanup();
+    }
+  });
+}
+
 test('rejects a raw absolute target even when it is inside the allowed root', async () => {
   const sandbox = await createSandbox();
   try {

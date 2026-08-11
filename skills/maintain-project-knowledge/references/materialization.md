@@ -16,7 +16,11 @@ Evidence may include code, resources, configuration, existing authoritative docu
 
 ## Canonical Ownership
 
-Use `project-map.json` for structure and routing, generated `INDEX.md`/`INDEX-en.md` for navigation, and paired Markdown for knowledge. The map must not become a second knowledge body. Capability Frontmatter proves the asset's matching ID, state, pair, baseline, entry points, and verification evidence; the body explains current product, architecture, implementation, quality, dependencies, provenance, and owned constraints.
+Use schema-v2 `project-map.json` for structure and routing, generated `INDEX.md`/`INDEX-en.md` for navigation, and paired Markdown for knowledge. The map must not become a second knowledge body. Capability Frontmatter proves the asset's matching ID, state, pair, baseline, entry points, and verification evidence; the body explains current product, architecture, implementation, quality, dependencies, provenance, and owned constraints.
+
+Canonical paths come only from the accepted topology and repository owner. A top-level leaf uses `knowledge/<id>-en.md`; a node with children owns `knowledge/<ancestor...>/<id>/<id>-en.md`; its direct children share that directory, recursively. The Chinese path follows the same rule without `-en`. `paired_assets.repository_id` is `null` for governance or the exact registered owner. Caller-chosen paths, filesystem nesting, and old flat locations never override the planner.
+
+For a repository-owned domain, bind the registered owner to an explicit local `repository_roots` entry. Stage and validate the body plus shard indexes there, retain its rollback backup, and publish the governance map only after the shard succeeds. A failure restores any shard already published.
 
 One independently verifiable or changeable semantic subject may receive a stable structured `fact_id`. Keep that ID when the accepted answer changes but the subject remains the same, and advance its revision. Replacement, split, merge, ownership transfer, or semantic-scope change creates a reviewed transition rather than recycling an identity. Do not add a global fact index or an exhaustive fact-ID array to Frontmatter.
 

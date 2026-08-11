@@ -7,9 +7,13 @@
 
 - None.
 
-## Domain entry points
+## Knowledge
 
-- None.
+- [Knowledge](knowledge/INDEX-en.md)
+
+## Delivery
+
+- [Delivery](delivery/)
 
 ## Active changes
 

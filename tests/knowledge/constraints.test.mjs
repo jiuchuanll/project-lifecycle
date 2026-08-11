@@ -61,11 +61,11 @@ const revalidatingProposal = (candidate, overrides = {}) => {
 const updateConstraintSections = async (root, oldId, newId, revision) => {
   const updates = { domain_id: 'desktop-experience' };
   for (const [language, name] of [['en', 'desktop-experience-en.md'], ['zh-CN', 'desktop-experience.md']]) {
-    const source = await readFile(join(lifecycle(root), 'knowledge', name), 'utf8');
+    const source = await readFile(join(lifecycle(root), 'knowledge/desktop-experience', name), 'utf8');
     const replaced = oldId === newId
       ? source.replaceAll(`id=${oldId} revision=1`, `id=${newId} revision=${revision}`)
       : `${source.trimEnd()}\n\n<a id="constraint-${newId}"></a>\n<!-- project-lifecycle:constraint id=${newId} revision=${revision} -->\nReplacement constraint content.\n<!-- /project-lifecycle:constraint -->\n`;
-    updates[language] = { locator: `knowledge/${name}`, content: replaced };
+    updates[language] = { locator: `knowledge/desktop-experience/${name}`, content: replaced };
   }
   return [updates];
 };
@@ -175,8 +175,8 @@ test('approved SEMANTIC application atomically updates map, pair, indexes, trace
   assert.equal(appliedMap.project_id, map.project_id);
   assert.deepEqual(appliedMap.project_identity, map.project_identity);
   assert.deepEqual((await readJson(join(lifecycle(root), 'pending-changes.json'))).changes, []);
-  assert.match(await readFile(join(lifecycle(root), 'knowledge/desktop-experience-en.md'), 'utf8'), /id=desktop-privacy revision=2/);
-  assert.match(await readFile(join(lifecycle(root), 'INDEX-en.md'), 'utf8'), /desktop-experience/);
+  assert.match(await readFile(join(lifecycle(root), 'knowledge/desktop-experience/desktop-experience-en.md'), 'utf8'), /id=desktop-privacy revision=2/);
+  assert.match(await readFile(join(lifecycle(root), 'knowledge/INDEX-en.md'), 'utf8'), /desktop-experience/);
   assert.match(await readFile(join(lifecycle(root), 'INDEX-en.md'), 'utf8'), /Sample app/);
   assert.match(await readFile(join(lifecycle(root), 'INDEX.md'), 'utf8'), /示例应用/);
 });
@@ -234,8 +234,8 @@ test('REPLACEMENT creates approved new identity and retains historical redirect'
     semantic_revision: 1,
     lifecycle_state: 'current',
     knowledge_refs: {
-      en: 'knowledge/desktop-experience-en.md#constraint-desktop-data-privacy',
-      'zh-CN': 'knowledge/desktop-experience.md#constraint-desktop-data-privacy',
+      en: 'knowledge/desktop-experience/desktop-experience-en.md#constraint-desktop-data-privacy',
+      'zh-CN': 'knowledge/desktop-experience/desktop-experience.md#constraint-desktop-data-privacy',
     },
     exceptions: [],
   });
@@ -265,7 +265,7 @@ test('new constraint IDs and retired-ID reuse cannot become current without appr
   const root = await setup(context);
   const map = await readJson(join(lifecycle(root), 'project-map.json'));
   const candidate = clone(map);
-  candidate.constraints.push({ ...candidate.constraints[0], id: 'new-privacy', knowledge_refs: { en: 'knowledge/desktop-experience-en.md#constraint-new-privacy', 'zh-CN': 'knowledge/desktop-experience.md#constraint-new-privacy' } });
+  candidate.constraints.push({ ...candidate.constraints[0], id: 'new-privacy', knowledge_refs: { en: 'knowledge/desktop-experience/desktop-experience-en.md#constraint-new-privacy', 'zh-CN': 'knowledge/desktop-experience/desktop-experience.md#constraint-new-privacy' } });
   candidate.constraints.sort((a, b) => a.id < b.id ? -1 : 1);
   const proposal = proposalFor(candidate, {
     change_class: 'REPLACEMENT',
@@ -294,8 +294,8 @@ test('new constraint IDs and retired-ID reuse cannot become current without appr
     id: 'privacy-successor',
     lifecycle_state: 'current',
     knowledge_refs: {
-      en: 'knowledge/desktop-experience-en.md#constraint-privacy-successor',
-      'zh-CN': 'knowledge/desktop-experience.md#constraint-privacy-successor',
+      en: 'knowledge/desktop-experience/desktop-experience-en.md#constraint-privacy-successor',
+      'zh-CN': 'knowledge/desktop-experience/desktop-experience.md#constraint-privacy-successor',
     },
   });
   delete retired.constraints[2].successor_ids;
@@ -556,8 +556,8 @@ test('preserves bounded recovery artifacts when the original backup is corrupt o
   assert.equal(corrupted.ok, false);
   assert.equal(corrupted.errors[0].code, 'CHANGE_RESTORE_FAILED');
   const corruptArtifacts = await readdir(join(corrupt.root, 'docs'));
-  assert.equal(corruptArtifacts.some((name) => name.startsWith('.project-lifecycle-change-backup-')), true);
-  assert.equal(corruptArtifacts.some((name) => name.startsWith('.project-lifecycle-change-stage-')), true);
+  assert.equal(corruptArtifacts.some((name) => name.startsWith('.project-lifecycle-layout-backup-')), true);
+  assert.equal(corruptArtifacts.some((name) => name.startsWith('.project-lifecycle-layout-stage-')), true);
 
   const restore = await preparedSemanticChange(context);
   const failedRestore = await applyApprovedChange({ root: restore.root, change_id: 'change-desktop-privacy', approval_ref: 'approval:v2', traceability: { knowledge_diff_ref: 'diff:v2', history_ref: 'git:v2' }, candidate_map: restore.candidate, knowledge_updates: restore.updates }, {
@@ -567,8 +567,8 @@ test('preserves bounded recovery artifacts when the original backup is corrupt o
   assert.equal(failedRestore.ok, false);
   assert.equal(failedRestore.errors[0].code, 'CHANGE_RESTORE_FAILED');
   const restoreArtifacts = await readdir(join(restore.root, 'docs'));
-  assert.equal(restoreArtifacts.some((name) => name.startsWith('.project-lifecycle-change-backup-')), true);
-  assert.equal(restoreArtifacts.some((name) => name.startsWith('.project-lifecycle-change-stage-')), true);
+  assert.equal(restoreArtifacts.some((name) => name.startsWith('.project-lifecycle-layout-backup-')), true);
+  assert.equal(restoreArtifacts.some((name) => name.startsWith('.project-lifecycle-layout-stage-')), true);
 });
 
 test('treats partial backup cleanup as pending and completed cleanup as complete even on rejection', async (context) => {
@@ -600,8 +600,8 @@ test('rejects label declarations for constraint add/replacement and scope-only A
     ...clone(map.constraints[1]),
     id: 'desktop-new-rule',
     knowledge_refs: {
-      en: 'knowledge/desktop-experience-en.md#constraint-desktop-new-rule',
-      'zh-CN': 'knowledge/desktop-experience.md#constraint-desktop-new-rule',
+      en: 'knowledge/desktop-experience/desktop-experience-en.md#constraint-desktop-new-rule',
+      'zh-CN': 'knowledge/desktop-experience/desktop-experience.md#constraint-desktop-new-rule',
     },
   });
   added.constraints.sort((left, right) => left.id < right.id ? -1 : 1);
@@ -611,7 +611,7 @@ test('rejects label declarations for constraint add/replacement and scope-only A
 
   const replacement = clone(map);
   replacement.constraints[0] = { ...replacement.constraints[0], lifecycle_state: 'retired', successor_ids: ['desktop-new-privacy'], retirement_reason_ref: 'decision:replace' };
-  replacement.constraints.push({ ...clone(map.constraints[0]), id: 'desktop-new-privacy', knowledge_refs: { en: 'knowledge/desktop-experience-en.md#constraint-desktop-new-privacy', 'zh-CN': 'knowledge/desktop-experience.md#constraint-desktop-new-privacy' } });
+  replacement.constraints.push({ ...clone(map.constraints[0]), id: 'desktop-new-privacy', knowledge_refs: { en: 'knowledge/desktop-experience/desktop-experience-en.md#constraint-desktop-new-privacy', 'zh-CN': 'knowledge/desktop-experience/desktop-experience.md#constraint-desktop-new-privacy' } });
   replacement.constraints.sort((left, right) => left.id < right.id ? -1 : 1);
   const replaceResult = analyzeImpact({ current_map: map, candidate_map: replacement, change_class: 'REPLACEMENT', changed_fields: ['label'], target_id: 'desktop-privacy', operation: 'REPLACE_CONSTRAINT' });
   assert.equal(replaceResult.ok, false);

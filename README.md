@@ -14,7 +14,7 @@ silently becoming accepted project truth.
 ## Project status
 
 > [!IMPORTANT]
-> This repository is open source, but version `0.1.0` remains a **pre-release
+> This repository is open source, but version `0.2.0` remains a **pre-release
 > evaluation candidate**. It is not published to npm, and no native host
 > currently satisfies the release support gate. Treat the installation guides
 > as evaluation instructions, not production-support claims.
@@ -39,6 +39,8 @@ Core rules:
 
 - The project map is a compact routing and ownership index, not a second
   knowledge body.
+- Schema-v2 `parent_id` is the only vertical-topology source. Generated
+  directories and indexes are navigation views, never competing topology.
 - English and Chinese assets are one logical pair and must advance together.
 - Only verified and accepted facts enter current knowledge. Delivery prose is
   never copied into the knowledge base automatically.
@@ -94,15 +96,38 @@ docs/project-lifecycle/
 ├── pending-changes.json    # bounded review ledger; not current truth
 ├── INDEX.md                # generated Chinese navigation mirror
 ├── INDEX-en.md             # generated Agent-default navigation
-├── knowledge/              # paired durable capability knowledge
+├── knowledge/
+│   ├── INDEX.md            # generated Chinese Knowledge-root/shard index
+│   ├── INDEX-en.md         # generated English Knowledge-root/shard index
+│   └── <parent>/
+│       ├── INDEX.md        # generated direct-child navigation
+│       ├── INDEX-en.md
+│       ├── <parent>.md     # optional only when the parent is materialized
+│       ├── <parent>-en.md
+│       └── <child>-en.md   # recursive child bodies share the parent directory
 └── delivery/               # PRD-bound delivery assets and runtime records
 ```
 
-Capability knowledge may be split by a user-understandable domain and then by
-specific capability. Frontend, backend, testing, or another implementation
-concern can have separate paired documents when they have independent facts,
-owners, or change cadence. `project-map.json` keeps those documents connected
-without merging their bodies.
+Canonical body locations are computed from map topology. A top-level leaf is
+`knowledge/<id>-en.md`; a node with children owns
+`knowledge/<ancestor...>/<id>/<id>-en.md`, and descendants recurse beneath that
+directory. Chinese files use the same path without `-en`. A confirmed parent
+may have a directory and index without a body until it independently satisfies
+the materialization gate.
+
+In multi-repository projects, governance identity stays in one map while each
+repository keeps its implementation knowledge in a local Knowledge shard.
+Cross-repository indexes use registered portable locators; bodies are not
+copied into governance. Filesystem-backed index generation reads only the
+active shard. An Agent routes with the accepted governance map, the authenticated
+current repository identity, and explicit authenticated roots for additional
+selected owners; missing roots remain portable-locator handoffs.
+
+Existing `0.1.0` flat knowledge trees require one explicit migration approval.
+The Agent previews moves and external-link risks, then invokes the internal
+atomic migration, preserving bilingual content and managed references while
+removing old canonical copies. There is intentionally no public migration CLI,
+schema-v1 registry, redirect stub, symlink, or duplicate body.
 
 The typical lifecycle is:
 
@@ -210,4 +235,4 @@ Project Lifecycle is licensed under the [Apache License 2.0](LICENSE).
   and both shared Skills are discovered natively. See the
   [migration recipe](docs/migrations/knowledgevault-agent-app.md).
 
-See [RELEASE-NOTES.md](RELEASE-NOTES.md) for the exact 0.1.0 candidate scope.
+See [RELEASE-NOTES.md](RELEASE-NOTES.md) for the exact 0.2.0 candidate scope and upgrade notes.

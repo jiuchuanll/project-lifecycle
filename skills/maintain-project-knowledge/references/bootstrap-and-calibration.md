@@ -8,6 +8,10 @@ Check the fixed `docs/project-lifecycle/` namespace first. Reuse an accepted map
 
 After user confirmation, bootstrap may establish the fixed root, the initial `project-map.json`, the single bounded `pending-changes.json` review ledger, paired generated indexes, and the `knowledge/` and `delivery/` directories. Do not create an empty project-extension registry.
 
+Bootstrap schema v2 directly. Create both lifecycle-root indexes and the repository-local Knowledge-root indexes. For a confirmed parent with children, create its direct-child index directory even when the parent does not meet the materialization threshold; do not create a placeholder body or promote it to `current`.
+
+If inspection finds a coherent v1 flat knowledge tree, report the exact move/reference plan and external-link risks, then ask once for migration approval. For multiple repositories, bind every registered owner to its explicit local repository root during inspection. After approval, the internal migration moves the whole accepted bilingual layout atomically, rewrites managed references, publishes repository shards before the governance map, removes old canonical copies, and verifies the v2 result. An ordinary temporary question performs no migration and no durable write.
+
 ## Lightweight Evidence Pack
 
 Inspect only high-signal evidence needed to propose boundaries:
@@ -43,6 +47,8 @@ Invite correction using real goals, business boundaries, hidden dependencies, an
 ## Allowed Writes
 
 After explicit boundary confirmation, write only the compact skeleton: immutable stable ID, localized label and purpose, kind, scope, state, parent and major relationships, compact evidence pointers, known gaps, and asset links only if already materialized. Keep product, architecture, implementation, test, and delivery prose out of the map.
+
+In multi-repository projects, keep one governance map. Register each repository's portable locator and domain ownership centrally, but create each materialized body and its Knowledge shard only in the owning repository.
 
 ### Bounded example
 

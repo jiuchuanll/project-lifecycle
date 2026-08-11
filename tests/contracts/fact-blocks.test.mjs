@@ -7,7 +7,7 @@ import { parseFrontmatter } from '../../scripts/lib/markdown.mjs';
 import { getSchemaValidator } from '../../scripts/lib/schema-registry.mjs';
 
 const validSource = async () => readFile(
-  new URL('../fixtures/contracts/knowledge-pairs/valid/wiki-workspace-en.md', import.meta.url),
+  new URL('../fixtures/contracts/knowledge-pairs/valid/knowledge/wiki-workspace-en.md', import.meta.url),
   'utf8',
 );
 

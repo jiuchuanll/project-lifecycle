@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   lstat,
+  mkdir,
   mkdtemp,
   readFile,
   readdir,
@@ -138,6 +139,37 @@ const assertRejectedWithoutMutation = async (context, mutate, expectedCode) => {
   assert.deepEqual(await treeSnapshot(project.lifecycleRoot), before);
 };
 
+test('publishes repository-owned materialization before the governance map', async (context) => {
+  const project = await createProject(context);
+  const shardRoot = await mkdtemp(join(tmpdir(), 'project-lifecycle-materialization-shard-'));
+  context.after(() => rm(shardRoot, { recursive: true, force: true }));
+  await mkdir(join(shardRoot, 'docs/project-lifecycle/knowledge'), { recursive: true });
+  const mapPath = join(project.lifecycleRoot, 'project-map.json');
+  const map = await readJson(mapPath);
+  map.repositories = [{
+    id: 'backend', purpose: { en: 'Owns backend.', 'zh-CN': '负责后端。' },
+    portable_locator: 'github:example/backend', integration_ref: 'refs/heads/main',
+    domain_ids: ['wiki-workspace'], knowledge_asset_locators: [], accepted_revision: 'revision:backend',
+  }];
+  await writeFile(mapPath, `${JSON.stringify(map, null, 2)}\n`);
+  const input = await validInput(project.root);
+  input.repository_roots = { backend: shardRoot };
+  const order = [];
+
+  const result = await materializeCapability(input, {
+    afterRepositoryPublish: ({ repository_id: repositoryId }) => order.push(repositoryId),
+  });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(order, ['backend', null]);
+  assert.equal(await readFile(join(shardRoot, 'docs/project-lifecycle/knowledge/wiki-workspace-en.md'), 'utf8')
+    .then(() => true, () => false), true);
+  assert.equal(await readFile(join(project.lifecycleRoot, 'knowledge/wiki-workspace-en.md'), 'utf8')
+    .then(() => true, () => false), false);
+  const publishedMap = await readJson(mapPath);
+  assert.equal(publishedMap.domains.find(({ id }) => id === 'wiki-workspace').paired_assets.repository_id, 'backend');
+});
+
 test('capability templates expose only six Frontmatter fields and exactly eight canonical sections', async () => {
   const expectedFields = [
     'id',
@@ -205,6 +237,8 @@ test('materializes exactly one bilingual pair, map update, and regenerated paire
     'INDEX.md',
     'delivery/',
     'knowledge/',
+    'knowledge/INDEX-en.md',
+    'knowledge/INDEX.md',
     'knowledge/wiki-workspace-en.md',
     'knowledge/wiki-workspace.md',
     'pending-changes.json',
@@ -220,6 +254,7 @@ test('materializes exactly one bilingual pair, map update, and regenerated paire
   assert.equal(node.domain_state, 'materialized');
   assert.equal(node.baseline, 'baseline-2026-08-09');
   assert.deepEqual(node.paired_assets, {
+    repository_id: null,
     en: 'knowledge/wiki-workspace-en.md',
     'zh-CN': 'knowledge/wiki-workspace.md',
   });
@@ -231,10 +266,12 @@ test('materializes exactly one bilingual pair, map update, and regenerated paire
   assert.deepEqual(pairResult, { ok: true, value: { fact_ids: ['fact-wiki-layout'] }, errors: [] });
   const englishIndex = await readFile(join(lifecycleRoot, 'INDEX-en.md'), 'utf8');
   const chineseIndex = await readFile(join(lifecycleRoot, 'INDEX.md'), 'utf8');
+  const englishKnowledgeIndex = await readFile(join(lifecycleRoot, 'knowledge/INDEX-en.md'), 'utf8');
+  const chineseKnowledgeIndex = await readFile(join(lifecycleRoot, 'knowledge/INDEX.md'), 'utf8');
   const englishDocument = await readFile(join(lifecycleRoot, node.paired_assets.en), 'utf8');
   const chineseDocument = await readFile(join(lifecycleRoot, node.paired_assets['zh-CN']), 'utf8');
-  assert.equal(englishIndex.includes('[`wiki-workspace`](knowledge/wiki-workspace-en.md)'), true);
-  assert.equal(chineseIndex.includes('[`wiki-workspace`](knowledge/wiki-workspace.md)'), true);
+  assert.equal(englishKnowledgeIndex.includes('[`domain:wiki-workspace`](wiki-workspace-en.md)'), true);
+  assert.equal(chineseKnowledgeIndex.includes('[`domain:wiki-workspace`](wiki-workspace.md)'), true);
   assert.equal(englishIndex.includes('approval:user-current-wiki'), false);
   assert.equal(chineseIndex.includes('approval:user-current-wiki'), false);
   for (const value of ['Sample Application', '示例应用', 'calibration:initial-user-approval']) {
@@ -246,6 +283,92 @@ test('materializes exactly one bilingual pair, map update, and regenerated paire
   assert.equal(chineseDocument.includes('已声明依赖：`app-shell`'), true);
   assert.equal(englishDocument.includes('Approval: `approval:user-current-wiki`'), true);
   assert.equal(chineseDocument.includes('批准依据：`approval:user-current-wiki`'), true);
+});
+
+test('materializes recursive leaves and parents without fabricating ancestor knowledge', async (context) => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-recursive-materialization-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const makeDomain = (id, parentId, includes) => ({
+    id,
+    kind: 'capability',
+    label: { en: id, 'zh-CN': id },
+    purpose: { en: `Owns ${id}.`, 'zh-CN': `负责 ${id}。` },
+    domain_state: 'confirmed',
+    scope: { includes, excludes: [] },
+    parent_id: parentId,
+    relationships: [],
+    evidence_refs: [`repo:${id}`],
+    known_gaps: [`No materialized ${id} knowledge yet.`],
+  });
+  const bootstrapped = await bootstrap({
+    root,
+    project_id: 'recursive-project',
+    label: { en: 'Recursive project', 'zh-CN': '递归项目' },
+    purpose: { en: 'Exercises recursive materialization.', 'zh-CN': '用于测试递归知识物化。' },
+    calibration_ref: 'calibration:recursive',
+    calibration_approved: true,
+    domains: [
+      makeDomain('loop', 'runtime', ['loop', 'tools']),
+      makeDomain('runtime', null, ['loop', 'runtime', 'tools']),
+      makeDomain('tools', 'loop', ['tools']),
+    ],
+  });
+  assert.equal(bootstrapped.ok, true, JSON.stringify(bootstrapped));
+  const lifecycleRoot = join(root, 'docs/project-lifecycle');
+  const materializationInput = async (id, targets, baseline) => {
+    const input = await validInput(root);
+    input.domain_id = id;
+    input.owner_id = id;
+    input.targets = targets;
+    input.baseline = baseline;
+    input.approval_ref = `approval:${id}`;
+    input.dependency_ids = [];
+    input.authoritative_evidence_refs = [`repo:${id}`, `test:${id}`];
+    input.implementation_refs = [`repo:${id}`];
+    input.verification_refs = [`test:${id}`];
+    for (const language of ['en', 'zh-CN']) {
+      input.pair[language].facts[0].fact_id = `fact-${id}`;
+      input.pair[language].facts[0].evidence_refs = [`repo:${id}`, `test:${id}`];
+    }
+    return input;
+  };
+
+  const tools = await materializeCapability(await materializationInput('tools', {
+    en: 'knowledge/runtime/loop/tools-en.md',
+    'zh-CN': 'knowledge/runtime/loop/tools.md',
+  }, 'baseline:tools'));
+  assert.equal(tools.ok, true, JSON.stringify(tools));
+  let map = await readJson(join(lifecycleRoot, 'project-map.json'));
+  assert.deepEqual(map.domains.find(({ id }) => id === 'tools').paired_assets, {
+    repository_id: null,
+    en: 'knowledge/runtime/loop/tools-en.md',
+    'zh-CN': 'knowledge/runtime/loop/tools.md',
+  });
+  assert.equal(await lstat(join(lifecycleRoot, 'knowledge/runtime')).then((state) => state.isDirectory()), true);
+  await assert.rejects(lstat(join(lifecycleRoot, 'knowledge/runtime/runtime-en.md')), { code: 'ENOENT' });
+  await assert.rejects(lstat(join(lifecycleRoot, 'knowledge/runtime/loop/loop-en.md')), { code: 'ENOENT' });
+
+  const runtime = await materializeCapability(await materializationInput('runtime', {
+    en: 'knowledge/runtime/runtime-en.md',
+    'zh-CN': 'knowledge/runtime/runtime.md',
+  }, 'baseline:runtime'));
+  assert.equal(runtime.ok, true, JSON.stringify(runtime));
+  const loop = await materializeCapability(await materializationInput('loop', {
+    en: 'knowledge/runtime/loop/loop-en.md',
+    'zh-CN': 'knowledge/runtime/loop/loop.md',
+  }, 'baseline:loop'));
+  assert.equal(loop.ok, true, JSON.stringify(loop));
+
+  map = await readJson(join(lifecycleRoot, 'project-map.json'));
+  assert.equal(map.domains.every(({ domain_state: state }) => state === 'materialized'), true);
+  const knowledgeIndex = await readFile(join(lifecycleRoot, 'knowledge/INDEX-en.md'), 'utf8');
+  const runtimeIndex = await readFile(join(lifecycleRoot, 'knowledge/runtime/INDEX-en.md'), 'utf8');
+  const loopIndex = await readFile(join(lifecycleRoot, 'knowledge/runtime/loop/INDEX-en.md'), 'utf8');
+  assert.match(knowledgeIndex, /domain:runtime/);
+  assert.doesNotMatch(knowledgeIndex, /domain:loop|domain:tools/);
+  assert.match(runtimeIndex, /domain:loop/);
+  assert.doesNotMatch(runtimeIndex, /domain:tools/);
+  assert.match(loopIndex, /domain:tools/);
 });
 
 test('preserves an unrelated relative symlink during a successful root swap', async (context) => {
@@ -287,6 +410,7 @@ test('preserves the accepted alpha baseline when a later beta capability is only
   const proposed = await materializeCapability(beta);
   const map = await readJson(join(lifecycleRoot, 'project-map.json'));
   const index = await readFile(join(lifecycleRoot, 'INDEX-en.md'), 'utf8');
+  const knowledgeIndex = await readFile(join(lifecycleRoot, 'knowledge/INDEX-en.md'), 'utf8');
   const selection = await selectContext({
     root,
     knowledge_baseline: 'baseline-alpha',
@@ -318,7 +442,7 @@ test('preserves the accepted alpha baseline when a later beta capability is only
   assert.equal(map.knowledge_baseline, 'baseline-alpha');
   assert.equal(map.domains.find(({ id }) => id === 'wiki-workspace').baseline, 'baseline-beta');
   assert.match(index, /## Project baseline\n\n- `baseline-alpha`/u);
-  assert.match(index, /wiki-workspace[^\n]*knowledge_state=proposed[^\n]*last_verified_baseline=baseline-beta/u);
+  assert.match(knowledgeIndex, /domain:wiki-workspace[^\n]*knowledge: `proposed`/u);
   assert.equal(selection.ok, true, JSON.stringify(selection));
   assert.equal(selection.value.stop.code, 'SUFFICIENT');
   assert.equal(proposedSelection.ok, true, JSON.stringify(proposedSelection));
@@ -478,7 +602,7 @@ test('rejects a target locator already owned by another materialized node', asyn
   const map = await readJson(mapPath);
   const otherNode = map.domains.find(({ id }) => id === 'app-shell');
   otherNode.domain_state = 'materialized';
-  otherNode.paired_assets = clone(input.targets);
+  otherNode.paired_assets = { repository_id: null, ...clone(input.targets) };
   otherNode.baseline = 'existing-baseline';
   await writeFile(mapPath, `${JSON.stringify(map, null, 2)}\n`);
   const before = await treeSnapshot(project.lifecycleRoot);
@@ -537,7 +661,7 @@ test('rejects an outside-pointing docs symlink with project and external trees u
   assert.deepEqual(await treeSnapshot(outside), outsideBefore);
 });
 
-test('restores the original when the first publisher moves the root and then rejects', async (context) => {
+test('accepts the first publisher moving the root and then rejecting when postconditions hold', async (context) => {
   const project = await createProject(context);
   const before = await treeSnapshot(join(project.root, 'docs'));
   let renameCount = 0;
@@ -550,10 +674,9 @@ test('restores the original when the first publisher moves the root and then rej
     },
   });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.errors[0].code, 'MATERIALIZATION_WRITE_FAILED');
-  assert.equal(renameCount, 1);
-  assert.deepEqual(await treeSnapshot(join(project.root, 'docs')), before);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(renameCount, 2);
+  assert.notDeepEqual(await treeSnapshot(join(project.root, 'docs')), before);
 });
 
 test('restores the original when trusted transition inspection rejects after the backup move', async (context) => {
@@ -613,7 +736,7 @@ test('restores the byte-identical original root when candidate publication fails
   assert.deepEqual(await treeSnapshot(project.lifecycleRoot), before);
 });
 
-test('restores the original when the second publisher moves the stage and then rejects', async (context) => {
+test('accepts the second publisher moving the stage and then rejecting when postconditions hold', async (context) => {
   const project = await createProject(context);
   const before = await treeSnapshot(join(project.root, 'docs'));
   let renameCount = 0;
@@ -626,10 +749,9 @@ test('restores the original when the second publisher moves the stage and then r
     },
   });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.errors[0].code, 'MATERIALIZATION_WRITE_FAILED');
+  assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(renameCount, 2);
-  assert.deepEqual(await treeSnapshot(join(project.root, 'docs')), before);
+  assert.notDeepEqual(await treeSnapshot(join(project.root, 'docs')), before);
 });
 
 test('preserves a verified live candidate when backup cleanup partially removes then rejects', async (context) => {
@@ -648,8 +770,8 @@ test('preserves a verified live candidate when backup cleanup partially removes 
   assert.deepEqual(result.value.recovery_artifacts, ['backup']);
   const docsEntries = await readdir(join(project.root, 'docs'));
   assert.equal(docsEntries.includes('project-lifecycle'), true);
-  assert.equal(docsEntries.some((name) => name.startsWith('.project-lifecycle-materialize-backup-')), true);
-  assert.equal(docsEntries.some((name) => name.startsWith('.project-lifecycle-materialize-stage-')), false);
+  assert.equal(docsEntries.some((name) => name.startsWith('.project-lifecycle-layout-backup-')), true);
+  assert.equal(docsEntries.some((name) => name.startsWith('.project-lifecycle-layout-stage-')), false);
   const map = await readJson(join(project.lifecycleRoot, 'project-map.json'));
   assert.equal(map.domains.find(({ id }) => id === 'wiki-workspace').domain_state, 'materialized');
 });
@@ -686,8 +808,8 @@ test('preserves backup and candidate recovery artifacts when restore rename fail
   assert.match(result.errors[0].message, /backup, stage/u);
   const docsEntries = await readdir(join(project.root, 'docs'));
   assert.equal(docsEntries.includes('project-lifecycle'), false);
-  assert.equal(docsEntries.some((name) => name.startsWith('.project-lifecycle-materialize-backup-')), true);
-  assert.equal(docsEntries.some((name) => name.startsWith('.project-lifecycle-materialize-stage-')), true);
+  assert.equal(docsEntries.some((name) => name.startsWith('.project-lifecycle-layout-backup-')), true);
+  assert.equal(docsEntries.some((name) => name.startsWith('.project-lifecycle-layout-stage-')), true);
 });
 
 test('rejects a no-op publication override without changing or hiding the original root', async (context) => {

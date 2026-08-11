@@ -6,6 +6,8 @@ Use this reference for semantic changes to domain nodes, ownership, parentage, c
 
 Vertical topology uses `parent_id` for containment. A child must be user-understandable, independently retrievable or maintainable, canonically own facts, have authoritative boundary evidence, and be strictly narrower than its one parent. Folder layout, technology, screen count, document length, and symmetrical navigation are not sufficient split reasons.
 
+Treat directory and body moves as mechanical consequences of an approved map change. Adding the first child promotes a former leaf body into its new domain directory; removing or reparenting the last child demotes it back to its ancestor directory. Reparenting moves the affected subtree and regenerates old and new ancestor indexes. Apply the map, bilingual body moves, constraint references, and changed indexes as one transaction; leave unrelated index bytes untouched.
+
 Horizontal topology uses only relationships with deterministic loading meaning:
 
 | Relationship | Meaning and loading rule |
@@ -45,6 +47,8 @@ Keep accepted topology in `project-map.json`. Put open topology, ownership, cons
 A parent boundary, kind, parentage, lifecycle, or propagated-constraint change requires scoped descendant analysis. For each affected node, propose the trigger, evidence, risk, affected facts or ownership, gaps, and a disposition such as no change, revalidate, reparent, merge, split, retire, or exception. Do not mutate a child merely because its parent changed. Parent merge or retirement cannot close with orphaned active children.
 
 Human approval gates every structural mutation, semantic constraint change, ownership transfer, exception, and final affected-fact resolution. Apply the approved map change and child dispositions atomically; keep unresolved validations as compact affected markers. Remove the pending entry only after its outcome and evidence are durably traceable.
+
+Cross-repository parentage changes discovery, not ownership: the child begins a repository-local shard at its own ID, and the governance parent's direct-child index points to the registered repository locator. Never synthesize governance ancestor directories in the shard, copy repository-local bodies into governance, or derive topology from matching directory names.
 
 ### Bounded example
 

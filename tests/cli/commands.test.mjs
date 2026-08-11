@@ -8,7 +8,7 @@ import test from 'node:test';
 
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
 const validFacts = fileURLToPath(new URL(
-  '../fixtures/contracts/knowledge-pairs/valid/wiki-workspace-en.md',
+  '../fixtures/contracts/knowledge-pairs/valid/knowledge/wiki-workspace-en.md',
   import.meta.url,
 ));
 const validMap = fileURLToPath(new URL(

@@ -1,22 +1,19 @@
 import {
   lstat,
   mkdir,
-  mkdtemp,
   readFile,
-  rename,
-  rm,
   rmdir,
 } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
-import { atomicWriteValidated } from '../lib/atomic-write.mjs';
 import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 import { generateIndexes } from './generate-indexes.mjs';
+import { applyLayoutTransaction } from './layout-transaction.mjs';
 
 const projectMapAsset = new URL(
   '../../skills/maintain-project-knowledge/assets/project-map.json',
@@ -59,11 +56,8 @@ const canonicalizeDomains = (domains, calibrationRef) => clone(domains)
   }))
   .sort((left, right) => compareCodePoints(left.id, right.id));
 
-const validateIndex = (source, domains) => {
-  const valid = typeof source === 'string'
-    && source.endsWith('\n')
-    && domains.every(({ id }) => source.includes(`\`${id}\``))
-    && !source.includes('](knowledge/');
+const validateIndex = (source, expected) => {
+  const valid = typeof source === 'string' && source === expected;
   return valid ? ok(source) : bootstrapFailure(
     'BOOTSTRAP_INDEX_INVALID',
     '/',
@@ -104,21 +98,22 @@ const existingConflict = (path = '/') => bootstrapFailure(
 const inspectCompleteBootstrap = async ({
   lifecycleRoot,
   expectedMap,
-  expectedEnglishIndex,
-  expectedChineseIndex,
+  expectedPending,
+  expectedFiles,
+  expectedDirectories,
 }) => {
   try {
     const rootStat = await fileState(lifecycleRoot);
     if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) return { ok: false, path: '/' };
 
-    for (const directory of ['knowledge', 'delivery']) {
+    for (const directory of expectedDirectories) {
       const stat = await fileState(join(lifecycleRoot, directory));
       if (!stat?.isDirectory() || stat.isSymbolicLink()) {
         return { ok: false, path: `/${directory}` };
       }
     }
 
-    const requiredFiles = ['project-map.json', 'pending-changes.json', 'INDEX-en.md', 'INDEX.md'];
+    const requiredFiles = ['project-map.json', 'pending-changes.json', ...expectedFiles.map(({ locator }) => locator)];
     const fileStats = await Promise.all(requiredFiles.map(async (name) => ({
       name,
       stat: await fileState(join(lifecycleRoot, name)),
@@ -127,20 +122,22 @@ const inspectCompleteBootstrap = async ({
       if (!stat?.isFile() || stat.isSymbolicLink()) return { ok: false, path: `/${name}` };
     }
 
-    const [mapSource, pendingSource, englishIndex, chineseIndex] = await Promise.all([
+    const [mapSource, pendingSource] = await Promise.all([
       readFile(join(lifecycleRoot, 'project-map.json'), 'utf8'),
       readFile(join(lifecycleRoot, 'pending-changes.json'), 'utf8'),
-      readFile(join(lifecycleRoot, 'INDEX-en.md'), 'utf8'),
-      readFile(join(lifecycleRoot, 'INDEX.md'), 'utf8'),
     ]);
     const existingMap = JSON.parse(mapSource);
     const existingPending = JSON.parse(pendingSource);
     if (!validateJson('project-map', existingMap).ok
       || !validateJson('pending-changes', existingPending).ok
       || !isDeepStrictEqual(existingMap, expectedMap)
-      || englishIndex !== expectedEnglishIndex
-      || chineseIndex !== expectedChineseIndex) {
+      || !isDeepStrictEqual(existingPending, expectedPending)) {
       return { ok: false, path: '/' };
+    }
+    for (const file of expectedFiles) {
+      if (await readFile(join(lifecycleRoot, file.locator), 'utf8') !== file.content) {
+        return { ok: false, path: `/${file.locator}` };
+      }
     }
     return { ok: true };
   } catch {
@@ -161,8 +158,6 @@ const requireCompleteBootstrap = async (expected) => {
   throw error;
 };
 
-// The sole-writer boundary makes the final directory rename the visibility point. Earlier failures
-// receive best-effort cleanup; this is not a transaction against hostile filesystem failures.
 export async function bootstrap({
   root,
   project_id: projectId,
@@ -172,8 +167,6 @@ export async function bootstrap({
   calibration_approved: calibrationApproved,
   domains,
 }, operations = {}) {
-  const writeArtifact = operations.atomicWriteValidated ?? atomicWriteValidated;
-  const publish = operations.rename ?? rename;
   if (typeof calibrationRef !== 'string' || calibrationRef.trim().length === 0
     || calibrationApproved !== true) {
     return bootstrapFailure(
@@ -225,16 +218,49 @@ export async function bootstrap({
 
   const generatedIndexes = generateIndexes({ map });
   if (!generatedIndexes.ok) return generatedIndexes;
-  const englishIndex = generatedIndexes.value.en;
-  const chineseIndex = generatedIndexes.value['zh-CN'];
-  const englishValidation = validateIndex(englishIndex, map.domains);
-  if (!englishValidation.ok) return englishValidation;
-  const chineseValidation = validateIndex(chineseIndex, map.domains);
-  if (!chineseValidation.ok) return chineseValidation;
+  const expectedFiles = generatedIndexes.value.files.filter(({ repository_id: repositoryId }) => repositoryId === null);
+  const expectedDirectories = [...new Set([
+    'delivery',
+    ...generatedIndexes.value.layout.directories
+      .filter(({ repository_id: repositoryId }) => repositoryId === null)
+      .map(({ locator }) => locator),
+  ])].sort(compareCodePoints);
+  const expectedPostcondition = { expectedMap: map, expectedPending: pending, expectedFiles, expectedDirectories };
+  const candidateFiles = [
+    {
+      repository_id: null,
+      locator: 'project-map.json',
+      content: jsonContent(map),
+      validate: async (source) => {
+        try {
+          return validateJson('project-map', JSON.parse(source));
+        } catch {
+          return bootstrapFailure('SCHEMA_INVALID', '/', 'Invalid project-map.');
+        }
+      },
+    },
+    {
+      repository_id: null,
+      locator: 'pending-changes.json',
+      content: jsonContent(pending),
+      validate: async (source) => {
+        try {
+          return validateJson('pending-changes', JSON.parse(source));
+        } catch {
+          return bootstrapFailure('SCHEMA_INVALID', '/', 'Invalid pending-changes.');
+        }
+      },
+    },
+    ...expectedFiles.map((file) => ({
+      repository_id: null,
+      locator: file.locator,
+      content: file.content,
+      validate: async (source) => validateIndex(source, file.content),
+    })),
+  ];
 
   let docsPath;
   let lifecycleRoot;
-  let stagingRoot;
   let createdDocs = false;
   try {
     docsPath = await resolveInside(root, 'docs');
@@ -253,77 +279,45 @@ export async function bootstrap({
       if (lifecycleStat) {
         return await existingBootstrap({
           lifecycleRoot,
-          expectedMap: map,
-          expectedEnglishIndex: englishIndex,
-          expectedChineseIndex: chineseIndex,
+          ...expectedPostcondition,
         });
       }
     }
-
-    stagingRoot = await mkdtemp(join(root, '.project-lifecycle-bootstrap-'));
-    await mkdir(join(stagingRoot, 'knowledge'));
-    await mkdir(join(stagingRoot, 'delivery'));
-    await writeArtifact({
-      root: stagingRoot,
-      target: 'project-map.json',
-      content: jsonContent(map),
-      validate: async (source) => {
-        try {
-          return validateJson('project-map', JSON.parse(source));
-        } catch {
-          return bootstrapFailure('SCHEMA_INVALID', '/', 'Invalid project-map.');
-        }
-      },
-    });
-    await writeArtifact({
-      root: stagingRoot,
-      target: 'pending-changes.json',
-      content: jsonContent(pending),
-      validate: async (source) => {
-        try {
-          return validateJson('pending-changes', JSON.parse(source));
-        } catch {
-          return bootstrapFailure('SCHEMA_INVALID', '/', 'Invalid pending-changes.');
-        }
-      },
-    });
-    await writeArtifact({
-      root: stagingRoot,
-      target: 'INDEX-en.md',
-      content: englishIndex,
-      validate: async (source) => validateIndex(source, map.domains),
-    });
-    await writeArtifact({
-      root: stagingRoot,
-      target: 'INDEX.md',
-      content: chineseIndex,
-      validate: async (source) => validateIndex(source, map.domains),
-    });
-    const expectedPostcondition = {
-      expectedMap: map,
-      expectedEnglishIndex: englishIndex,
-      expectedChineseIndex: chineseIndex,
-    };
-    await requireCompleteBootstrap({
-      lifecycleRoot: stagingRoot,
-      ...expectedPostcondition,
-    });
 
     if (!docsStat) {
       await mkdir(docsPath);
       createdDocs = true;
     }
     lifecycleRoot = join(docsPath, 'project-lifecycle');
-    await publish(stagingRoot, lifecycleRoot);
+    const published = await applyLayoutTransaction({
+      repositoryRoot: root,
+      initialize: true,
+      candidateFiles,
+      candidateDirectories: expectedDirectories,
+      deleteLocators: [],
+      validateCandidate: async ({ lifecycleRoot: candidateRoot }) => {
+        const inspection = await inspectCompleteBootstrap({
+          lifecycleRoot: candidateRoot,
+          ...expectedPostcondition,
+        });
+        return inspection.ok ? ok() : bootstrapFailure('BOOTSTRAP_WRITE_FAILED', inspection.path, 'Bootstrap candidate is incomplete.');
+      },
+    }, operations);
+    if (!published.ok) {
+      if (createdDocs) await rmdir(docsPath).catch(() => {});
+      const first = published.errors[0];
+      return bootstrapFailure(
+        first.code === 'PATH_SYMLINK_ESCAPE' ? first.code : 'BOOTSTRAP_WRITE_FAILED',
+        '/',
+        'Bootstrap could not be completed.',
+      );
+    }
     await requireCompleteBootstrap({
       lifecycleRoot,
       ...expectedPostcondition,
     });
-    await rm(stagingRoot, { recursive: true, force: true });
-    stagingRoot = null;
-    return ok({ status: 'created' });
+    return ok({ status: 'created', changed: published.value.changed });
   } catch (error) {
-    if (stagingRoot) await rm(stagingRoot, { recursive: true, force: true }).catch(() => {});
     if (createdDocs && docsPath) await rmdir(docsPath).catch(() => {});
     if (error.code === 'EEXIST' || error.code === 'ENOTEMPTY') {
       return bootstrapFailure(

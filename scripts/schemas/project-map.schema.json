@@ -5,7 +5,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "project_id", "identity_lineage", "repositories", "constraints", "domains"],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "const": 2 },
     "project_id": { "$ref": "#/$defs/id" },
     "knowledge_baseline": { "type": "string", "minLength": 1 },
     "project_identity": { "$ref": "#/$defs/projectIdentity" },
@@ -62,7 +62,7 @@
         "portable_locator": { "type": "string", "minLength": 1 },
         "integration_ref": { "type": "string", "minLength": 1 },
         "domain_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
-        "knowledge_asset_locators": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "knowledge_asset_locators": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/knowledgeAssetLocator" } },
         "accepted_revision": { "type": "string", "minLength": 1 }
       }
     },
@@ -87,19 +87,24 @@
     "pairedAssets": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["en", "zh-CN"],
+      "required": ["repository_id", "en", "zh-CN"],
       "properties": {
-        "en": { "type": "string", "minLength": 1 },
-        "zh-CN": { "type": "string", "minLength": 1 }
+        "repository_id": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/id" }] },
+        "en": { "type": "string", "pattern": "^knowledge/(?:[a-z][a-z0-9-]*/)*[a-z][a-z0-9-]*-en\\.md$" },
+        "zh-CN": { "type": "string", "pattern": "^knowledge/(?:[a-z][a-z0-9-]*/)*[a-z][a-z0-9-]*\\.md$" }
       }
+    },
+    "knowledgeAssetLocator": {
+      "type": "string",
+      "pattern": "^knowledge/(?:[a-z][a-z0-9-]*/)*[a-z][a-z0-9-]*(?:-en)?\\.md$"
     },
     "knowledgeRefs": {
       "type": "object",
       "additionalProperties": false,
       "required": ["en", "zh-CN"],
       "properties": {
-        "en": { "type": "string", "pattern": "^knowledge/[a-z][a-z0-9-]*-en\\.md#constraint-[a-z][a-z0-9-]*$" },
-        "zh-CN": { "type": "string", "pattern": "^knowledge/[a-z][a-z0-9-]*\\.md#constraint-[a-z][a-z0-9-]*$" }
+        "en": { "type": "string", "pattern": "^knowledge/(?:[a-z][a-z0-9-]*/)*[a-z][a-z0-9-]*-en\\.md#constraint-[a-z][a-z0-9-]*$" },
+        "zh-CN": { "type": "string", "pattern": "^knowledge/(?:[a-z][a-z0-9-]*/)*[a-z][a-z0-9-]*\\.md#constraint-[a-z][a-z0-9-]*$" }
       }
     },
     "domain": {

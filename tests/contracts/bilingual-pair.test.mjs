@@ -10,7 +10,10 @@ import {
   validateBilingualPair,
 } from '../../scripts/lib/bilingual-pair.mjs';
 
-const fixtureUrl = (name) => new URL(`../fixtures/contracts/knowledge-pairs/valid/${name}`, import.meta.url);
+const fixtureUrl = (name) => new URL(
+  `../fixtures/contracts/knowledge-pairs/valid/${name === 'project-map.json' ? name : `knowledge/${name}`}`,
+  import.meta.url,
+);
 const readMap = async () => JSON.parse(await readFile(fixtureUrl('project-map.json'), 'utf8'));
 
 const hasError = (result, code, path) => result.errors.some((error) => (
@@ -20,8 +23,10 @@ const hasError = (result, code, path) => result.errors.some((error) => (
 const withPair = async (context, editEn = (value) => value, editZh = (value) => value) => {
   const directory = await mkdtemp(join(tmpdir(), 'project-lifecycle-pair-'));
   context.after(() => rm(directory, { force: true, recursive: true }));
-  const enPath = join(directory, 'wiki-workspace-en.md');
-  const zhPath = join(directory, 'wiki-workspace.md');
+  const knowledge = join(directory, 'knowledge');
+  await mkdir(knowledge);
+  const enPath = join(knowledge, 'wiki-workspace-en.md');
+  const zhPath = join(knowledge, 'wiki-workspace.md');
   await writeFile(enPath, editEn(await readFile(fixtureUrl('wiki-workspace-en.md'), 'utf8')));
   await writeFile(zhPath, editZh(await readFile(fixtureUrl('wiki-workspace.md'), 'utf8')));
   return { directory, enPath, map: await readMap(), zhPath };
@@ -31,6 +36,7 @@ const constraintBlock = (id = 'wiki-privacy', revision = 2) => `\n<a id="constra
 
 const addOwnedConstraint = (map) => {
   map.domains[0].paired_assets = {
+    repository_id: null,
     en: 'knowledge/wiki-workspace-en.md',
     'zh-CN': 'knowledge/wiki-workspace.md',
   };
@@ -257,7 +263,7 @@ test('rejects mismatched language-neutral Frontmatter fields', async (context) =
 });
 
 test('rejects missing paired assets', async () => {
-  const directory = new URL('../fixtures/contracts/knowledge-pairs/missing-pair/', import.meta.url);
+  const directory = new URL('../fixtures/contracts/knowledge-pairs/missing-pair/knowledge/', import.meta.url);
   const result = await validateBilingualPair(
     new URL('wiki-workspace-en.md', directory),
     new URL('wiki-workspace.md', directory),
@@ -424,7 +430,7 @@ test('rejects paired_asset symlink targets outside the real knowledge root', asy
     'paired_asset: outside-link.md',
   );
   const { directory, enPath, map, zhPath } = await withPair(context, changeTarget, changeTarget);
-  await symlink(outside, join(directory, 'outside-link.md'));
+  await symlink(outside, join(directory, 'knowledge', 'outside-link.md'));
 
   const result = await validateBilingualPair(enPath, zhPath, map);
 
@@ -437,7 +443,7 @@ test('rejects traversing authoritative map asset locators before reading assets'
 
   const result = await validateBilingualPair('/missing/en.md', '/missing/zh.md', map);
 
-  assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/map/paired_assets/en'), true);
+  assert.equal(hasError(result, 'SCHEMA_INVALID', '/domains/0/paired_assets/en'), true);
   assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset'), false);
 });
 
@@ -453,7 +459,7 @@ for (const locator of [
 
     const result = await validateBilingualPair('/missing/en.md', '/missing/zh.md', map);
 
-    assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/map/paired_assets/en'), true);
+    assert.equal(hasError(result, 'SCHEMA_INVALID', '/domains/0/paired_assets/en'), true);
     assert.equal(hasError(result, 'PAIR_MACHINE_MISMATCH', '/frontmatter/paired_asset'), false);
   });
 }

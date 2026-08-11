@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 import { selectContext } from '../../scripts/knowledge/select-context.mjs';
+import { generateIndexesFromRoot } from '../../scripts/knowledge/generate-indexes.mjs';
 import { validateJson } from '../../scripts/lib/validate-json.mjs';
 
 const constraintBlocks = (id) => id === 'desktop-experience'
@@ -18,7 +19,7 @@ const capability = (id, pairedAsset, baseline = 'baseline-7') => `---\nid: ${id}
 const delivery = ({ id, tier = 'active', domainIds = ['wiki-workspace'], kind = 'prd', baseline = 'global-baseline-7', projectId = 'sample-project' }) => `---\nschema_version: 1\nartifact_id: ${id}\nartifact_kind: ${kind}\nprimary_route: PRD_DELIVERY\nproject_id_at_creation: ${projectId}\n${tier === 'active' ? `current_project_id: ${projectId}\n` : ''}domain_ids:\n${domainIds.map((domainId) => `  - ${domainId}`).join('\n')}\nknowledge_baseline: ${baseline}\nrelationships:\n  feedback_ids: []\n  prd_ids: []\n  legacy_artifact_refs: []\nretention_tier: ${tier}\nreclassified_from_refs: []\nobligations: []\n---\n\n# SECRET DELIVERY BODY ${id}\n`;
 
 const projectMap = {
-  schema_version: 1, project_id: 'sample-project',
+  schema_version: 2, project_id: 'sample-project',
   knowledge_baseline: 'global-baseline-7',
   project_identity: {
     label: { en: 'Sample project', 'zh-CN': '示例项目' },
@@ -31,8 +32,8 @@ const projectMap = {
       id: 'desktop-privacy', scope: 'descendants', owner_id: 'desktop-experience', semantic_revision: 3,
       lifecycle_state: 'current',
       knowledge_refs: {
-        en: 'knowledge/desktop-experience-en.md#constraint-desktop-privacy',
-        'zh-CN': 'knowledge/desktop-experience.md#constraint-desktop-privacy',
+        en: 'knowledge/desktop-experience/desktop-experience-en.md#constraint-desktop-privacy',
+        'zh-CN': 'knowledge/desktop-experience/desktop-experience.md#constraint-desktop-privacy',
       },
       exceptions: [],
     },
@@ -40,8 +41,8 @@ const projectMap = {
       id: 'desktop-self', scope: 'self', owner_id: 'desktop-experience', semantic_revision: 1,
       lifecycle_state: 'current',
       knowledge_refs: {
-        en: 'knowledge/desktop-experience-en.md#constraint-desktop-self',
-        'zh-CN': 'knowledge/desktop-experience.md#constraint-desktop-self',
+        en: 'knowledge/desktop-experience/desktop-experience-en.md#constraint-desktop-self',
+        'zh-CN': 'knowledge/desktop-experience/desktop-experience.md#constraint-desktop-self',
       },
       exceptions: [],
     },
@@ -57,8 +58,8 @@ const projectMap = {
       id: 'wiki-selected', scope: 'selected_descendants', owner_id: 'desktop-experience',
       selected_descendants: ['wiki-workspace'], semantic_revision: 2, lifecycle_state: 'current',
       knowledge_refs: {
-        en: 'knowledge/desktop-experience-en.md#constraint-wiki-selected',
-        'zh-CN': 'knowledge/desktop-experience.md#constraint-wiki-selected',
+        en: 'knowledge/desktop-experience/desktop-experience-en.md#constraint-wiki-selected',
+        'zh-CN': 'knowledge/desktop-experience/desktop-experience.md#constraint-wiki-selected',
       }, exceptions: [],
     },
   ],
@@ -67,44 +68,55 @@ const projectMap = {
       id: 'desktop-experience', kind: 'domain', label: { en: 'Desktop', 'zh-CN': '桌面' }, purpose: { en: 'Desktop.', 'zh-CN': '桌面。' },
       domain_state: 'materialized', scope: { includes: ['desktop', 'source', 'wiki'], excludes: [] }, parent_id: null,
       relationships: [], evidence_refs: ['repo:README.md'], known_gaps: [], baseline: 'baseline-7',
-      paired_assets: { en: 'knowledge/desktop-experience-en.md', 'zh-CN': 'knowledge/desktop-experience.md' },
+      paired_assets: { repository_id: null, en: 'knowledge/desktop-experience/desktop-experience-en.md', 'zh-CN': 'knowledge/desktop-experience/desktop-experience.md' },
     },
     {
       id: 'source-workspace', kind: 'capability', label: { en: 'Source', 'zh-CN': '来源' }, purpose: { en: 'Source.', 'zh-CN': '来源。' },
       domain_state: 'materialized', scope: { includes: ['source'], excludes: [] }, parent_id: 'desktop-experience',
       relationships: [{ kind: 'depends_on', target_id: 'wiki-workspace' }], evidence_refs: ['repo:src/source'], known_gaps: [], baseline: 'baseline-7',
-      paired_assets: { en: 'knowledge/source-workspace-en.md', 'zh-CN': 'knowledge/source-workspace.md' },
+      paired_assets: { repository_id: null, en: 'knowledge/desktop-experience/source-workspace-en.md', 'zh-CN': 'knowledge/desktop-experience/source-workspace.md' },
     },
     {
       id: 'unrelated-workspace', kind: 'capability', label: { en: 'Other', 'zh-CN': '其他' }, purpose: { en: 'Other.', 'zh-CN': '其他。' },
       domain_state: 'materialized', scope: { includes: ['other'], excludes: [] }, parent_id: null,
       relationships: [], evidence_refs: ['repo:src/other'], known_gaps: [], baseline: 'baseline-7',
-      paired_assets: { en: 'knowledge/unrelated-workspace-en.md', 'zh-CN': 'knowledge/unrelated-workspace.md' },
+      paired_assets: { repository_id: null, en: 'knowledge/unrelated-workspace-en.md', 'zh-CN': 'knowledge/unrelated-workspace.md' },
     },
     {
       id: 'wiki-workspace', kind: 'capability', label: { en: 'Wiki', 'zh-CN': '维基' }, purpose: { en: 'Wiki.', 'zh-CN': '维基。' },
       domain_state: 'materialized', scope: { includes: ['wiki'], excludes: [] }, parent_id: 'desktop-experience',
       relationships: [{ kind: 'depends_on', target_id: 'source-workspace' }, { kind: 'coordinates_with', target_id: 'unrelated-workspace' }, { kind: 'governed_by', target_id: 'unrelated-workspace' }],
       evidence_refs: ['repo:src/wiki'], known_gaps: [], baseline: 'baseline-7',
-      paired_assets: { en: 'knowledge/wiki-workspace-en.md', 'zh-CN': 'knowledge/wiki-workspace.md' },
+      paired_assets: { repository_id: null, en: 'knowledge/desktop-experience/wiki-workspace-en.md', 'zh-CN': 'knowledge/desktop-experience/wiki-workspace.md' },
     },
   ],
 };
 
-const setup = async (context) => {
+const setup = async (context, map = projectMap) => {
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-context-'));
   context.after(() => rm(root, { recursive: true, force: true }));
   const lifecycle = join(root, 'docs/project-lifecycle');
   await mkdir(join(lifecycle, 'knowledge'), { recursive: true });
   await mkdir(join(lifecycle, 'delivery'), { recursive: true });
-  await writeFile(join(lifecycle, 'project-map.json'), `${JSON.stringify(projectMap, null, 2)}\n`);
-  for (const domain of projectMap.domains) {
-    await writeFile(join(lifecycle, domain.paired_assets.en), capability(domain.id, domain.paired_assets['zh-CN'].split('/').at(-1)));
-    await writeFile(join(lifecycle, domain.paired_assets['zh-CN']), capability(domain.id, domain.paired_assets.en.split('/').at(-1)));
+  await writeFile(join(lifecycle, 'project-map.json'), `${JSON.stringify(map, null, 2)}\n`);
+  for (const domain of map.domains) {
+    await mkdir(dirname(join(lifecycle, domain.paired_assets.en)), { recursive: true });
+    const pairedAsset = domain.paired_assets['zh-CN'].split('/').at(-1);
+    await writeFile(join(lifecycle, domain.paired_assets.en), capability(domain.id, pairedAsset));
+    await writeFile(join(lifecycle, domain.paired_assets['zh-CN']), capability(domain.id, pairedAsset));
   }
   await writeFile(join(lifecycle, 'delivery/prd-wiki-refresh-en.md'), delivery({ id: 'prd-wiki-refresh' }));
+  await writeFile(join(lifecycle, 'delivery/prd-wiki-refresh.md'), delivery({ id: 'prd-wiki-refresh' }));
   await writeFile(join(lifecycle, 'delivery/prd-wiki-history-en.md'), delivery({ id: 'prd-wiki-history', tier: 'archive' }));
+  await writeFile(join(lifecycle, 'delivery/prd-wiki-history.md'), delivery({ id: 'prd-wiki-history', tier: 'archive' }));
   await writeFile(join(lifecycle, 'delivery/prd-wiki-closed-en.md'), delivery({ id: 'prd-wiki-closed', tier: 'closed-summary' }));
+  await writeFile(join(lifecycle, 'delivery/prd-wiki-closed.md'), delivery({ id: 'prd-wiki-closed', tier: 'closed-summary' }));
+  const indexes = await generateIndexesFromRoot({ map, lifecycleRoot: lifecycle });
+  assert.equal(indexes.ok, true, JSON.stringify(indexes));
+  for (const file of indexes.value.files.filter(({ repository_id: repositoryId }) => repositoryId === null)) {
+    await mkdir(dirname(join(lifecycle, file.locator)), { recursive: true });
+    await writeFile(join(lifecycle, file.locator), file.content);
+  }
   return root;
 };
 
@@ -147,10 +159,13 @@ test('selects exact vertical constraints, explicit cyclic dependencies, and acti
   ]);
   assert.deepEqual(reads.map(({ level, locator, section }) => [level, locator, section]), [
     ['L0', 'project-map.json', 'document'],
-    ['L1', 'knowledge/desktop-experience-en.md', 'constraint-anchor'],
-    ['L1', 'knowledge/desktop-experience-en.md', 'constraint-anchor'],
-    ['L2', 'knowledge/wiki-workspace-en.md', 'frontmatter'],
-    ['L3', 'knowledge/source-workspace-en.md', 'frontmatter'],
+    ['L0', 'INDEX-en.md', 'navigation-index'],
+    ['L0', 'knowledge/INDEX-en.md', 'navigation-index'],
+    ['L0', 'knowledge/desktop-experience/INDEX-en.md', 'navigation-index'],
+    ['L1', 'knowledge/desktop-experience/desktop-experience-en.md', 'constraint-anchor'],
+    ['L1', 'knowledge/desktop-experience/desktop-experience-en.md', 'constraint-anchor'],
+    ['L2', 'knowledge/desktop-experience/wiki-workspace-en.md', 'frontmatter'],
+    ['L3', 'knowledge/desktop-experience/source-workspace-en.md', 'frontmatter'],
     ['L4', 'delivery/prd-wiki-refresh-en.md', 'frontmatter'],
     ['L5', 'delivery/prd-wiki-history-en.md', 'frontmatter'],
     ['L4', 'delivery/prd-wiki-closed-en.md', 'frontmatter'],
@@ -232,7 +247,7 @@ test('validates caller routing, dependency grounding, delivery linkage, versions
   const outside = await mkdtemp(join(tmpdir(), 'project-lifecycle-context-outside-'));
   context.after(() => rm(outside, { recursive: true, force: true }));
   await writeFile(join(outside, 'escaped.md'), capability('wiki-workspace', 'wiki-workspace.md'));
-  const target = join(root, 'docs/project-lifecycle/knowledge/wiki-workspace-en.md');
+  const target = join(root, 'docs/project-lifecycle/knowledge/desktop-experience/wiki-workspace-en.md');
   await rm(target);
   await symlink(join(outside, 'escaped.md'), target);
   const escaped = await selectContext({ ...baseInput(root), task_delivery_refs: [] });
@@ -317,7 +332,7 @@ test('rejects unsafe context reference values with a stable diagnostic', async (
 
 test('rejects a missing or stale constraint anchor before capability selection', async (context) => {
   const root = await setup(context);
-  const path = join(root, 'docs/project-lifecycle/knowledge/desktop-experience-en.md');
+  const path = join(root, 'docs/project-lifecycle/knowledge/desktop-experience/desktop-experience-en.md');
   await writeFile(path, capability('desktop-experience', 'desktop-experience.md').replace(
     '<a id="constraint-desktop-privacy"></a>',
     '<a id="constraint-renamed"></a>',
@@ -350,7 +365,7 @@ test('rejects malformed or fenced-only L1 constraint sections before L2 reads', 
   ];
   for (const corrupt of corruptions) {
     const root = await setup(context);
-    const path = join(root, 'docs/project-lifecycle/knowledge/desktop-experience-en.md');
+    const path = join(root, 'docs/project-lifecycle/knowledge/desktop-experience/desktop-experience-en.md');
     await writeFile(path, corrupt(capability('desktop-experience', 'desktop-experience.md')));
     const reads = [];
     const result = await selectContext({ ...baseInput(root), task_delivery_refs: [] }, { onRead: (entry) => reads.push(entry) });
@@ -362,7 +377,7 @@ test('rejects malformed or fenced-only L1 constraint sections before L2 reads', 
 
 test('stops bounded L1 reads after an early exact section and rejects cap overflow before completion', async (context) => {
   const earlyRoot = await setup(context);
-  const earlyPath = join(earlyRoot, 'docs/project-lifecycle/knowledge/desktop-experience-en.md');
+  const earlyPath = join(earlyRoot, 'docs/project-lifecycle/knowledge/desktop-experience/desktop-experience-en.md');
   const earlySource = `${capability('desktop-experience', 'desktop-experience.md')}\n${'TAIL_MUST_NOT_BE_READ\n'.repeat(25_000)}`;
   await writeFile(earlyPath, earlySource);
   const earlyReads = [];
@@ -371,7 +386,7 @@ test('stops bounded L1 reads after an early exact section and rejects cap overfl
   assert.equal(earlyReads.filter(({ level }) => level === 'L1').every(({ bytes_read: bytesRead }) => bytesRead < Buffer.byteLength(earlySource)), true);
 
   const overflowRoot = await setup(context);
-  const overflowPath = join(overflowRoot, 'docs/project-lifecycle/knowledge/desktop-experience-en.md');
+  const overflowPath = join(overflowRoot, 'docs/project-lifecycle/knowledge/desktop-experience/desktop-experience-en.md');
   const withoutConstraints = capability('desktop-experience', 'desktop-experience.md').replace(constraintBlocks('desktop-experience'), '');
   await writeFile(overflowPath, `${withoutConstraints}\n${'PREFIX\n'.repeat(12_000)}${constraintBlocks('desktop-experience')}`);
   const overflowReads = [];
@@ -386,7 +401,7 @@ test('treats immediate and distant post-close duplicate anchors identically at t
   const outcomes = [];
   for (const spacing of ['', 'UNREAD_TAIL\n'.repeat(1_000)]) {
     const root = await setup(context);
-    const path = join(root, 'docs/project-lifecycle/knowledge/desktop-experience-en.md');
+    const path = join(root, 'docs/project-lifecycle/knowledge/desktop-experience/desktop-experience-en.md');
     const original = capability('desktop-experience', 'desktop-experience.md');
     const closeNeedle = 'privacy\n<!-- /project-lifecycle:constraint -->';
     const closeEnd = Buffer.byteLength(original.slice(0, original.indexOf(closeNeedle) + closeNeedle.length));
@@ -405,14 +420,168 @@ test('treats immediate and distant post-close duplicate anchors identically at t
   }
 
   assert.deepEqual(outcomes, [
-    { ok: true, stop: 'SUFFICIENT', levels: ['L0', 'L1', 'L1', 'L2', 'L3'] },
-    { ok: true, stop: 'SUFFICIENT', levels: ['L0', 'L1', 'L1', 'L2', 'L3'] },
+    { ok: true, stop: 'SUFFICIENT', levels: ['L0', 'L0', 'L0', 'L0', 'L1', 'L1', 'L2', 'L3'] },
+    { ok: true, stop: 'SUFFICIENT', levels: ['L0', 'L0', 'L0', 'L0', 'L1', 'L1', 'L2', 'L3'] },
   ]);
+});
+
+test('reads every necessary index level for a three-level branch and no unrelated sibling index', async (context) => {
+  const map = structuredClone(projectMap);
+  map.domains.find(({ id }) => id === 'desktop-experience').scope.includes.push('editing');
+  map.domains.find(({ id }) => id === 'desktop-experience').scope.includes.sort();
+  const wiki = map.domains.find(({ id }) => id === 'wiki-workspace');
+  wiki.scope.includes = ['editing', 'wiki'];
+  wiki.paired_assets = {
+    repository_id: null,
+    en: 'knowledge/desktop-experience/wiki-workspace/wiki-workspace-en.md',
+    'zh-CN': 'knowledge/desktop-experience/wiki-workspace/wiki-workspace.md',
+  };
+  map.domains.unshift({
+    id: 'article-editor', kind: 'capability',
+    label: { en: 'Article editor', 'zh-CN': '文章编辑器' },
+    purpose: { en: 'Edits articles.', 'zh-CN': '编辑文章。' },
+    domain_state: 'materialized', scope: { includes: ['editing'], excludes: [] },
+    parent_id: 'wiki-workspace', relationships: [], evidence_refs: ['repo:src/editor'], known_gaps: [], baseline: 'baseline-7',
+    paired_assets: {
+      repository_id: null,
+      en: 'knowledge/desktop-experience/wiki-workspace/article-editor-en.md',
+      'zh-CN': 'knowledge/desktop-experience/wiki-workspace/article-editor.md',
+    },
+  });
+  const root = await setup(context, map);
+  const reads = [];
+  const result = await selectContext({
+    ...baseInput(root), primary_domain_id: 'article-editor', candidate_domain_ids: ['article-editor'],
+    applicable_relationships: [], task_delivery_refs: [],
+  }, { onRead: (entry) => reads.push(entry) });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(reads.filter(({ section }) => section === 'navigation-index').map(({ locator }) => locator), [
+    'INDEX-en.md',
+    'knowledge/INDEX-en.md',
+    'knowledge/desktop-experience/INDEX-en.md',
+    'knowledge/desktop-experience/wiki-workspace/INDEX-en.md',
+  ]);
+  assert.equal(reads.some(({ locator }) => locator.includes('unrelated-workspace/INDEX')), false);
+});
+
+test('requires explicit v1 migration before any index or knowledge body read', async (context) => {
+  const root = await setup(context);
+  const path = join(root, 'docs/project-lifecycle/project-map.json');
+  const legacy = JSON.parse(await readFile(path, 'utf8'));
+  legacy.schema_version = 1;
+  await writeFile(path, `${JSON.stringify(legacy, null, 2)}\n`);
+  const reads = [];
+
+  const result = await selectContext(baseInput(root), { onRead: (entry) => reads.push(entry) });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'CONTEXT_LAYOUT_MIGRATION_REQUIRED');
+  assert.deepEqual(reads, [{ level: 'L0', locator: 'project-map.json', section: 'document' }]);
+});
+
+test('continues bounded routing after the agent enters the authenticated owning shard', async (context) => {
+  const repositoryId = 'backend';
+  const map = structuredClone(projectMap);
+  map.constraints = [];
+  map.domains = [map.domains.find(({ id }) => id === 'wiki-workspace')];
+  map.domains[0].parent_id = null;
+  map.domains[0].relationships = [];
+  map.domains[0].paired_assets = {
+    repository_id: repositoryId,
+    en: 'knowledge/wiki-workspace-en.md',
+    'zh-CN': 'knowledge/wiki-workspace.md',
+  };
+  map.repositories = [{
+    id: repositoryId,
+    purpose: { en: 'Owns backend knowledge.', 'zh-CN': '负责后端知识。' },
+    portable_locator: 'github:example/backend', integration_ref: 'refs/heads/main',
+    domain_ids: ['wiki-workspace'],
+    knowledge_asset_locators: ['knowledge/wiki-workspace-en.md', 'knowledge/wiki-workspace.md'],
+    accepted_revision: 'revision:backend',
+  }];
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-context-shard-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const lifecycle = join(root, 'docs/project-lifecycle');
+  await mkdir(join(lifecycle, 'knowledge'), { recursive: true });
+  await writeFile(join(lifecycle, 'knowledge/wiki-workspace-en.md'), capability('wiki-workspace', 'wiki-workspace.md'));
+  await writeFile(join(lifecycle, 'knowledge/wiki-workspace.md'), capability('wiki-workspace', 'wiki-workspace.md'));
+  const indexes = await generateIndexesFromRoot({ map, lifecycleRoot: lifecycle, repository_id: repositoryId });
+  assert.equal(indexes.ok, true, JSON.stringify(indexes));
+  for (const file of indexes.value.files) {
+    await mkdir(dirname(join(lifecycle, file.locator)), { recursive: true });
+    await writeFile(join(lifecycle, file.locator), file.content);
+  }
+
+  const result = await selectContext({
+    ...baseInput(root), primary_domain_id: 'wiki-workspace', candidate_domain_ids: ['wiki-workspace'],
+    applicable_relationships: [], task_delivery_refs: [],
+  }, { governanceMap: map, currentRepositoryId: repositoryId });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.value.stop.code, 'SUFFICIENT');
+  assert.deepEqual(result.value.selected_context.map(({ id }) => id), ['wiki-workspace']);
+});
+
+test('converges a selection spanning two authenticated repository shards', async (context) => {
+  const map = structuredClone(projectMap);
+  map.constraints = [];
+  map.domains = [
+    map.domains.find(({ id }) => id === 'wiki-workspace'),
+    map.domains.find(({ id }) => id === 'unrelated-workspace'),
+  ];
+  for (const domain of map.domains) {
+    domain.parent_id = null;
+    domain.relationships = [];
+    domain.paired_assets = {
+      repository_id: domain.id === 'wiki-workspace' ? 'backend' : 'frontend',
+      en: `knowledge/${domain.id}-en.md`,
+      'zh-CN': `knowledge/${domain.id}.md`,
+    };
+  }
+  map.domains[0].relationships = [{ kind: 'depends_on', target_id: 'unrelated-workspace' }];
+  map.domains.sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+  map.repositories = ['backend', 'frontend'].map((id) => ({
+    id, purpose: { en: `Owns ${id}.`, 'zh-CN': `负责 ${id}。` },
+    portable_locator: `github:example/${id}`, integration_ref: 'refs/heads/main',
+    domain_ids: [id === 'backend' ? 'wiki-workspace' : 'unrelated-workspace'],
+    knowledge_asset_locators: [], accepted_revision: `revision:${id}`,
+  }));
+  const roots = {};
+  for (const repositoryId of ['backend', 'frontend']) {
+    const root = await mkdtemp(join(tmpdir(), `project-lifecycle-context-${repositoryId}-`));
+    context.after(() => rm(root, { recursive: true, force: true }));
+    const lifecycleRoot = join(root, 'docs/project-lifecycle');
+    await mkdir(join(lifecycleRoot, 'knowledge'), { recursive: true });
+    const domain = map.domains.find(({ paired_assets: pair }) => pair.repository_id === repositoryId);
+    await writeFile(join(lifecycleRoot, domain.paired_assets.en), capability(domain.id, `${domain.id}.md`));
+    await writeFile(join(lifecycleRoot, domain.paired_assets['zh-CN']), capability(domain.id, `${domain.id}.md`));
+    const generated = await generateIndexesFromRoot({ map, lifecycleRoot, repository_id: repositoryId });
+    assert.equal(generated.ok, true, JSON.stringify(generated));
+    for (const file of generated.value.files) {
+      await mkdir(dirname(join(lifecycleRoot, file.locator)), { recursive: true });
+      await writeFile(join(lifecycleRoot, file.locator), file.content);
+    }
+    roots[repositoryId] = root;
+  }
+
+  const result = await selectContext({
+    ...baseInput(roots.backend), primary_domain_id: 'wiki-workspace', candidate_domain_ids: ['wiki-workspace'],
+    applicable_relationships: [{ source_id: 'wiki-workspace', kind: 'depends_on', target_id: 'unrelated-workspace' }],
+    task_delivery_refs: [],
+  }, {
+    governanceMap: map,
+    currentRepositoryId: 'backend',
+    repositoryRoots: { frontend: roots.frontend },
+  });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(result.value.selected_context.map(({ id }) => id), ['unrelated-workspace', 'wiki-workspace']);
 });
 
 test('accepts CRLF and reordered Frontmatter keys without reading the body', async (context) => {
   const root = await setup(context);
-  const path = join(root, 'docs/project-lifecycle/knowledge/wiki-workspace-en.md');
+  const path = join(root, 'docs/project-lifecycle/knowledge/desktop-experience/wiki-workspace-en.md');
   const reordered = `---\nverification_refs:\n  - repo:test/wiki-workspace\nimplementation_refs:\n  - repo:src/wiki-workspace\nlast_verified_baseline: baseline-7\npaired_asset: wiki-workspace.md\nknowledge_state: current\nid: wiki-workspace\n---\n\n# BODY MUST STAY UNREAD\n`.replaceAll('\n', '\r\n');
   await writeFile(path, reordered);
   const result = await selectContext({ ...baseInput(root), candidate_domain_ids: ['wiki-workspace'], applicable_relationships: [], task_delivery_refs: [] });

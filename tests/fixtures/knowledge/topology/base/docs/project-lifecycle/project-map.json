@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "project_id": "sample-app",
   "knowledge_baseline": "baseline-1",
   "project_identity": {
@@ -17,8 +17,8 @@
       "semantic_revision": 1,
       "lifecycle_state": "current",
       "knowledge_refs": {
-        "en": "knowledge/desktop-experience-en.md#constraint-desktop-privacy",
-        "zh-CN": "knowledge/desktop-experience.md#constraint-desktop-privacy"
+        "en": "knowledge/desktop-experience/desktop-experience-en.md#constraint-desktop-privacy",
+        "zh-CN": "knowledge/desktop-experience/desktop-experience.md#constraint-desktop-privacy"
       },
       "exceptions": []
     },
@@ -29,8 +29,8 @@
       "semantic_revision": 1,
       "lifecycle_state": "current",
       "knowledge_refs": {
-        "en": "knowledge/desktop-experience-en.md#constraint-desktop-shell",
-        "zh-CN": "knowledge/desktop-experience.md#constraint-desktop-shell"
+        "en": "knowledge/desktop-experience/desktop-experience-en.md#constraint-desktop-shell",
+        "zh-CN": "knowledge/desktop-experience/desktop-experience.md#constraint-desktop-shell"
       },
       "exceptions": []
     }
@@ -48,8 +48,9 @@
       "evidence_refs": ["repo:README.md"],
       "known_gaps": [],
       "paired_assets": {
-        "en": "knowledge/desktop-experience-en.md",
-        "zh-CN": "knowledge/desktop-experience.md"
+        "repository_id": null,
+        "en": "knowledge/desktop-experience/desktop-experience-en.md",
+        "zh-CN": "knowledge/desktop-experience/desktop-experience.md"
       },
       "baseline": "baseline-1"
     },

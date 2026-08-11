@@ -59,7 +59,7 @@ const setup = async (context) => {
   const frontend = await repository(context, 'baseline-frontend-', `docs/project-lifecycle/${fixture.frontend_asset}`, 'frontend one\n');
   const backend = await repository(context, 'baseline-backend-', `docs/project-lifecycle/${fixture.backend_asset}`, 'backend one\n');
   const map = {
-    schema_version: 1,
+    schema_version: 2,
     project_id: 'sample-app',
     knowledge_baseline: 'baseline:governance-1',
     project_identity: {
