@@ -14,7 +14,7 @@ silently becoming accepted project truth.
 ## Project status
 
 > [!IMPORTANT]
-> This repository is open source, but version `0.2.0` remains a **pre-release
+> This repository is open source, but version `0.3.0` remains a **pre-release
 > evaluation candidate**. It is not published to npm, and no native host
 > currently satisfies the release support gate. Treat the installation guides
 > as evaluation instructions, not production-support claims.
@@ -46,6 +46,12 @@ Core rules:
   never copied into the knowledge base automatically.
 - Important topology, constraint identity, baseline, conflict, and
   parallel-delivery decisions require explicit user review.
+- Domain complexity is assessed per candidate domain. Complexity signals may
+  recommend deeper thinking, but never start brainstorming or Grill Me without
+  the user's choice.
+- Installing a missing deep-thinking capability requires separate approval for
+  the exact trusted global source; declining or failing installation selects the
+  bounded built-in equivalent instead of blocking calibration.
 - Agents read the smallest sufficient context first and access archived
   material only through an explicit, receipt-bound request.
 
@@ -235,4 +241,4 @@ Project Lifecycle is licensed under the [Apache License 2.0](LICENSE).
   and both shared Skills are discovered natively. See the
   [migration recipe](docs/migrations/knowledgevault-agent-app.md).
 
-See [RELEASE-NOTES.md](RELEASE-NOTES.md) for the exact 0.2.0 candidate scope and upgrade notes.
+See [RELEASE-NOTES.md](RELEASE-NOTES.md) for the exact 0.3.0 candidate scope and upgrade notes.

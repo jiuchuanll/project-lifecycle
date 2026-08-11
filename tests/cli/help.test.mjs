@@ -21,7 +21,7 @@ test('version emits one JSON result envelope', () => {
     encoding: 'utf8',
   });
 
-  assert.deepEqual(JSON.parse(output), { ok: true, value: { version: '0.2.0' }, errors: [] });
+  assert.deepEqual(JSON.parse(output), { ok: true, value: { version: '0.3.0' }, errors: [] });
   assert.equal(output.trimEnd().split('\n').length, 1);
 });
 
