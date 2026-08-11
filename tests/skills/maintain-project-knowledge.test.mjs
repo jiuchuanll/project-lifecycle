@@ -222,6 +222,31 @@ test('defines a closed user-controlled deep-domain calibration contract', async 
   }
 });
 
+test('connects bootstrap to user-controlled deepening and affected-only second-pass review', async () => {
+  const source = await readFile(
+    new URL('../../skills/maintain-project-knowledge/references/bootstrap-and-calibration.md', import.meta.url),
+    'utf8',
+  );
+  const contract = source.match(/<!-- deep-calibration-bootstrap-contract\n([\s\S]*?)\n-->/)?.[1];
+
+  assert.ok(contract, 'bootstrap reference must expose its deep-calibration handoff');
+  assert.deepEqual(parseYaml(contract), {
+    complexity_scope: 'per-domain',
+    signal_action: 'recommend-and-wait',
+    explicit_request: 'authorized',
+    decline: {
+      progress: 'verified-only',
+      current_promotion: 'evidence-required',
+      repeated_persuasion: 'forbidden',
+    },
+    second_pass: {
+      timing: 'after-authorized-deepening',
+      write_gate: 'before-complex-skeleton',
+      reopen: 'affected-only',
+    },
+  });
+});
+
 test('defines only the narrow knowledge-selection handoff to PRD Lifecycle', async () => {
   const { body } = await loadSkill();
   const handoff = body.match(/<!-- prd-lifecycle-handoff\n([\s\S]*?)\n-->/)?.[1];
