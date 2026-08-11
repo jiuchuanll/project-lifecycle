@@ -308,6 +308,22 @@ test('materializes exactly one bilingual pair, map update, and regenerated paire
   assert.equal(chineseDocument.includes('规范所有者：`wiki-workspace`'), true);
   assert.equal(englishDocument.includes('Declared dependency: `app-shell`'), true);
   assert.equal(chineseDocument.includes('已声明依赖：`app-shell`'), true);
+  const englishRelationships = englishDocument.match(
+    /## System and data relationships\n\n([\s\S]*?)\n\n## Implementation and resource map/u,
+  )?.[1];
+  const englishDependencies = englishDocument.match(
+    /## Dependencies\n\n([\s\S]*?)\n\n## Known limits and unknowns/u,
+  )?.[1];
+  const chineseRelationships = chineseDocument.match(
+    /## 系统与数据关系\n\n([\s\S]*?)\n\n## 实现与资源地图/u,
+  )?.[1];
+  const chineseDependencies = chineseDocument.match(
+    /## 依赖\n\n([\s\S]*?)\n\n## 已知限制与未知项/u,
+  )?.[1];
+  assert.doesNotMatch(englishRelationships, /Canonical owner:/u);
+  assert.match(englishDependencies, /Canonical owner: `wiki-workspace`/u);
+  assert.doesNotMatch(chineseRelationships, /规范所有者：/u);
+  assert.match(chineseDependencies, /规范所有者：`wiki-workspace`/u);
   assert.equal(englishDocument.includes('Approval: `approval:user-current-wiki`'), true);
   assert.equal(chineseDocument.includes('批准依据：`approval:user-current-wiki`'), true);
 });
