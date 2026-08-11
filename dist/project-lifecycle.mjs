@@ -17970,7 +17970,7 @@ var validateFixtures = async (rootValue) => {
 };
 
 // scripts/bin/project-lifecycle.mjs
-var version = "0.2.0";
+var version = "0.3.0";
 var command = process.argv[2] ?? "help";
 var cliFailure = (code, path, message) => fail([createError(code, path, message)]);
 var publicDiagnosticMessages = Object.freeze({

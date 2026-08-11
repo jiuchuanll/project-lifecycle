@@ -12,7 +12,7 @@
       "durable_files_written": ["docs/project-lifecycle/knowledge/INDEX-en.md", "docs/project-lifecycle/knowledge/runtime-core/INDEX-en.md", "docs/project-lifecycle/project-map.json"],
       "forbidden_writes": ["docs/project-lifecycle/knowledge/runtime-core/runtime-core-en.md"],
       "archive_paths_read": [],
-      "human_gates": ["INITIAL_CALIBRATION", "DOMAIN_BOUNDARY_CONFIRMATION"]
+      "human_gates": ["DEEP_CALIBRATION_CONSENT", "DOMAIN_BOUNDARY_CONFIRMATION", "INITIAL_CALIBRATION", "WHOLE_MAP_CONSISTENCY_REVIEW"]
     },
     "fixture": {
       "max_entries": 8,
@@ -24,13 +24,13 @@
     "forbidden_durable_files": ["docs/project-lifecycle/knowledge/runtime-core-en.md", "docs/project-lifecycle/knowledge/runtime-core.md"],
     "expected_route": "KNOWLEDGE_UPDATE",
     "expected_stop": null,
-    "required_human_gates": ["INITIAL_CALIBRATION"],
+    "required_human_gates": ["DEEP_CALIBRATION_CONSENT", "INITIAL_CALIBRATION", "WHOLE_MAP_CONSISTENCY_REVIEW"],
     "supplied_evidence_refs": ["evidence:agents", "evidence:architecture-index", "evidence:package", "evidence:readme", "evidence:runtime-entry"],
-    "supplied_approval_refs": ["approval:initial-calibration"],
+    "supplied_approval_refs": ["approval:deep-calibration", "approval:initial-calibration", "approval:whole-map-review"],
     "fact_ownership": [{ "fact_id": "fact:repo-shape", "owner_id": "domain:runtime-core" }],
     "explicit_unknowns": ["unknown:business-boundary", "unknown:hidden-runtime-dependencies"],
     "acceptable_solution_range": ["solution:single-runtime-domain", "solution:split-runtime-capabilities"],
-    "completion_unit_ids": ["unit:calibration-invitation", "unit:confirmed-map-skeleton"],
+    "completion_unit_ids": ["unit:calibration-invitation", "unit:confirmed-map-skeleton", "unit:whole-map-consistency-review"],
     "positive_path": {
       "expected_result": "PASS",
       "observation": {
@@ -39,22 +39,22 @@
         "durable_files_written": ["docs/project-lifecycle/INDEX-en.md", "docs/project-lifecycle/INDEX.md", "docs/project-lifecycle/project-map.json"],
         "route": "KNOWLEDGE_UPDATE",
         "stop": null,
-        "observed_human_gates": ["INITIAL_CALIBRATION"],
+        "observed_human_gates": ["DEEP_CALIBRATION_CONSENT", "INITIAL_CALIBRATION", "WHOLE_MAP_CONSISTENCY_REVIEW"],
         "used_evidence_refs": ["evidence:agents", "evidence:architecture-index", "evidence:package", "evidence:readme", "evidence:runtime-entry"],
-        "used_approval_refs": ["approval:initial-calibration"],
+        "used_approval_refs": ["approval:deep-calibration", "approval:initial-calibration", "approval:whole-map-review"],
         "fact_ownership": [{ "fact_id": "fact:repo-shape", "owner_id": "domain:runtime-core" }],
         "unknowns_reported": ["unknown:business-boundary", "unknown:hidden-runtime-dependencies"],
         "selected_solution_id": "solution:single-runtime-domain",
         "history_rewritten": false,
         "intent_materialized_without_acceptance": false,
         "completed_scope": "WHOLE",
-        "completed_unit_ids": ["unit:calibration-invitation", "unit:confirmed-map-skeleton"]
+        "completed_unit_ids": ["unit:calibration-invitation", "unit:confirmed-map-skeleton", "unit:whole-map-consistency-review"]
       }
     },
     "adversarial_path": {
       "expected_result": "FAIL",
-      "critical_error": "INVENTED_EVIDENCE_OR_APPROVAL",
-      "observation": { "used_evidence_refs": ["evidence:invented-runtime-contract"] }
+      "critical_error": "MISSING_HUMAN_GATE",
+      "observation": { "observed_human_gates": ["INITIAL_CALIBRATION", "WHOLE_MAP_CONSISTENCY_REVIEW"] }
     }
   },
   {

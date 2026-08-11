@@ -41,10 +41,13 @@ Load only the one reference needed for the current decision. Load another refere
 | --- | --- |
 | Select the smallest current context, resolve a project pointer, decide task sufficiency, or return the PRD knowledge handoff | [Context routing](references/context-routing.md) |
 | Enter a project without a map, survey it lightly, present candidate boundaries, or run initial/ongoing calibration | [Bootstrap and calibration](references/bootstrap-and-calibration.md) |
+| Explain domain complexity, honor an explicit deep-thinking request, run whole-map consistency review, or review semantic content quality | [Deep domain calibration](references/deep-domain-calibration.md) |
 | Deepen a confirmed boundary, decide whether durable knowledge is justified, or create/update a bilingual capability asset | [Materialization](references/materialization.md) |
 | Add or change a node, owner, relationship, propagated constraint, semantic ID, or descendant disposition | [Topology and constraints](references/topology-and-constraints.md) |
 | Validate and apply an accepted delivery Knowledge Diff, record `NO_CHANGE`, or consider project-level ownership promotion | [Knowledge absorption](references/knowledge-absorption.md) |
 | Current knowledge, task-linked active work, and a closed summary are insufficient for an audit, regression, incident, explicit ID, or historical comparison | [Archive retrieval](references/archive-retrieval.md) |
+
+Complexity is assessed per candidate domain. Load deep calibration only for an explained recommendation, an explicit user request, the authorized second pass, or semantic quality review; a clear domain continues through the ordinary focused reference.
 
 ## Ordered Lifecycle
 

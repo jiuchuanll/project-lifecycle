@@ -24,6 +24,33 @@ For a repository-owned domain, bind the registered owner to an explicit local `r
 
 One independently verifiable or changeable semantic subject may receive a stable structured `fact_id`. Keep that ID when the accepted answer changes but the subject remains the same, and advance its revision. Replacement, split, merge, ownership transfer, or semantic-scope change creates a reviewed transition rather than recycling an identity. Do not add a global fact index or an exhaustive fact-ID array to Frontmatter.
 
+## Semantic Content Quality Gate
+
+A candidate must pass all six semantic gates before promotion to `current`:
+
+1. **Boundary clarity:** purpose, included and excluded scope, and distinction from parent and peer domains are understandable.
+2. **Durable fact coverage:** stable facts likely to support future retrieval and decisions are present without placeholder prose.
+3. **Evidence quality:** every current fact has supporting evidence, a verification baseline, and limits proportional to risk.
+4. **Relationship clarity:** canonical owner, parentage, major dependencies, shared constraints, and repository ownership are explicit.
+5. **Extension readiness:** stable identities, likely change seams, known extensions, unknowns, and unresolved risks are clear.
+6. **Concision:** link instead of duplicating map, Feedback, PRD, test-report, delivery, or other domain bodies.
+
+Do not combine these gates into a numeric score. A failed critical gate leaves the asset absent or non-current and reports the smallest actionable gap. User acceptance of risk does not turn unsupported content into verified truth. Structural validation cannot override this semantic review.
+
+<!-- semantic-content-quality-contract
+promotion: all-required
+aggregation: non-numeric
+on_failure: absent-or-non-current
+user_risk_acceptance_overrides_truth: false
+gates:
+  - BOUNDARY_CLARITY
+  - DURABLE_FACT_COVERAGE
+  - EVIDENCE_QUALITY
+  - RELATIONSHIP_CLARITY
+  - EXTENSION_READINESS
+  - CONCISION
+-->
+
 ## Truth and Bilingual Gates
 
 `current` means an accepted fact integrated into the authoritative baseline. `in-progress` belongs to delivery, `proposed` remains unconfirmed, and `superseded` leaves default retrieval. A confirmed domain boundary does not imply a current fact.

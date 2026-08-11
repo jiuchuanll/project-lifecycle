@@ -16,6 +16,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
+import { parse as parseYaml } from 'yaml';
+
 import { bootstrap } from '../../scripts/knowledge/bootstrap.mjs';
 import { materializeCapability } from '../../scripts/knowledge/materialize.mjs';
 import { selectContext } from '../../scripts/knowledge/select-context.mjs';
@@ -35,6 +37,10 @@ const chineseTemplatePath = fileURLToPath(new URL(
   '../../skills/maintain-project-knowledge/assets/capability.md',
   import.meta.url,
 ));
+const materializationReferenceUrl = new URL(
+  '../../skills/maintain-project-knowledge/references/materialization.md',
+  import.meta.url,
+);
 
 const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'));
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -216,6 +222,27 @@ test('capability templates expose only six Frontmatter fields and exactly eight 
   }
 });
 
+test('requires all semantic content quality gates before current promotion', async () => {
+  const reference = await readFile(materializationReferenceUrl, 'utf8');
+  const contract = reference.match(/<!-- semantic-content-quality-contract\n([\s\S]*?)\n-->/)?.[1];
+
+  assert.ok(contract, 'materialization must expose its semantic quality contract');
+  assert.deepEqual(parseYaml(contract), {
+    promotion: 'all-required',
+    aggregation: 'non-numeric',
+    on_failure: 'absent-or-non-current',
+    user_risk_acceptance_overrides_truth: false,
+    gates: [
+      'BOUNDARY_CLARITY',
+      'DURABLE_FACT_COVERAGE',
+      'EVIDENCE_QUALITY',
+      'RELATIONSHIP_CLARITY',
+      'EXTENSION_READINESS',
+      'CONCISION',
+    ],
+  });
+});
+
 test('materializes exactly one bilingual pair, map update, and regenerated paired indexes', async (context) => {
   const { root, lifecycleRoot } = await createProject(context);
   const originalMap = await readJson(join(lifecycleRoot, 'project-map.json'));
@@ -281,6 +308,22 @@ test('materializes exactly one bilingual pair, map update, and regenerated paire
   assert.equal(chineseDocument.includes('规范所有者：`wiki-workspace`'), true);
   assert.equal(englishDocument.includes('Declared dependency: `app-shell`'), true);
   assert.equal(chineseDocument.includes('已声明依赖：`app-shell`'), true);
+  const englishRelationships = englishDocument.match(
+    /## System and data relationships\n\n([\s\S]*?)\n\n## Implementation and resource map/u,
+  )?.[1];
+  const englishDependencies = englishDocument.match(
+    /## Dependencies\n\n([\s\S]*?)\n\n## Known limits and unknowns/u,
+  )?.[1];
+  const chineseRelationships = chineseDocument.match(
+    /## 系统与数据关系\n\n([\s\S]*?)\n\n## 实现与资源地图/u,
+  )?.[1];
+  const chineseDependencies = chineseDocument.match(
+    /## 依赖\n\n([\s\S]*?)\n\n## 已知限制与未知项/u,
+  )?.[1];
+  assert.doesNotMatch(englishRelationships, /Canonical owner:/u);
+  assert.match(englishDependencies, /Canonical owner: `wiki-workspace`/u);
+  assert.doesNotMatch(chineseRelationships, /规范所有者：/u);
+  assert.match(chineseDependencies, /规范所有者：`wiki-workspace`/u);
   assert.equal(englishDocument.includes('Approval: `approval:user-current-wiki`'), true);
   assert.equal(chineseDocument.includes('批准依据：`approval:user-current-wiki`'), true);
 });

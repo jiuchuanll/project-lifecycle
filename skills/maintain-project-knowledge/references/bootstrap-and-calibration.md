@@ -38,11 +38,37 @@ Present one candidate at a time with:
 
 The user may confirm, rename, split, merge, reject, or defer it. Confirmation authorizes only the boundary skeleton. It does not verify individual facts or justify a formal knowledge document.
 
+## Domain Complexity and User Choice
+
+Assess complexity separately for each candidate domain. Keep the assessment transient. When a signal exists, show the evidence, inference, downstream risk, recommended deep mode, and expected decision, then recommend a mode and wait for the user's choice. Do not start Brainstorming or Grill Me from a signal alone; an explicit user request is already consent.
+
+If the user declines deepening, continue with the verified boundary work, preserve the smallest material unknown, and do not repeatedly persuade. A user who declines deepening does not approve an unsupported fact as `current`.
+
+<!-- deep-calibration-bootstrap-contract
+complexity_scope: per-domain
+signal_action: recommend-and-wait
+explicit_request: authorized
+decline:
+  progress: verified-only
+  current_promotion: evidence-required
+  repeated_persuasion: forbidden
+second_pass:
+  timing: after-authorized-deepening
+  write_gate: before-complex-skeleton
+  reopen: affected-only
+-->
+
 ## Calibration Gates
 
 After presenting the initial candidate map and coverage assessment, stop until the user corrects it or explicitly says to continue. Before that response, explain evidence and refine questions but do not begin bulk domain materialization.
 
 Invite correction using real goals, business boundaries, hidden dependencies, and missing domains. Later corrections reopen only affected boundaries, shared facts, constraints, and dependent assets; unrelated confirmed knowledge remains usable. New user input becomes evidence for a candidate, never current truth by itself.
+
+## Whole-Map Consistency Review
+
+Run the whole-map consistency review after authorized domain deepening and before writing a new or materially changed complex skeleton. Check missing capabilities, overlapping or unowned responsibility, false parent-child containment, hidden horizontal dependencies, shared ownership, known extensions, and undeclared downstream impact.
+
+Present material findings for user review. When a finding changes a semantic boundary, reopen only affected domains; unrelated confirmed knowledge remains usable. A simple evidence-clear map still receives the bounded coverage check but does not require an artificial deep-calibration session.
 
 ## Allowed Writes
 
