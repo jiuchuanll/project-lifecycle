@@ -205,25 +205,25 @@ const renderDocument = ({
   const replacements = language === 'en'
     ? [
       ['Capability title', document.title],
-      ['Describe the capability purpose and its accepted boundary.', document.purpose_and_current_boundary],
-      ['Add only durable facts with structured fact metadata and explicit limits.', factContent(document.facts, language)],
-      ['Describe the system and data relationships that affect this capability.', `${ownerLine}\n\n${document.system_and_data_relationships}`],
-      ['List the smallest stable implementation and resource entry points.', document.implementation_and_resource_map],
-      ['Describe the verified quality state and evidence coverage.', document.quality_state],
-      ['Describe the declared major dependencies used for routing.', `${dependencyLines}\n\n${document.dependencies}`],
-      ['State explicit limits, unknowns, confidence bounds, and unresolved risks.', bulletContent(document.unknowns)],
-      ['Summarize the authoritative evidence and human decisions behind the asset.', `${approvalLine}\n\n${document.provenance}`],
+      ['State the owned outcome, included and excluded scope, and the distinction from parent and peer domains.', document.purpose_and_current_boundary],
+      ['Add only durable facts. For each independently addressable fact, retain its stable ID and revision, current statement, evidence references, verification baseline, and explicit limits. Do not fill missing knowledge with placeholder prose.', factContent(document.facts, language)],
+      ['Describe only the containment, horizontal collaboration, shared data, interfaces, and constraints that affect this capability.', `${ownerLine}\n\n${document.system_and_data_relationships}`],
+      ['List the smallest stable implementation and resource entry points; link instead of duplicating implementation prose.', document.implementation_and_resource_map],
+      ['State verified coverage, supporting checks, and any unmet semantic quality gate.', document.quality_state],
+      ['Identify the canonical owner and declared major dependencies used for routing.', `${dependencyLines}\n\n${document.dependencies}`],
+      ['State evidence-bounded limits, confidence limits, known extension seams, unknowns, and unresolved risks.', bulletContent(document.unknowns)],
+      ['Summarize authoritative evidence and human decisions without copying Feedback, PRD, test-report, delivery, or historical bodies.', `${approvalLine}\n\n${document.provenance}`],
     ]
     : [
       ['能力标题', document.title],
-      ['说明该能力的用途及其已确认边界。', document.purpose_and_current_boundary],
-      ['只记录带结构化事实元数据和明确限制的耐久事实。', factContent(document.facts, language)],
-      ['说明影响该能力的系统关系与数据关系。', `${ownerLine}\n\n${document.system_and_data_relationships}`],
-      ['列出最小且稳定的实现与资源入口。', document.implementation_and_resource_map],
-      ['说明已验证的质量状态与证据覆盖情况。', document.quality_state],
-      ['说明用于路由的已声明主要依赖。', `${dependencyLines}\n\n${document.dependencies}`],
-      ['明确记录限制、未知项、置信边界和未解决风险。', bulletContent(document.unknowns)],
-      ['概述支撑该资产的权威证据与人工决策。', `${approvalLine}\n\n${document.provenance}`],
+      ['说明该领域负责的结果、包含与排除范围，以及它与父级和同级领域的区别。', document.purpose_and_current_boundary],
+      ['仅添加持久事实。对于每个可独立引用的事实，保留稳定 ID 与修订号、当前陈述、证据引用、验证基线和明确限制。不要用占位文字填补缺失知识。', factContent(document.facts, language)],
+      ['只描述影响该能力的包含关系、横向协作、共享数据、接口和约束。', `${ownerLine}\n\n${document.system_and_data_relationships}`],
+      ['列出最小且稳定的实现与资源入口；通过链接而不是复制实现说明。', document.implementation_and_resource_map],
+      ['说明已验证覆盖、支持性检查以及尚未满足的语义质量门。', document.quality_state],
+      ['标明规范所有者以及用于路由的已声明主要依赖。', `${dependencyLines}\n\n${document.dependencies}`],
+      ['说明由证据限定的限制、置信边界、已知扩展接缝、未知项和未解决风险。', bulletContent(document.unknowns)],
+      ['概述权威证据与人工决策，不复制 Feedback、PRD、测试报告、交付文档或历史正文。', `${approvalLine}\n\n${document.provenance}`],
     ];
   for (const [needle, replacement] of replacements) source = replaceOnce(source, needle, replacement);
   return source;

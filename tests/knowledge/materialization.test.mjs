@@ -16,6 +16,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
+import { parse as parseYaml } from 'yaml';
+
 import { bootstrap } from '../../scripts/knowledge/bootstrap.mjs';
 import { materializeCapability } from '../../scripts/knowledge/materialize.mjs';
 import { selectContext } from '../../scripts/knowledge/select-context.mjs';
@@ -35,6 +37,10 @@ const chineseTemplatePath = fileURLToPath(new URL(
   '../../skills/maintain-project-knowledge/assets/capability.md',
   import.meta.url,
 ));
+const materializationReferenceUrl = new URL(
+  '../../skills/maintain-project-knowledge/references/materialization.md',
+  import.meta.url,
+);
 
 const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'));
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -214,6 +220,27 @@ test('capability templates expose only six Frontmatter fields and exactly eight 
     );
     assert.equal(/product.*architecture.*development.*test/is.test(source), false);
   }
+});
+
+test('requires all semantic content quality gates before current promotion', async () => {
+  const reference = await readFile(materializationReferenceUrl, 'utf8');
+  const contract = reference.match(/<!-- semantic-content-quality-contract\n([\s\S]*?)\n-->/)?.[1];
+
+  assert.ok(contract, 'materialization must expose its semantic quality contract');
+  assert.deepEqual(parseYaml(contract), {
+    promotion: 'all-required',
+    aggregation: 'non-numeric',
+    on_failure: 'absent-or-non-current',
+    user_risk_acceptance_overrides_truth: false,
+    gates: [
+      'BOUNDARY_CLARITY',
+      'DURABLE_FACT_COVERAGE',
+      'EVIDENCE_QUALITY',
+      'RELATIONSHIP_CLARITY',
+      'EXTENSION_READINESS',
+      'CONCISION',
+    ],
+  });
 });
 
 test('materializes exactly one bilingual pair, map update, and regenerated paired indexes', async (context) => {
