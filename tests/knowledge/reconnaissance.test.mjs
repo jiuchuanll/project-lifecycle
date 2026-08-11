@@ -43,7 +43,7 @@ const pendingChangesAssetPath = fileURLToPath(new URL(
 const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'));
 
 const runCli = (args) => new Promise((resolve, reject) => {
-  const child = spawn(process.execPath, ['scripts/bin/project-lifecycle.mjs', ...args], {
+  const child = spawn(process.execPath, ['scripts/bin/project-lifecycle-source.mjs', ...args], {
     cwd: repositoryRoot,
   });
   let stdout = '';

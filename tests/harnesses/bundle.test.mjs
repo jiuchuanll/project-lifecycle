@@ -53,3 +53,19 @@ test('runs the bundled validator from a clean managed-plugin copy without node_m
   assert.equal(invalid.status, 1);
   assert.equal(envelope(invalid).errors[0].code, 'SCHEMA_INVALID');
 });
+
+test('keeps the legacy CLI path dependency-free in a managed-plugin cache', async (context) => {
+  const install = await mkdtemp(join(tmpdir(), 'project-lifecycle-cache-entry-'));
+  context.after(() => rm(install, { recursive: true, force: true }));
+  await cp(join(repositoryRoot, 'scripts'), join(install, 'scripts'), { recursive: true });
+  await mkdir(join(install, 'dist'), { recursive: true });
+  await copyFile(
+    join(repositoryRoot, 'dist/project-lifecycle.mjs'),
+    join(install, 'dist/project-lifecycle.mjs'),
+  );
+  assert.equal(await readFile(join(install, 'node_modules'), 'utf8').catch(() => null), null);
+
+  const version = run(join(install, 'scripts/bin/project-lifecycle.mjs'), ['version'], install);
+  assert.equal(version.status, 0, version.stderr);
+  assert.equal(envelope(version).value.version, packageJson.version);
+});

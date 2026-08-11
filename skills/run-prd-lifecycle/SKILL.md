@@ -11,6 +11,17 @@ Use the fixed project-owned root `docs/project-lifecycle/` for durable delivery 
 
 This Skill owns Feedback, PRD and non-PRD delivery assets, architecture and guidance deltas, execution and test evidence, acceptance, closure, the runtime Context Receipt, and the candidate Knowledge Diff. `maintain-project-knowledge` owns accepted knowledge selection and accepted knowledge writeback.
 
+## Installed Runtime
+
+When deterministic validation is needed from an installed plugin, resolve `<plugin-root>` by ascending two directories from the directory that contains this `SKILL.md`, then execute `<plugin-root>/bin/project-lifecycle`. If the host cannot execute that wrapper, use `node <plugin-root>/dist/project-lifecycle.mjs` as the only fallback. Never invoke files under `<plugin-root>/scripts/`, run package scripts, install dependencies, or modify a plugin cache; source entry points are repository-development-only.
+
+<!-- plugin-runtime-contract
+installed_cli: bin/project-lifecycle
+node_fallback: dist/project-lifecycle.mjs
+source_cli: repository-development-only
+cache_dependency_install: forbidden
+-->
+
 ## Native Decision Contract
 
 Keep this contract in working context before consulting a deeper routing reference.

@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 test('help lists only implemented phase-one commands', () => {
-  const output = execFileSync(process.execPath, ['scripts/bin/project-lifecycle.mjs', 'help'], {
+  const output = execFileSync(process.execPath, ['scripts/bin/project-lifecycle-source.mjs', 'help'], {
     encoding: 'utf8',
   });
   const result = JSON.parse(output);
@@ -17,16 +17,16 @@ test('help lists only implemented phase-one commands', () => {
 });
 
 test('version emits one JSON result envelope', () => {
-  const output = execFileSync(process.execPath, ['scripts/bin/project-lifecycle.mjs', 'version'], {
+  const output = execFileSync(process.execPath, ['scripts/bin/project-lifecycle-source.mjs', 'version'], {
     encoding: 'utf8',
   });
 
-  assert.deepEqual(JSON.parse(output), { ok: true, value: { version: '0.3.0' }, errors: [] });
+  assert.deepEqual(JSON.parse(output), { ok: true, value: { version: '0.3.1' }, errors: [] });
   assert.equal(output.trimEnd().split('\n').length, 1);
 });
 
 test('unknown commands report the CLI error code and exit 2', () => {
-  const result = spawnSync(process.execPath, ['scripts/bin/project-lifecycle.mjs', 'unsupported-command'], {
+  const result = spawnSync(process.execPath, ['scripts/bin/project-lifecycle-source.mjs', 'unsupported-command'], {
     encoding: 'utf8',
   });
 

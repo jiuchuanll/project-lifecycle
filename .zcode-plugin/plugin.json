@@ -1,6 +1,6 @@
 {
   "name": "project-lifecycle",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Build low-noise project knowledge and run traceable PRD delivery lifecycles.",
   "repository": "https://github.com/jiuchuanll/project-lifecycle",
   "author": { "name": "jiuchuanll" },
