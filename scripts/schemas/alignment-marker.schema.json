@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "alignment-marker",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "classification", "primary_domain_id"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "classification": { "const": "BUSINESS_IMPLEMENTATION_DIVERGENCE" },
+    "primary_domain_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "routing_disposition": { "const": "DEFERRED" }
+  }
+}

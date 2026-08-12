@@ -1,6 +1,7 @@
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 
+import alignmentMarkerSchema from '../schemas/alignment-marker.schema.json' with { type: 'json' };
 import archiveAccessReceiptSchema from '../schemas/archive-access-receipt.schema.json' with { type: 'json' };
 import capabilityFrontmatterSchema from '../schemas/capability-frontmatter.schema.json' with { type: 'json' };
 import contextReceiptSchema from '../schemas/context-receipt.schema.json' with { type: 'json' };
@@ -17,6 +18,7 @@ addFormats(ajv);
 
 const schemaValidators = new Map(
   [
+    alignmentMarkerSchema,
     projectMapSchema,
     projectPointerSchema,
     projectExtensionsSchema,
