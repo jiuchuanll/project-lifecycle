@@ -117,7 +117,7 @@ Feedback captured != PRD materialized != delivery started
 - 暂缓；
 - 接受无需整改并记录关闭原因。
 
-确认路由后，派生行变成 `DELIVERY_OPEN` 并填写 `owner_ref`。创建交付 Owner 不代表该行已经完成。只要任一必要的关联 Owner 仍开放，该行就保持 `DELIVERY_OPEN`；只有所有必要关联 Owner 都已接受关闭后，才进入 `KNOWLEDGE_WRITEBACK`，并持续到所有对应候选 Knowledge Diff 都被 `maintain-project-knowledge` 解决。
+只有尚未存在必要交付 Owner 时，已确认的暂缓才适用。一旦关联任何必要 Owner，关联 Owner 状态优先：派生行变成 `DELIVERY_OPEN` 并填写 `owner_ref`。创建交付 Owner 不代表该行已经完成。只要任一必要 Owner 仍开放，该行就保持 `DELIVERY_OPEN`；只有所有必要 Owner 都已接受关闭后，才进入 `KNOWLEDGE_WRITEBACK`，并持续到所有对应候选 Knowledge Diff 都被 `maintain-project-knowledge` 解决。
 
 只有同时满足以下条件，条目才能退出活动投影：
 

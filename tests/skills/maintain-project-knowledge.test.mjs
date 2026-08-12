@@ -319,8 +319,8 @@ test('keeps knowledge control during confirmed alignment Feedback capture', asyn
     new URL('../../skills/maintain-project-knowledge/references/materialization.md', import.meta.url),
     'utf8',
   );
-  assert.match(bootstrap, /Feedback captured.*PRD materialized.*delivery started/is);
+  assert.match(bootstrap, /Feedback captured[^\n]*PRD materialized[^\n]*delivery started/i);
   assert.match(bootstrap, /return control to knowledge (?:construction|maintenance)/i);
-  assert.match(materialization, /accepted business decision.*verified implementation state/is);
-  assert.match(materialization, /must not claim.*implementation.*removed/is);
+  assert.match(materialization, /accepted business decision[^\n]*verified implementation state/i);
+  assert.match(materialization, /must not claim[^\n]*implementation[^\n]*removed/i);
 });

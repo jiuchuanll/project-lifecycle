@@ -236,14 +236,14 @@ test('rejects linked owners from another project and closures from another basel
   assert.equal(wrongBaseline.errors[0].code, 'ALIGNMENT_REVIEW_INPUT_INVALID');
 });
 
-test('preserves explicit deferral after a delivery owner has been linked', () => {
+test('lets linked delivery ownership supersede bootstrap deferral', () => {
   const result = deriveAlignmentReview({
     feedbacks: [feedback('feedback-deferred-delivery', { marker: marker('DEFERRED') })],
     owners: [owner('prd-deferred', ['feedback-deferred-delivery'])],
     closures: [],
   });
   assert.equal(result.ok, true);
-  assert.deepEqual(result.value.rows[0], row('feedback-deferred-delivery', 'DEFERRED', ['prd-deferred']));
+  assert.deepEqual(result.value.rows[0], row('feedback-deferred-delivery', 'DELIVERY_OPEN', ['prd-deferred']));
 });
 
 test('rejects an accepted-looking object that is not a validated closure summary', () => {
@@ -368,9 +368,28 @@ test('publishes and removes the bilingual generated projection as one pair', asy
   const removed = await syncAlignmentReview({ root, feedbacks: [], owners: [], closures: [] });
   assert.equal(removed.ok, true);
   assert.deepEqual(
-    await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')),
+    (await readdir(join(root, 'docs', 'project-lifecycle', 'delivery'))).sort(),
     ['feedback-active-en.md', 'feedback-active.md'],
   );
+});
+
+test('reports an unchanged generated pair when the first removal fails', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-first-remove-'));
+  await mkdir(join(root, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
+  const initial = { root, feedbacks: [feedback('feedback-active')], owners: [], closures: [] };
+  await writeInventory(root, initial);
+  assert.equal((await syncAlignmentReview(initial)).ok, true);
+  await writeInventory(root, { feedbacks: [feedback('feedback-active', { marker: null })] });
+
+  const failed = await syncAlignmentReview({ root, feedbacks: [], owners: [], closures: [] }, {
+    unlink: async () => {
+      throw new Error('injected first removal failure');
+    },
+  });
+
+  assert.equal(failed.errors[0].code, 'ALIGNMENT_REVIEW_WRITE_FAILED');
+  assert.match(failed.errors[0].message, /unchanged/iu);
+  assert.doesNotMatch(failed.errors[0].message, /rolled back/iu);
 });
 
 test('rejects projection publication when authoritative Feedback, owner, or closure inventory is omitted', async () => {

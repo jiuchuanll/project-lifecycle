@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import { stringify as stringifyYaml } from 'yaml';
 
+import { closureSummaryHash } from '../../scripts/lib/closure-summary.mjs';
 import { parseRestrictedYaml } from '../../scripts/lib/markdown.mjs';
 import { atomicWriteValidated } from '../../scripts/lib/atomic-write.mjs';
 import { materializeAsset, validateMaterializationRequest } from '../../scripts/delivery/materialize-asset.mjs';
@@ -353,6 +354,7 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
       );
       return pair;
     })(),
+    alignment_owners: [deliveryOwner],
     alignment_closures: [closure],
     alignment_resolution: {
       schema_version: 1,
@@ -389,10 +391,23 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
     closure_summary: closure,
     body: ordinaryBody,
   }))).ok, true);
+  const persistedClosure = await readFile(join(
+    root,
+    'docs',
+    'project-lifecycle',
+    'delivery',
+    'closure-prd-retire-wiki-density-en.md',
+  ), 'utf8');
+  assert.match(persistedClosure, new RegExp(`project-lifecycle:closure-summary sha256=${closureSummaryHash(closure)}`, 'u'));
   const forgedClosure = structuredClone(resolvedRequest);
   forgedClosure.alignment_closures[0].evidence_refs.push('verification:forged');
   const forgedResult = await materializeAsset(forgedClosure);
   assert.equal(forgedResult.errors[0].code, 'ALIGNMENT_CLOSURE_INVENTORY_INCOMPLETE');
+
+  const omittedOwners = structuredClone(resolvedRequest);
+  omittedOwners.alignment_owners = [];
+  const omittedOwnerResult = await materializeAsset(omittedOwners);
+  assert.equal(omittedOwnerResult.errors[0].code, 'ALIGNMENT_OWNER_INVENTORY_INCOMPLETE');
 
   const resolved = await materializeAsset(resolvedRequest);
   assert.equal(resolved.ok, true);
@@ -689,11 +704,12 @@ test('discovers linked delivery owners from authoritative assets before no-remed
     frontmatter,
     body: alignmentFeedbackBody(),
   }))).ok, true);
+  const deliveryOwner = baseFrontmatter({
+    artifact_id: 'prd-owner-discovery',
+    relationships: { feedback_ids: [feedbackId], prd_ids: [], legacy_artifact_refs: [] },
+  });
   assert.equal((await materializeAsset(request(root, {
-    frontmatter: baseFrontmatter({
-      artifact_id: 'prd-owner-discovery',
-      relationships: { feedback_ids: [feedbackId], prd_ids: [], legacy_artifact_refs: [] },
-    }),
+    frontmatter: deliveryOwner,
     body: ordinaryBody,
   }))).ok, true);
   const bodyWithEvidence = feedbackBody({
@@ -707,7 +723,7 @@ test('discovers linked delivery owners from authoritative assets before no-remed
   const result = await materializeAsset(request(root, {
     frontmatter,
     body: bodyWithEvidence,
-    alignment_owners: [],
+    alignment_owners: [deliveryOwner],
     alignment_resolution: {
       schema_version: 1,
       feedback_id: feedbackId,

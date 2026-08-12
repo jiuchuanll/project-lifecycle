@@ -25,7 +25,7 @@
       "minItems": 1,
       "maxItems": 20,
       "uniqueItems": true,
-      "items": { "type": "string", "minLength": 1, "maxLength": 500, "pattern": "^[^\\s,;；，]+$" }
+      "items": { "type": "string", "maxLength": 500, "pattern": "^knowledge-resolution:[a-z][a-z0-9-]*$" }
     },
     "human_approval_ref": { "type": "string", "minLength": 1, "maxLength": 500, "pattern": "^[^\\s,;；，]+$" }
   },
@@ -36,10 +36,6 @@
         "properties": {
           "owner_refs": { "type": "array", "minItems": 1 },
           "closure_refs": { "type": "array", "minItems": 1 },
-          "knowledge_resolution_refs": {
-            "type": "array",
-            "items": { "type": "string", "pattern": "^knowledge-resolution:[a-z][a-z0-9-]*$" }
-          },
           "human_approval_ref": false
         }
       }
@@ -50,11 +46,7 @@
         "required": ["human_approval_ref"],
         "properties": {
           "owner_refs": { "type": "array", "maxItems": 0 },
-          "closure_refs": { "type": "array", "maxItems": 0 },
-          "knowledge_resolution_refs": {
-            "type": "array",
-            "items": { "type": "string", "pattern": "^knowledge-resolution:[a-z][a-z0-9-]*$" }
-          }
+          "closure_refs": { "type": "array", "maxItems": 0 }
         }
       }
     }

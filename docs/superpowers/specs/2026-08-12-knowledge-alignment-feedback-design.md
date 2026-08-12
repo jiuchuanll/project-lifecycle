@@ -117,7 +117,7 @@ During bootstrap or maintenance, a newly captured alignment Feedback appears as 
 - defer;
 - accept no remediation and close with a reason.
 
-Confirmed routing changes the derived row to `DELIVERY_OPEN` and supplies `owner_ref`. Creating delivery owners does not complete the row. If any required linked owner remains open, the row stays `DELIVERY_OPEN`; only after every required linked owner has an accepted closure does it move to `KNOWLEDGE_WRITEBACK`, where it remains until all corresponding candidate Knowledge Diffs are resolved by `maintain-project-knowledge`.
+Confirmed deferral applies only while no required delivery owner exists. Once any required owner is linked, linked owner state takes precedence: the derived row changes to `DELIVERY_OPEN` and supplies `owner_ref`. Creating delivery owners does not complete the row. If any required owner remains open, the row stays `DELIVERY_OPEN`; only after every required owner has an accepted closure does it move to `KNOWLEDGE_WRITEBACK`, where it remains until all corresponding candidate Knowledge Diffs are resolved by `maintain-project-knowledge`.
 
 An item exits the active projection only when:
 

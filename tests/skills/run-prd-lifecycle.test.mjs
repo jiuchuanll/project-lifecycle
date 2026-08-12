@@ -159,6 +159,10 @@ test('defines the sparse alignment projection and knowledge-writeback exit gate'
   for (const field of ['feedback_id', 'title', 'primary_domain_id', 'alignment_phase', 'owner_ref']) {
     assert.match(assets, new RegExp(`\\b${field}\\b`));
   }
-  assert.match(assets, /REVIEW_REQUIRED.*DELIVERY_OPEN.*KNOWLEDGE_WRITEBACK.*DEFERRED/is);
+  for (const phase of ['REVIEW_REQUIRED', 'DELIVERY_OPEN', 'KNOWLEDGE_WRITEBACK', 'DEFERRED']) {
+    assert.match(assets, new RegExp(`\\b${phase}\\b`, 'u'));
+  }
+  assert.match(assets, /`DEFERRED` applies only while no required linked owner exists[^\n]*linked owner state takes precedence/iu);
+  assert.match(assets, /A row remains `DELIVERY_OPEN`[^\n]*It reaches `KNOWLEDGE_WRITEBACK`/u);
   assert.match(closure, /every required linked owner.*Knowledge Diff/is);
 });

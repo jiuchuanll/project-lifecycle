@@ -6,6 +6,11 @@ import { isDeepStrictEqual } from 'node:util';
 import { stringify as stringifyYaml } from 'yaml';
 
 import { atomicWriteValidated } from '../lib/atomic-write.mjs';
+import {
+  addClosureSummaryHash,
+  closureSummaryHash,
+  extractClosureSummaryHash,
+} from '../lib/closure-summary.mjs';
 import { createError } from '../lib/errors.mjs';
 import { maskFencedMarkdown, parseRestrictedYaml } from '../lib/markdown.mjs';
 import { isSafeReference } from '../lib/reference-safety.mjs';
@@ -19,16 +24,9 @@ const MAX_DOCUMENT_BYTES = MAX_BODY_BYTES * 2;
 const FEEDBACK_SOURCE_SECTIONS = ['original_problem', 'scenario', 'expectation'];
 const FEEDBACK_MUTABLE_SECTIONS = ['marking', 'coverage'];
 const FEEDBACK_HASH_MARKER = /^<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n?/u;
-const CLOSURE_SUMMARY_MARKER = /^<!-- project-lifecycle:closure-summary sha256=([0-9a-f]{64}) -->\n?/u;
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const hash = (value) => createHash('sha256').update(value).digest('hex');
-const canonicalize = (value) => {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (!record(value)) return value;
-  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]));
-};
-const closureSummaryHash = (summary) => hash(JSON.stringify(canonicalize(summary)));
 const boundedText = (value) => typeof value === 'string'
   && value.trim().length > 0
   && value.length <= 500
@@ -111,34 +109,6 @@ const addFeedbackHashes = (body, hashes) => {
   const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(withoutMarker);
   if (!title) return `${feedbackHashMarker(hashes)}\n${withoutMarker}`;
   return `${title[0]}${feedbackHashMarker(hashes)}\n${withoutMarker.slice(title[0].length)}`;
-};
-
-const closureSummaryMarker = (digest) => `<!-- project-lifecycle:closure-summary sha256=${digest} -->`;
-
-const withoutManagedClosureSummaryHash = (body) => {
-  const normalized = body.replaceAll('\r\n', '\n').replace(/^\n/u, '');
-  if (CLOSURE_SUMMARY_MARKER.test(normalized)) return normalized.replace(CLOSURE_SUMMARY_MARKER, '');
-  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(normalized);
-  if (!title) return normalized;
-  const rest = normalized.slice(title[0].length);
-  return CLOSURE_SUMMARY_MARKER.test(rest)
-    ? `${title[0]}${rest.replace(CLOSURE_SUMMARY_MARKER, '')}`
-    : normalized;
-};
-
-const addClosureSummaryHash = (body, digest) => {
-  const withoutMarker = withoutManagedClosureSummaryHash(body);
-  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(withoutMarker);
-  if (!title) return `${closureSummaryMarker(digest)}\n${withoutMarker}`;
-  return `${title[0]}${closureSummaryMarker(digest)}\n${withoutMarker.slice(title[0].length)}`;
-};
-
-const extractClosureSummaryHash = (body) => {
-  const normalized = body.replaceAll('\r\n', '\n').replace(/^\n/u, '');
-  const direct = CLOSURE_SUMMARY_MARKER.exec(normalized);
-  if (direct) return direct[1];
-  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(normalized);
-  return title ? CLOSURE_SUMMARY_MARKER.exec(normalized.slice(title[0].length))?.[1] ?? null : null;
 };
 
 const feedbackSkeleton = (body) => {
@@ -302,7 +272,7 @@ const discoverAlignmentResolutionInventory = async (lifecycleRoot, feedbackId) =
   const pairs = new Map();
   for (const { root, name } of entries) {
     const source = await existingFile(join(root, name));
-    if (source === null || Buffer.byteLength(source) > MAX_BODY_BYTES * 2) {
+    if (source === null || Buffer.byteLength(source) > MAX_DOCUMENT_BYTES) {
       throw new Error('Delivery owner inventory contains an invalid file.');
     }
     const document = splitDocument(source);
@@ -451,6 +421,15 @@ export async function materializeAsset(input = {}, operations = {}) {
         inventory = await discoverAlignmentResolutionInventory(lifecycleRoot, input.frontmatter.artifact_id);
       } catch {
         return failure('ALIGNMENT_OWNER_INVENTORY_INCOMPLETE', '/alignment_owners', 'Marker exit requires a complete valid owner inventory from authoritative delivery assets.');
+      }
+      const suppliedOwnerById = new Map(suppliedOwners.map((owner) => [owner.artifact_id, owner]));
+      if (suppliedOwnerById.size !== suppliedOwners.length
+        || suppliedOwnerById.size !== inventory.owners.length
+        || inventory.owners.some((owner) => !isDeepStrictEqual(
+          suppliedOwnerById.get(owner.artifact_id),
+          owner,
+        ))) {
+        return failure('ALIGNMENT_OWNER_INVENTORY_INCOMPLETE', '/alignment_owners', 'Marker exit requires the exact persisted bilingual delivery-owner inventory.');
       }
       const linkedOwnerIds = new Set(inventory.owners.map(({ artifact_id: ownerId }) => ownerId));
       const suppliedClosures = input.alignment_closures ?? [];

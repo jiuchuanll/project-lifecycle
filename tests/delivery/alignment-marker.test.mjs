@@ -478,6 +478,7 @@ test('does not exclude a rejected owner whose closure is not bound to the linked
     closures: [rejectedClosure('prd-unbound')],
   });
   assert.equal(result.errors[0].code, 'ALIGNMENT_RESOLUTION_INVALID');
+  assert.equal(result.errors[0].path, '/alignment_closures');
 });
 
 test('rejects a linked alignment owner from another project', () => {
