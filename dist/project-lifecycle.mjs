@@ -15694,6 +15694,13 @@ var delivery_frontmatter_schema_default = {
   },
   allOf: [
     {
+      not: {
+        type: "object",
+        properties: { artifact_id: { const: "alignment-review" } },
+        required: ["artifact_id"]
+      }
+    },
+    {
       if: { type: "object", properties: { retention_tier: { const: "active" } }, required: ["retention_tier"] },
       then: {
         type: "object",
@@ -18308,7 +18315,7 @@ var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}
   const rows = [];
   for (const [index, record2] of feedbacks.entries()) {
     const validation2 = validateJson("delivery-frontmatter", record2?.frontmatter);
-    if (!validation2.ok || record2.frontmatter.artifact_kind !== "feedback") {
+    if (!validation2.ok || record2.frontmatter.artifact_kind !== "feedback" || record2.frontmatter.retention_tier !== "active") {
       return failure3(`/feedbacks/${index}`, "Alignment entries must reference valid Feedback Frontmatter.");
     }
     const feedbackId = record2.frontmatter.artifact_id;

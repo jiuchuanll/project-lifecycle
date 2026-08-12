@@ -53,7 +53,8 @@ export const deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = 
   const rows = [];
   for (const [index, record] of feedbacks.entries()) {
     const validation = validateJson('delivery-frontmatter', record?.frontmatter);
-    if (!validation.ok || record.frontmatter.artifact_kind !== 'feedback') {
+    if (!validation.ok || record.frontmatter.artifact_kind !== 'feedback'
+      || record.frontmatter.retention_tier !== 'active') {
       return failure(`/feedbacks/${index}`, 'Alignment entries must reference valid Feedback Frontmatter.');
     }
     const feedbackId = record.frontmatter.artifact_id;

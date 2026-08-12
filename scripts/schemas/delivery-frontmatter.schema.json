@@ -58,6 +58,13 @@
   },
   "allOf": [
     {
+      "not": {
+        "type": "object",
+        "properties": { "artifact_id": { "const": "alignment-review" } },
+        "required": ["artifact_id"]
+      }
+    },
+    {
       "if": { "type": "object", "properties": { "retention_tier": { "const": "active" } }, "required": ["retention_tier"] },
       "then": {
         "type": "object",

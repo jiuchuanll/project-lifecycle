@@ -225,6 +225,25 @@ test('renders only active rows when hundreds of completed Feedback records exist
   assert.doesNotMatch(JSON.stringify(result.value), /evidence_refs|risk|history|reasoning|code_path/iu);
 });
 
+test('rejects retained Feedback from the active alignment projection', () => {
+  for (const retentionTier of ['archive', 'closed-summary']) {
+    const { current_project_id: ignored, ...retainedFrontmatter } = feedback('feedback-template').frontmatter;
+    const result = deriveAlignmentReview({
+      feedbacks: [feedback(`feedback-${retentionTier}`, {
+        frontmatter: {
+          ...retainedFrontmatter,
+          artifact_id: `feedback-${retentionTier}`,
+          retention_tier: retentionTier,
+        },
+      })],
+      owners: [],
+      closures: [],
+    });
+    assert.equal(result.ok, false, retentionTier);
+    assert.equal(result.errors[0].code, 'ALIGNMENT_REVIEW_INPUT_INVALID', retentionTier);
+  }
+});
+
 test('publishes and removes the bilingual generated projection as one pair', async () => {
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-review-'));
   await mkdir(join(root, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
