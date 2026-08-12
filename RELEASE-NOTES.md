@@ -1,18 +1,41 @@
-# Project Lifecycle 0.3.1 candidate notes
+# Project Lifecycle 0.4.0 candidate notes
 
 Publication status: **PUBLIC PRE-RELEASE EVALUATION CANDIDATE**
 
 Host support gate: **NON-RELEASE CANDIDATE**
 
-Version `0.3.1` keeps the deterministic schema-v2 hierarchy and
-user-controlled deep domain calibration from `0.3.0`, while repairing installed
-plugin validation so no npm dependency installation is required inside a host
-cache. It remains private npm metadata and is published as repository source
-plus a deterministic release archive; the version bump does not upgrade any
-native-host support claim.
+Version `0.4.0` adds a user-confirmed business-to-implementation alignment flow
+for knowledge bootstrap and maintenance. Accepted business intent may be
+recorded without pretending the current code already implements it; the
+remaining divergence is captured as bounded Feedback and reviewed in a sparse
+generated projection before any PRD or non-PRD owner is materialized. The
+self-contained installed runtime introduced in `0.3.1` remains intact, so no
+npm dependency installation is required inside a host cache. This version
+remains private npm metadata and is published as repository source plus a
+deterministic release archive; the version bump does not upgrade any native-host
+support claim.
 
 ## What changed
 
+- Knowledge bootstrap and later maintenance now preserve two explicit truths:
+  accepted business intent in canonical knowledge and observed implementation
+  state in evidence. A confirmed divergence never masquerades as completed code.
+- A compact `knowledge_alignment` Feedback marker records only classification,
+  primary domain, and optional deferral disposition. Capture does not itself
+  authorize PRD materialization, delivery startup, a worktree, or a code change.
+- Initial bootstrap batches active alignment items for its closing review;
+  subsequent maintenance batches the current maintenance scope. Explicitly
+  requested immediate remediation still captures Feedback first and confirms
+  the smallest defensible delivery boundary.
+- The generated bilingual `alignment-review` pair is a sparse activity view,
+  not another backlog or history ledger. Every row has exactly five fields and
+  derives one of four phases from authoritative Feedback and delivery assets.
+- Alignment completion fails closed until all authoritative linked owners have
+  accepted closure and exact Knowledge resolution evidence. Explicit
+  no-remediation closure additionally requires human approval and retained
+  residual-divergence or no-change evidence.
+- `validate-alignment-feedback` and `sync-alignment-review` expose the bounded
+  runtime contract without echoing Feedback prose or filesystem contents.
 - Installed Agents now receive one explicit runtime contract: execute
   `bin/project-lifecycle`, use `node dist/project-lifecycle.mjs` only as a
   fallback, and never invoke source scripts or install dependencies in a plugin
@@ -56,11 +79,18 @@ native-host support claim.
   materialization, topology application, and accepted Knowledge Diffs publish
   validated repository shards before the governance map with cross-shard rollback.
 
+## Upgrade from 0.3.1
+
+No knowledge schema or layout migration is required. Existing repositories gain
+the optional alignment Feedback marker and generated review pair only when a
+user-confirmed business-to-implementation divergence is captured. Refresh the
+marketplace and installed plugin after this release is merged; do not install
+npm packages or edit cached plugin files manually.
+
 ## Upgrade from 0.3.0
 
-No knowledge schema or layout migration is required. Refresh the marketplace
-and installed plugin so validator calls use the `0.3.1` runtime contract. Do
-not repair the old cache by installing npm packages or editing cached files.
+No knowledge schema or layout migration is required. The dependency-free cache
+runtime introduced in `0.3.1` remains the supported candidate entry contract.
 
 ## Upgrade from 0.2.0
 
@@ -101,7 +131,7 @@ local plugin only after the release PR is merged.
   and temporary questions with no durable write.
 - Codex `0.147.0-alpha.6.5` and Kimi Code `0.29.2` retained traces were produced
   for `0.1.0`. Their recorded failures and bounded remediation results remain
-  historical evidence and are not relabeled as `0.3.1` runs.
+  historical evidence and are not relabeled as `0.4.0` runs.
 - Claude Code, Cursor, and ZCode remain `NOT_TESTED` because native executables
   were unavailable. Structural passes never produce a `SUPPORTED` claim.
 

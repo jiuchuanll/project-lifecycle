@@ -1,6 +1,6 @@
 # Kimi Code installation
 
-Candidate version: `0.3.1`. Evidence status: `FAILED` based on retained `0.1.0` evidence for Kimi Code `0.29.2`; see the root support matrix. Those traces are historical evidence, not validation of this candidate.
+Candidate version: `0.4.0`. Evidence status: `FAILED` based on retained `0.1.0` evidence for Kimi Code `0.29.2`; see the root support matrix. Those traces are historical evidence, not validation of this candidate.
 
 ```text
 /plugins install https://github.com/jiuchuanll/project-lifecycle

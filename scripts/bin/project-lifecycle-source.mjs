@@ -15,7 +15,7 @@ import { validateFixtures } from '../validate-fixtures.mjs';
 import { validateAlignmentFeedbackDocuments } from '../delivery/alignment-marker.mjs';
 import { syncAlignmentReview } from '../delivery/alignment-review.mjs';
 
-const version = '0.3.1';
+const version = '0.4.0';
 const command = process.argv[2] ?? 'help';
 
 const cliFailure = (code, path, message) => fail([createError(code, path, message)]);

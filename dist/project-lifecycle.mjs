@@ -18490,7 +18490,7 @@ var syncAlignmentReview = async (input = {}, operations = {}) => {
 };
 
 // scripts/bin/project-lifecycle-source.mjs
-var version = "0.3.1";
+var version = "0.4.0";
 var command = process.argv[2] ?? "help";
 var cliFailure = (code, path, message) => fail([createError(code, path, message)]);
 var publicDiagnosticMessages = Object.freeze({
