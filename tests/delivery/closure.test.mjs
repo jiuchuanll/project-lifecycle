@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { closeDelivery } from '../../scripts/delivery/close-delivery.mjs';
+import { closeDelivery, validateClosureSummary } from '../../scripts/delivery/close-delivery.mjs';
 import { createKnowledgeDiffCandidate } from '../../scripts/delivery/create-knowledge-diff.mjs';
 import { createRetentionPlan } from '../../scripts/delivery/retention.mjs';
 import { validateJson } from '../../scripts/lib/validate-json.mjs';
@@ -172,6 +172,21 @@ test('closes accepted PRD work with a change and an accepted no-change repair', 
   }));
   assert.equal(repair.ok, true);
   assert.equal(repair.value.summary.knowledge_handoff.outcome, 'NO_CHANGE');
+});
+
+test('normalizes successful closure summaries to their closed consumer contract', () => {
+  const result = closeDelivery(closure({
+    outcome: { ...closure().outcome, private_note: 'ignored' },
+    verification: { ...closure().verification, runner: 'local' },
+    acceptance_units: [{ ...closure().acceptance_units[0], note: 'ignored' }],
+    feedback_coverage: [{ ...closure().feedback_coverage[0], note: 'ignored' }],
+    conflict_disposition: { ...closure().conflict_disposition, note: 'ignored' },
+    baseline: { ...closure().baseline, note: 'ignored' },
+  }));
+  assert.equal(result.ok, true);
+  assert.equal(validateClosureSummary(result.value.summary).ok, true);
+  assert.equal(JSON.stringify(result.value.summary).includes('ignored'), false);
+  assert.equal(JSON.stringify(result.value.summary).includes('local'), false);
 });
 
 test('binds the validated impact owner, baselines, and accepted evidence to closure', () => {

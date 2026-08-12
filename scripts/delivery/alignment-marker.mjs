@@ -9,6 +9,7 @@ import { validateJson } from '../lib/validate-json.mjs';
 import { validateClosureSummary } from './close-delivery.mjs';
 
 const failure = (code, path, message) => fail([createError(code, path, message)]);
+const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const MARKER = /<!-- project-lifecycle:alignment\n([\s\S]*?)\n-->/gu;
 const FEEDBACK_SECTIONS = ['original_problem', 'scenario', 'expectation', 'marking', 'coverage'];
 const sectionPattern = (id) => new RegExp(
@@ -141,6 +142,7 @@ export const validateAlignmentExit = ({
   resolution,
   owners = [],
   closures = [],
+  knowledgeResults = [],
   ownerInventoryComplete = false,
 } = {}) => {
   if (resolution === undefined || resolution === null) {
@@ -158,6 +160,31 @@ export const validateAlignmentExit = ({
   }
   if (ownerInventoryComplete !== true) {
     return failure('ALIGNMENT_OWNER_INVENTORY_INCOMPLETE', '/alignment_owners', 'Marker exit requires a complete owner inventory derived from authoritative delivery assets.');
+  }
+  if (!Array.isArray(knowledgeResults) || knowledgeResults.length === 0
+    || knowledgeResults.length > 20) {
+    return failure('ALIGNMENT_KNOWLEDGE_RESULT_INVALID', '/alignment_knowledge_results', 'Marker exit requires bounded externally verified knowledge results.');
+  }
+  const knowledgeResultByRef = new Map();
+  for (const result of knowledgeResults) {
+    const allowed = result?.diff_id === undefined
+      ? ['ref', 'verified', 'feedback_id', 'status']
+      : ['ref', 'verified', 'feedback_id', 'status', 'diff_id'];
+    if (!record(result) || Object.keys(result).length !== allowed.length
+      || Object.keys(result).some((key) => !allowed.includes(key))
+      || !isSafeReference(result.ref) || result.verified !== true
+      || result.feedback_id !== feedbackId
+      || !['APPLIED', 'NO_CHANGE', 'RESIDUAL_DIVERGENCE_ACCEPTED'].includes(result.status)
+      || (result.diff_id !== undefined
+        && (!/^[a-z][a-z0-9-]*$/u.test(result.diff_id)
+          || result.ref !== `knowledge-resolution:${result.diff_id}`))
+      || knowledgeResultByRef.has(result.ref)) {
+      return failure('ALIGNMENT_KNOWLEDGE_RESULT_INVALID', '/alignment_knowledge_results', 'Knowledge results require unique exact externally verified bindings.');
+    }
+    knowledgeResultByRef.set(result.ref, result);
+  }
+  if (!sameSorted([...knowledgeResultByRef.keys()], resolution.knowledge_resolution_refs)) {
+    return failure('ALIGNMENT_KNOWLEDGE_RESULT_INVALID', '/alignment_knowledge_results', 'Verified knowledge results must exactly match the resolution references.');
   }
   const closureByOwner = new Map();
   for (const closure of closures) {
@@ -177,7 +204,10 @@ export const validateAlignmentExit = ({
     return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_owners', 'Alignment owners require unique safe identities.');
   }
   if (resolution.disposition === 'NO_REMEDIATION_ACCEPTED') {
-    return requiredOwnerRefs.length === 0
+    const acceptedKnowledge = [...knowledgeResultByRef.values()].every(({ status }) => (
+      ['NO_CHANGE', 'RESIDUAL_DIVERGENCE_ACCEPTED'].includes(status)
+    ));
+    return requiredOwnerRefs.length === 0 && acceptedKnowledge
       ? ok(resolution)
       : failure('ALIGNMENT_RESOLUTION_INCOMPLETE', '/alignment_resolution/owner_refs', 'No-remediation exit cannot omit linked delivery owners.');
   }
@@ -198,7 +228,13 @@ export const validateAlignmentExit = ({
     `knowledge-resolution:${closureByOwner.get(ownerId).knowledge_handoff.diff_id}`
   ));
   if (!sameSorted(resolution.closure_refs, requiredClosureRefs)
-    || !sameSorted(resolution.knowledge_resolution_refs, requiredKnowledgeResolutionRefs)) {
+    || !sameSorted(resolution.knowledge_resolution_refs, requiredKnowledgeResolutionRefs)
+    || requiredOwnerRefs.some((ownerId) => {
+      const handoff = closureByOwner.get(ownerId).knowledge_handoff;
+      const result = knowledgeResultByRef.get(`knowledge-resolution:${handoff.diff_id}`);
+      return result?.diff_id !== handoff.diff_id
+        || result.status !== (handoff.outcome === 'CHANGE' ? 'APPLIED' : 'NO_CHANGE');
+    })) {
     return failure('ALIGNMENT_RESOLUTION_INCOMPLETE', '/alignment_resolution', 'Every accepted owner requires closure and knowledge resolution.');
   }
   return ok(resolution);

@@ -63,7 +63,23 @@ const pair = (overrides = {}) => ({
   },
 });
 
-const validateExit = (input) => validateAlignmentExit({ ...input, ownerInventoryComplete: true });
+const knowledgeResultsFor = ({ resolution, closures = [] }) => resolution.knowledge_resolution_refs.map((ref) => {
+  const diffId = ref.replace(/^knowledge-resolution:/u, '');
+  const closure = closures.find((candidate) => candidate.knowledge_handoff?.diff_id === diffId);
+  return {
+    ref,
+    verified: true,
+    feedback_id: resolution.feedback_id,
+    status: closure?.knowledge_handoff?.outcome === 'CHANGE' ? 'APPLIED' : 'NO_CHANGE',
+    ...(closure ? { diff_id: diffId } : {}),
+  };
+});
+
+const validateExit = (input) => validateAlignmentExit({
+  ...input,
+  ownerInventoryComplete: true,
+  knowledgeResults: input.knowledgeResults ?? knowledgeResultsFor(input),
+});
 
 test('parses one bounded business-to-implementation marker', () => {
   assert.deepEqual(extractAlignmentMarker(`## Marking\n\n${marker()}`, '/marking'), {
@@ -213,9 +229,26 @@ test('requires the complete accepted owner set and knowledge resolution before m
     ],
   };
 
+  assert.equal(validateAlignmentExit({
+    feedbackId: 'feedback-retire-legacy',
+    resolution,
+    owners,
+    closures,
+    ownerInventoryComplete: true,
+  }).errors[0].code, 'ALIGNMENT_KNOWLEDGE_RESULT_INVALID');
   assert.equal(validateExit({
     feedbackId: 'feedback-retire-legacy', resolution, owners, closures,
   }).ok, true);
+  assert.equal(validateExit({
+    feedbackId: 'feedback-retire-legacy',
+    resolution,
+    owners,
+    closures,
+    knowledgeResults: knowledgeResultsFor({ resolution, closures }).map((result) => ({
+      ...result,
+      status: 'NO_CHANGE',
+    })),
+  }).errors[0].code, 'ALIGNMENT_RESOLUTION_INCOMPLETE');
   assert.equal(validateExit({
     feedbackId: 'feedback-retire-legacy',
     resolution: { ...resolution, owner_refs: ['prd-backend'], closure_refs: ['closure-prd-backend'] },
@@ -260,6 +293,41 @@ test('requires explicit approval for an accepted no-remediation exit', () => {
     owners: [],
     closures: [],
   }).ok, true);
+});
+
+test('requires externally verified knowledge results before marker exit', () => {
+  const resolution = {
+    schema_version: 1,
+    feedback_id: 'feedback-retire-legacy',
+    disposition: 'NO_REMEDIATION_ACCEPTED',
+    owner_refs: [],
+    closure_refs: [],
+    knowledge_resolution_refs: ['knowledge-resolution:no-remediation-accepted'],
+    human_approval_ref: 'decision:no-remediation',
+  };
+  const missing = validateAlignmentExit({
+    feedbackId: resolution.feedback_id,
+    resolution,
+    owners: [],
+    closures: [],
+    ownerInventoryComplete: true,
+  });
+  assert.equal(missing.errors[0].code, 'ALIGNMENT_KNOWLEDGE_RESULT_INVALID');
+
+  const unverified = validateAlignmentExit({
+    feedbackId: resolution.feedback_id,
+    resolution,
+    owners: [],
+    closures: [],
+    ownerInventoryComplete: true,
+    knowledgeResults: [{
+      ref: 'knowledge-resolution:no-remediation-accepted',
+      verified: false,
+      feedback_id: resolution.feedback_id,
+      status: 'RESIDUAL_DIVERGENCE_ACCEPTED',
+    }],
+  });
+  assert.equal(unverified.errors[0].code, 'ALIGNMENT_KNOWLEDGE_RESULT_INVALID');
 });
 
 test('fails closed unless the owner inventory is explicitly complete', () => {

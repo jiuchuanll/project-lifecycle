@@ -25,6 +25,18 @@ const freeze = (value) => {
   return value;
 };
 const sortedRecords = (values, field) => [...values].sort((left, right) => compareCodePoints(left[field], right[field]));
+const normalizeUnit = ({ unit_id, status, evidence_refs }) => ({
+  unit_id,
+  status,
+  evidence_refs: [...evidence_refs],
+});
+const normalizeCoverage = ({ feedback_id, status, covering_prd_ids, evidence_refs, remaining_criteria }) => ({
+  feedback_id,
+  status,
+  covering_prd_ids: [...covering_prd_ids],
+  evidence_refs: [...evidence_refs],
+  remaining_criteria: [...remaining_criteria],
+});
 
 export const validateClosureSummary = (summary) => {
   const topLevel = [
@@ -236,16 +248,29 @@ export const closeDelivery = (input = {}) => {
   const summary = freeze({
     artifact_id: closureId,
     owner_artifact_id: input.owner.artifact_id,
-    outcome: structuredClone(input.outcome),
-    verification: structuredClone(input.verification),
+    outcome: {
+      status: input.outcome.status,
+      ref: input.outcome.ref,
+      residual_risk_refs: [...input.outcome.residual_risk_refs],
+    },
+    verification: { status: input.verification.status, ref: input.verification.ref },
     acceptance: {
       claimed: accepted,
-      units: sortedRecords(input.acceptance_units, 'unit_id'),
+      units: sortedRecords(input.acceptance_units.map(normalizeUnit), 'unit_id'),
     },
-    feedback_coverage: coverage.value,
+    feedback_coverage: coverage.value.map(normalizeCoverage),
     obligation_outcomes: gate.value.compact_outcomes,
-    conflict_disposition: structuredClone(input.conflict_disposition),
-    baseline: structuredClone(input.baseline),
+    conflict_disposition: {
+      status: input.conflict_disposition.status,
+      ref: input.conflict_disposition.ref,
+    },
+    baseline: {
+      starting: input.baseline.starting,
+      current: input.baseline.current,
+      ...(input.baseline.reconciliation_ref
+        ? { reconciliation_ref: input.baseline.reconciliation_ref }
+        : {}),
+    },
     knowledge_handoff: {
       diff_id: input.knowledge_handoff.diff.diff_id,
       outcome: input.knowledge_handoff.diff.outcome,

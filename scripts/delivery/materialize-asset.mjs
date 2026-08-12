@@ -67,7 +67,8 @@ const extractFeedbackSections = (body) => {
 };
 
 const sourceHashes = (sections) => Object.fromEntries(
-  FEEDBACK_SOURCE_SECTIONS.map((id) => [id, hash(sections[id])]),
+  FEEDBACK_SOURCE_SECTIONS.map((id) => [id, hash(sections[id]
+    .replace(/^<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n?/gmu, ''))]),
 );
 
 const feedbackHashMarker = (hashes) => `<!-- project-lifecycle:feedback-source-hashes ${FEEDBACK_SOURCE_SECTIONS
@@ -86,6 +87,22 @@ const feedbackSkeleton = (body) => {
     output = output.replace(sectionPattern(id), `<!-- project-lifecycle:section ${id} -->\n[MUTABLE]\n<!-- /project-lifecycle:section -->`);
   }
   return output.replaceAll('\r\n', '\n').replace(/^\n/u, '');
+};
+
+const withoutDocumentTitle = (body) => body.replace(/^#[ \t]+[^\n]+\n(?:\n)?/u, '');
+
+const hasExactCoverageReference = (coverage, reference) => {
+  const escaped = reference.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  return new RegExp(`(?<![A-Za-z0-9:_-])${escaped}(?![A-Za-z0-9:_-])`, 'u').test(coverage);
+};
+
+const feedbackFrame = (body) => {
+  let output = withoutDocumentTitle(body)
+    .replace(/^<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n?/gmu, '');
+  for (const id of [...FEEDBACK_SOURCE_SECTIONS, ...FEEDBACK_MUTABLE_SECTIONS]) {
+    output = output.replace(sectionPattern(id), `<!-- project-lifecycle:section-frame ${id} -->`);
+  }
+  return output.replace(/\s+/gu, ' ').trim();
 };
 
 const splitDocument = (source) => {
@@ -178,14 +195,25 @@ const existingFile = async (path) => {
 };
 
 const discoverAlignmentOwners = async (lifecycleRoot, feedbackId) => {
-  const deliveryRoot = join(lifecycleRoot, 'delivery');
-  const names = (await readdir(deliveryRoot))
-    .filter((name) => name.endsWith('.md')
-      && !['alignment-review-en.md', 'alignment-review.md'].includes(name));
-  if (names.length > 2000) throw new Error('Delivery owner inventory is unbounded.');
+  const roots = [await requireRegularDirectory(join(lifecycleRoot, 'delivery'), lifecycleRoot)];
+  try {
+    roots.push(await requireRegularDirectory(join(lifecycleRoot, 'archive', 'delivery'), lifecycleRoot));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  const entries = [];
+  for (const root of roots) {
+    for (const name of await readdir(root)) {
+      if (name.endsWith('.md')
+        && !['alignment-review-en.md', 'alignment-review.md'].includes(name)) {
+        entries.push({ root, name });
+      }
+    }
+  }
+  if (entries.length > 2000) throw new Error('Delivery owner inventory is unbounded.');
   const pairs = new Map();
-  for (const name of names) {
-    const source = await existingFile(join(deliveryRoot, name));
+  for (const { root, name } of entries) {
+    const source = await existingFile(join(root, name));
     if (source === null || Buffer.byteLength(source) > MAX_BODY_BYTES * 2) {
       throw new Error('Delivery owner inventory contains an invalid file.');
     }
@@ -324,6 +352,7 @@ export async function materializeAsset(input = {}, operations = {}) {
         resolution: input.alignment_resolution,
         owners,
         closures: input.alignment_closures ?? [],
+        knowledgeResults: input.alignment_knowledge_results ?? [],
         ownerInventoryComplete: true,
       });
       if (!exit.ok) return exit;
@@ -336,7 +365,7 @@ export async function materializeAsset(input = {}, operations = {}) {
           ...exit.value.knowledge_resolution_refs];
       for (const language of ['en', 'zh-CN']) {
         const coverage = extractFeedbackSections(bodies[language])?.coverage;
-        if (!coverage || requiredEvidence.some((reference) => !coverage.includes(reference))) {
+        if (!coverage || requiredEvidence.some((reference) => !hasExactCoverageReference(coverage, reference))) {
           return failure(
             'ALIGNMENT_RESOLUTION_EVIDENCE_MISSING',
             `/body/${language}/coverage`,
@@ -357,9 +386,19 @@ export async function materializeAsset(input = {}, operations = {}) {
         }
         const priorSections = extractFeedbackSections(prior.body);
         const nextSections = extractFeedbackSections(bodies[language]);
+        const titleMigration = priorAlignment.value.marker === null
+          && nextAlignment.value.marker !== null
+          && priorAlignment.value.titles[language] === null;
+        const priorSkeleton = feedbackSkeleton(prior.body);
+        const nextSkeleton = feedbackSkeleton(
+          titleMigration ? withoutDocumentTitle(bodies[language]) : bodies[language],
+        );
+        const skeletonMatches = titleMigration
+          ? feedbackFrame(prior.body) === feedbackFrame(bodies[language])
+          : priorSkeleton === nextSkeleton;
         if (!priorSections || !nextSections
           || !isDeepStrictEqual(sourceHashes(priorSections), sourceHashes(nextSections))
-          || feedbackSkeleton(prior.body) !== feedbackSkeleton(bodies[language])) {
+          || !skeletonMatches) {
           return failure('HISTORY_BODY_CHANGED', `/body/${language}`, 'Feedback source history cannot change without an erratum or successor.');
         }
       }

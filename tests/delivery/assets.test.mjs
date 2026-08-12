@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, readdir, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rename, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -73,6 +73,14 @@ const request = (root, overrides = {}) => ({
   frontmatter: baseFrontmatter(),
   body: ordinaryBody,
   ...overrides,
+});
+
+const knowledgeResult = ({ feedbackId, diffId = null, ref = null, status }) => ({
+  ref: ref ?? `knowledge-resolution:${diffId}`,
+  verified: true,
+  feedback_id: feedbackId,
+  status,
+  ...(diffId ? { diff_id: diffId } : {}),
 });
 
 const parseDeliveryFrontmatter = (source) => {
@@ -265,6 +273,11 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
     frontmatter: deliveryOwner,
     body: ordinaryBody,
   }))).ok, true);
+  const archive = join(root, 'docs', 'project-lifecycle', 'archive', 'delivery');
+  await mkdir(archive, { recursive: true });
+  for (const name of ['prd-retire-wiki-density-en.md', 'prd-retire-wiki-density.md']) {
+    await rename(join(root, 'docs', 'project-lifecycle', 'delivery', name), join(archive, name));
+  }
   const closure = {
     artifact_id: 'closure-prd-retire-wiki-density',
     owner_artifact_id: 'prd-retire-wiki-density',
@@ -314,6 +327,11 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
       closure_refs: ['closure-prd-retire-wiki-density'],
       knowledge_resolution_refs: ['knowledge-resolution:diff-retirement'],
     },
+    alignment_knowledge_results: [knowledgeResult({
+      feedbackId,
+      diffId: 'diff-retirement',
+      status: 'APPLIED',
+    })],
   }));
   assert.equal(resolved.ok, true);
   const source = await readFile(join(root, 'docs', 'project-lifecycle', 'delivery', `${feedbackId}-en.md`), 'utf8');
@@ -353,6 +371,11 @@ test('requires no-remediation approval and knowledge evidence in retained Feedba
     frontmatter,
     body: feedbackBody(),
     alignment_resolution: alignmentResolution,
+    alignment_knowledge_results: [knowledgeResult({
+      feedbackId,
+      ref: 'knowledge-resolution:retained-divergence',
+      status: 'RESIDUAL_DIVERGENCE_ACCEPTED',
+    })],
   }));
   assert.equal(missingEvidence.errors[0].code, 'ALIGNMENT_RESOLUTION_EVIDENCE_MISSING');
 
@@ -367,6 +390,11 @@ test('requires no-remediation approval and knowledge evidence in retained Feedba
     frontmatter,
     body: bodyWithEvidence,
     alignment_resolution: alignmentResolution,
+    alignment_knowledge_results: [knowledgeResult({
+      feedbackId,
+      ref: 'knowledge-resolution:retained-divergence',
+      status: 'RESIDUAL_DIVERGENCE_ACCEPTED',
+    })],
   }));
   assert.equal(resolved.ok, true);
   for (const language of ['en', 'zh-CN']) {
@@ -376,6 +404,68 @@ test('requires no-remediation approval and knowledge evidence in retained Feedba
     assert.match(source, /decision:retain-divergence/u);
     assert.match(source, /knowledge-resolution:retained-divergence/u);
   }
+});
+
+test('requires exact retained resolution tokens instead of prefix matches', async () => {
+  const root = await rootFor();
+  const feedbackId = 'feedback-prefix-evidence';
+  const frontmatter = baseFrontmatter({
+    artifact_id: feedbackId,
+    artifact_kind: 'feedback',
+    primary_route: 'KNOWLEDGE_UPDATE',
+  });
+  assert.equal((await materializeAsset(request(root, {
+    frontmatter,
+    body: alignmentFeedbackBody(),
+  }))).ok, true);
+  const bodyWithPrefix = feedbackBody({
+    coverage: 'NO_REMEDIATION_ACCEPTED; decision:retain-prefix-old; knowledge-resolution:prefix-old',
+  });
+  bodyWithPrefix['zh-CN'] = bodyWithPrefix['zh-CN'].replace(
+    '已由 PRD 覆盖。',
+    'NO_REMEDIATION_ACCEPTED；decision:retain-prefix-old；knowledge-resolution:prefix-old',
+  );
+  const result = await materializeAsset(request(root, {
+    frontmatter,
+    body: bodyWithPrefix,
+    alignment_resolution: {
+      schema_version: 1,
+      feedback_id: feedbackId,
+      disposition: 'NO_REMEDIATION_ACCEPTED',
+      owner_refs: [],
+      closure_refs: [],
+      knowledge_resolution_refs: ['knowledge-resolution:prefix'],
+      human_approval_ref: 'decision:retain-prefix',
+    },
+    alignment_knowledge_results: [knowledgeResult({
+      feedbackId,
+      ref: 'knowledge-resolution:prefix',
+      status: 'RESIDUAL_DIVERGENCE_ACCEPTED',
+    })],
+  }));
+  assert.equal(result.errors[0].code, 'ALIGNMENT_RESOLUTION_EVIDENCE_MISSING');
+});
+
+test('reuses titleless legacy Feedback by allowing one bounded alignment title migration', async () => {
+  const root = await rootFor();
+  const feedbackId = 'feedback-title-migration';
+  const frontmatter = baseFrontmatter({
+    artifact_id: feedbackId,
+    artifact_kind: 'feedback',
+    primary_route: 'PRD_DELIVERY',
+  });
+  const titleless = feedbackBody();
+  titleless.en = titleless.en.replace(/^# .*\n\n/u, '');
+  titleless['zh-CN'] = titleless['zh-CN'].replace(/^# .*\n\n/u, '');
+  assert.equal((await materializeAsset(request(root, { frontmatter, body: titleless }))).ok, true);
+
+  const aligned = alignmentFeedbackBody();
+  const result = await materializeAsset(request(root, {
+    frontmatter,
+    body: aligned,
+  }));
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.value.status, 'updated');
 });
 
 test('discovers linked delivery owners from authoritative assets before no-remediation exit', async () => {
@@ -418,6 +508,11 @@ test('discovers linked delivery owners from authoritative assets before no-remed
       knowledge_resolution_refs: ['knowledge-resolution:owner-discovery'],
       human_approval_ref: 'decision:ignore-owner',
     },
+    alignment_knowledge_results: [knowledgeResult({
+      feedbackId,
+      ref: 'knowledge-resolution:owner-discovery',
+      status: 'RESIDUAL_DIVERGENCE_ACCEPTED',
+    })],
   }));
   assert.equal(result.errors[0].code, 'ALIGNMENT_RESOLUTION_INCOMPLETE');
 });

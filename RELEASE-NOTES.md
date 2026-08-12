@@ -30,8 +30,9 @@ support claim.
 - The generated bilingual `alignment-review` pair is a sparse activity view,
   not another backlog or history ledger. Every row has exactly five fields and
   derives one of four phases from authoritative Feedback and delivery assets.
-- Alignment completion fails closed until all authoritative linked owners have
-  accepted closure and exact Knowledge resolution evidence. Explicit
+- Alignment completion fails closed until all active or retained authoritative
+  linked owners have accepted closure and exact externally verified Knowledge
+  application or no-change evidence. Explicit
   no-remediation closure additionally requires human approval and retained
   residual-divergence or no-change evidence.
 - `validate-alignment-feedback` and `sync-alignment-review` expose the bounded
