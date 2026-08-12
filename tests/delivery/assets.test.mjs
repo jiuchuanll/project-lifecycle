@@ -162,6 +162,17 @@ test('accepts a bounded human-readable materialization reason', () => {
   assert.equal(result.ok, true);
 });
 
+test('keeps ordinary Feedback without a document-level H1 compatible', () => {
+  const body = feedbackBody();
+  body.en = body.en.replace(/^# .*\n\n/u, '');
+  body['zh-CN'] = body['zh-CN'].replace(/^# .*\n\n/u, '');
+  const result = validateMaterializationRequest(request('/tmp/example', {
+    frontmatter: baseFrontmatter({ artifact_id: 'feedback-wiki-layout', artifact_kind: 'feedback' }),
+    body,
+  }));
+  assert.equal(result.ok, true);
+});
+
 test('rejects inferred PRD creation and architecture without their explicit gates before writing', async () => {
   const root = await rootFor();
   const inferred = await materializeAsset(request(root, { creation_origin: 'agent_inferred' }));
@@ -295,6 +306,57 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
   assert.equal(resolved.ok, true);
   const source = await readFile(join(root, 'docs', 'project-lifecycle', 'delivery', `${feedbackId}-en.md`), 'utf8');
   assert.doesNotMatch(source, /project-lifecycle:alignment/u);
+});
+
+test('requires no-remediation approval and knowledge evidence in retained Feedback coverage', async () => {
+  const root = await rootFor();
+  const feedbackId = 'feedback-retain-divergence';
+  const frontmatter = baseFrontmatter({
+    artifact_id: feedbackId,
+    artifact_kind: 'feedback',
+    primary_route: 'KNOWLEDGE_UPDATE',
+  });
+  assert.equal((await materializeAsset(request(root, {
+    frontmatter,
+    body: alignmentFeedbackBody(),
+  }))).ok, true);
+  const alignmentResolution = {
+    schema_version: 1,
+    feedback_id: feedbackId,
+    disposition: 'NO_REMEDIATION_ACCEPTED',
+    owner_refs: [],
+    closure_refs: [],
+    knowledge_resolution_refs: ['knowledge-resolution:retained-divergence'],
+    human_approval_ref: 'decision:retain-divergence',
+  };
+
+  const missingEvidence = await materializeAsset(request(root, {
+    frontmatter,
+    body: feedbackBody(),
+    alignment_resolution: alignmentResolution,
+  }));
+  assert.equal(missingEvidence.errors[0].code, 'ALIGNMENT_RESOLUTION_EVIDENCE_MISSING');
+
+  const bodyWithEvidence = feedbackBody({
+    coverage: 'NO_REMEDIATION_ACCEPTED; decision:retain-divergence; knowledge-resolution:retained-divergence',
+  });
+  bodyWithEvidence['zh-CN'] = bodyWithEvidence['zh-CN'].replace(
+    '已由 PRD 覆盖。',
+    'NO_REMEDIATION_ACCEPTED；decision:retain-divergence；knowledge-resolution:retained-divergence',
+  );
+  const resolved = await materializeAsset(request(root, {
+    frontmatter,
+    body: bodyWithEvidence,
+    alignment_resolution: alignmentResolution,
+  }));
+  assert.equal(resolved.ok, true);
+  for (const language of ['en', 'zh-CN']) {
+    const suffix = language === 'en' ? '-en.md' : '.md';
+    const source = await readFile(join(root, 'docs', 'project-lifecycle', 'delivery', `${feedbackId}${suffix}`), 'utf8');
+    assert.match(source, /NO_REMEDIATION_ACCEPTED/u);
+    assert.match(source, /decision:retain-divergence/u);
+    assert.match(source, /knowledge-resolution:retained-divergence/u);
+  }
 });
 
 test('allows only Feedback marking and coverage updates without an erratum or successor', async () => {

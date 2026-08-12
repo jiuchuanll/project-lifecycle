@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, readdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -199,6 +199,25 @@ test('publishes and removes the bilingual generated projection as one pair', asy
   const removed = await syncAlignmentReview({ root, feedbacks: [], owners: [], closures: [] });
   assert.equal(removed.ok, true);
   assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
+});
+
+test('refuses to overwrite or remove a non-generated asset at the projection locators', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-collision-'));
+  const delivery = join(root, 'docs', 'project-lifecycle', 'delivery');
+  await mkdir(delivery, { recursive: true });
+  const originals = {
+    en: '---\nartifact_id: alignment-review\n---\nExisting English asset.\n',
+    'zh-CN': '---\nartifact_id: alignment-review\n---\n现有中文资产。\n',
+  };
+  await writeFile(join(delivery, 'alignment-review-en.md'), originals.en);
+  await writeFile(join(delivery, 'alignment-review.md'), originals['zh-CN']);
+
+  for (const feedbacks of [[feedback('feedback-active')], []]) {
+    const result = await syncAlignmentReview({ root, feedbacks, owners: [], closures: [] });
+    assert.equal(result.errors[0].code, 'ALIGNMENT_REVIEW_COLLISION');
+    assert.equal(await readFile(join(delivery, 'alignment-review-en.md'), 'utf8'), originals.en);
+    assert.equal(await readFile(join(delivery, 'alignment-review.md'), 'utf8'), originals['zh-CN']);
+  }
 });
 
 test('restores the prior English projection when the Chinese write fails', async () => {

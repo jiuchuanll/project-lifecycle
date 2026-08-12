@@ -61,9 +61,9 @@ const extractBody = (body, language) => {
   if (!marker.ok) return marker;
   const visible = maskFencedMarkdown(normalized);
   const documentTitles = [...visible.matchAll(/^#[ \t]+(.+)$/gmu)];
-  const title = documentTitles[0]?.[1]?.trim();
-  if (documentTitles.length !== 1 || documentTitles[0]?.index !== 0
-    || !title || title.length > 200 || /[\p{Cc}\p{Cf}]/u.test(title)) {
+  const title = documentTitles[0]?.[1]?.trim() ?? null;
+  if (marker.value && (documentTitles.length !== 1 || documentTitles[0]?.index !== 0
+    || !title || title.length > 200 || /[\p{Cc}\p{Cf}]/u.test(title))) {
     return failure('ALIGNMENT_MARKER_INVALID', `/body/${language}/title`, 'Feedback requires one safe bounded H1 title.');
   }
   return ok({
@@ -150,8 +150,19 @@ export const validateAlignmentExit = ({ feedbackId, resolution, owners = [], clo
   if (!Array.isArray(owners) || !Array.isArray(closures)) {
     return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_resolution', 'Alignment resolution requires bounded owner and closure inputs.');
   }
+  const closureByOwner = new Map();
+  for (const closure of closures) {
+    if (!validateClosureSummary(closure).ok
+      || closureByOwner.has(closure.owner_artifact_id)) {
+      return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_closures', 'Closure summaries require unique validated owner references.');
+    }
+    closureByOwner.set(closure.owner_artifact_id, closure);
+  }
   const linkedOwners = owners.filter((owner) => owner?.relationships?.feedback_ids?.includes(feedbackId));
-  const requiredOwnerRefs = linkedOwners.map(({ artifact_id: artifactId }) => artifactId);
+  const requiredOwnerRefs = linkedOwners
+    .filter(({ artifact_id: artifactId }) => !['ABANDONED', 'CANCELLED', 'REJECTED']
+      .includes(closureByOwner.get(artifactId)?.outcome?.status))
+    .map(({ artifact_id: artifactId }) => artifactId);
   if (new Set(requiredOwnerRefs).size !== requiredOwnerRefs.length
     || requiredOwnerRefs.some((ownerId) => !/^[a-z][a-z0-9-]*$/u.test(ownerId))) {
     return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_owners', 'Alignment owners require unique safe identities.');
@@ -163,13 +174,6 @@ export const validateAlignmentExit = ({ feedbackId, resolution, owners = [], clo
   }
   if (!sameSorted(resolution.owner_refs, requiredOwnerRefs)) {
     return failure('ALIGNMENT_RESOLUTION_INCOMPLETE', '/alignment_resolution/owner_refs', 'Resolution must cover every linked delivery owner.');
-  }
-  const closureByOwner = new Map();
-  for (const closure of closures) {
-    if (typeof closure?.owner_artifact_id !== 'string' || closureByOwner.has(closure.owner_artifact_id)) {
-      return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_closures', 'Closure summaries require unique owner references.');
-    }
-    closureByOwner.set(closure.owner_artifact_id, closure);
   }
   const requiredClosureRefs = [];
   for (const ownerId of requiredOwnerRefs) {

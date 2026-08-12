@@ -279,6 +279,23 @@ export async function materializeAsset(input = {}, operations = {}) {
         closures: input.alignment_closures ?? [],
       });
       if (!exit.ok) return exit;
+      if (exit.value.disposition === 'NO_REMEDIATION_ACCEPTED') {
+        const requiredEvidence = [
+          exit.value.disposition,
+          exit.value.human_approval_ref,
+          ...exit.value.knowledge_resolution_refs,
+        ];
+        for (const language of ['en', 'zh-CN']) {
+          const coverage = extractFeedbackSections(bodies[language])?.coverage;
+          if (!coverage || requiredEvidence.some((reference) => !coverage.includes(reference))) {
+            return failure(
+              'ALIGNMENT_RESOLUTION_EVIDENCE_MISSING',
+              `/body/${language}/coverage`,
+              'No-remediation exit must retain its disposition, approval, and knowledge resolution references in Feedback coverage.',
+            );
+          }
+        }
+      }
     } else if (input.frontmatter.primary_route === 'KNOWLEDGE_UPDATE' && nextAlignment.value.marker === null) {
       return failure('ROUTE_ASSET_MISMATCH', '/frontmatter/primary_route', 'Knowledge-controlled Feedback requires an active alignment marker.');
     }

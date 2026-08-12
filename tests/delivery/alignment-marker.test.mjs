@@ -145,6 +145,17 @@ test('requires exactly one document-level H1 before bounded Feedback sections', 
   }
 });
 
+test('does not require a document-level H1 when Feedback has no active alignment marker', () => {
+  const withoutTitle = (language) => body({ language, marking: language === 'en' ? 'Active.' : '有效。' })
+    .replace(/^# .*\n\n/u, '');
+  const result = validateAlignmentFeedbackPair({
+    frontmatter: frontmatter(),
+    bodies: { en: withoutTitle('en'), 'zh-CN': withoutTitle('zh-CN') },
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.titles, { en: null, 'zh-CN': null });
+});
+
 test('requires the complete accepted owner set and knowledge resolution before marker exit', () => {
   const owners = ['prd-backend', 'prd-frontend'].map((artifactId) => ({
     artifact_id: artifactId,
@@ -236,5 +247,54 @@ test('requires explicit approval for an accepted no-remediation exit', () => {
     resolution: { ...resolution, human_approval_ref: 'decision:no-remediation' },
     owners: [],
     closures: [],
+  }).ok, true);
+});
+
+test('ignores rejected historical owners after an accepted successor covers the Feedback', () => {
+  const closure = (ownerId, accepted) => ({
+    artifact_id: `closure-${ownerId}`,
+    owner_artifact_id: ownerId,
+    outcome: { status: accepted ? 'ACCEPTED' : 'REJECTED', ref: `outcome:${ownerId}`, residual_risk_refs: [] },
+    verification: { status: accepted ? 'PASSED' : 'FAILED', ref: `verification:${ownerId}` },
+    acceptance: {
+      claimed: accepted,
+      units: accepted ? [{ unit_id: 'remediation', status: 'ACCEPTED', evidence_refs: [`test:${ownerId}`] }] : [],
+    },
+    feedback_coverage: [{
+      feedback_id: 'feedback-retire-legacy',
+      status: accepted ? 'COVERED' : 'NOT_COVERED',
+      covering_prd_ids: [ownerId],
+      evidence_refs: [`outcome:${ownerId}`],
+      remaining_criteria: accepted ? [] : ['Superseded by a successor.'],
+    }],
+    obligation_outcomes: [],
+    conflict_disposition: { status: 'NOT_APPLICABLE', ref: `conflict:${ownerId}` },
+    baseline: { starting: 'baseline-7', current: 'baseline-7' },
+    knowledge_handoff: {
+      diff_id: `diff-${ownerId}`,
+      outcome: 'CHANGE',
+      owner: 'run-prd-lifecycle',
+      apply_authority: 'maintain-project-knowledge',
+    },
+    evidence_refs: [`verification:${ownerId}`],
+    closure_ref: `outcome:${ownerId}`,
+  });
+  const owners = ['prd-old', 'prd-new'].map((artifactId) => ({
+    artifact_id: artifactId,
+    relationships: { feedback_ids: ['feedback-retire-legacy'] },
+  }));
+  const resolution = {
+    schema_version: 1,
+    feedback_id: 'feedback-retire-legacy',
+    disposition: 'DELIVERY_ACCEPTED',
+    owner_refs: ['prd-new'],
+    closure_refs: ['closure-prd-new'],
+    knowledge_resolution_refs: ['knowledge-resolution:diff-prd-new'],
+  };
+  assert.equal(validateAlignmentExit({
+    feedbackId: 'feedback-retire-legacy',
+    resolution,
+    owners,
+    closures: [closure('prd-old', false), closure('prd-new', true)],
   }).ok, true);
 });
