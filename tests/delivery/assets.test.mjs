@@ -54,6 +54,18 @@ const feedbackBody = ({ problem = 'The layout is too dense.', coverage = 'Open.'
   'zh-CN': `# Wiki 反馈\n\n<!-- project-lifecycle:section original_problem -->\n## 原始问题\n\n${problem === 'The layout is too dense.' ? '布局过于拥挤。' : '问题已被改写。'}\n<!-- /project-lifecycle:section -->\n\n<!-- project-lifecycle:section scenario -->\n## 场景\n\n日常 Wiki 导航。\n<!-- /project-lifecycle:section -->\n\n<!-- project-lifecycle:section expectation -->\n## 期望\n\n更清晰的层级。\n<!-- /project-lifecycle:section -->\n\n<!-- project-lifecycle:section marking -->\n## 标记\n\n有效。\n<!-- /project-lifecycle:section -->\n\n<!-- project-lifecycle:section coverage -->\n## 覆盖\n\n${coverage === 'Open.' ? '待处理。' : '已由 PRD 覆盖。'}\n<!-- /project-lifecycle:section -->\n`,
 });
 
+const alignmentFeedbackBody = ({ oneLanguage = false, domain = 'wiki-workspace' } = {}) => {
+  const bodies = feedbackBody();
+  const alignment = `<!-- project-lifecycle:alignment
+schema_version: 1
+classification: BUSINESS_IMPLEMENTATION_DIVERGENCE
+primary_domain_id: ${domain}
+-->`;
+  bodies.en = bodies.en.replace('Active.', alignment);
+  if (!oneLanguage) bodies['zh-CN'] = bodies['zh-CN'].replace('有效。', alignment);
+  return bodies;
+};
+
 const request = (root, overrides = {}) => ({
   root,
   reason: 'delivery:wiki-layout',
@@ -174,6 +186,45 @@ test('rejects redundant or route-incompatible durable assets before writing', as
   }));
   assert.equal(knowledgeOnly.errors[0].code, 'ROUTE_ASSET_MISMATCH');
   assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
+});
+
+test('materializes alignment Feedback under knowledge control without creating a delivery owner', async () => {
+  const root = await rootFor();
+  const frontmatter = baseFrontmatter({
+    artifact_id: 'feedback-retire-wiki-density',
+    artifact_kind: 'feedback',
+    primary_route: 'KNOWLEDGE_UPDATE',
+  });
+
+  const result = await materializeAsset(request(root, {
+    frontmatter,
+    body: alignmentFeedbackBody(),
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.status, 'created');
+  assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), [
+    'feedback-retire-wiki-density-en.md',
+    'feedback-retire-wiki-density.md',
+  ]);
+});
+
+test('rejects invalid alignment Feedback before writing either language', async () => {
+  for (const body of [
+    alignmentFeedbackBody({ oneLanguage: true }),
+    alignmentFeedbackBody({ domain: 'foreign-domain' }),
+  ]) {
+    const root = await rootFor();
+    const frontmatter = baseFrontmatter({
+      artifact_id: 'feedback-retire-wiki-density',
+      artifact_kind: 'feedback',
+      primary_route: 'KNOWLEDGE_UPDATE',
+    });
+    const result = await materializeAsset(request(root, { frontmatter, body }));
+    assert.equal(result.ok, false);
+    assert.match(result.errors[0].code, /^ALIGNMENT_/u);
+    assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
+  }
 });
 
 test('allows only Feedback marking and coverage updates without an erratum or successor', async () => {

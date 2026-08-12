@@ -11,6 +11,7 @@ import { parseRestrictedYaml } from '../lib/markdown.mjs';
 import { isSafeReference } from '../lib/reference-safety.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
+import { validateAlignmentFeedbackPair } from './alignment-marker.mjs';
 
 const MAX_BODY_BYTES = 131_072;
 const FEEDBACK_SOURCE_SECTIONS = ['original_problem', 'scenario', 'expectation'];
@@ -107,8 +108,9 @@ const validateRendered = (source, expectedFrontmatter, expectedBody) => {
   return validateJson('delivery-frontmatter', parsed.frontmatter);
 };
 
-const compatibleRoute = ({ artifact_kind: kind, primary_route: route }) => {
-  if (['KNOWLEDGE_UPDATE', 'OUTSIDE_PLUGIN'].includes(route)) return false;
+const compatibleRoute = ({ artifact_kind: kind, primary_route: route }, alignmentCapture = false) => {
+  if (route === 'KNOWLEDGE_UPDATE') return kind === 'feedback' && alignmentCapture;
+  if (route === 'OUTSIDE_PLUGIN') return false;
   if (kind === 'prd') return route === 'PRD_DELIVERY';
   if (kind === 'non-prd-delivery') return route === 'NON_PRD_DELIVERY';
   return ['PRD_DELIVERY', 'NON_PRD_DELIVERY'].includes(route);
@@ -122,9 +124,6 @@ export const validateMaterializationRequest = (input = {}) => {
   }
   const frontmatter = validateJson('delivery-frontmatter', input.frontmatter);
   if (!frontmatter.ok) return failure('ASSET_FRONTMATTER_INVALID', '/frontmatter', 'Delivery Frontmatter must satisfy the shared contract.');
-  if (!compatibleRoute(input.frontmatter)) {
-    return failure('ROUTE_ASSET_MISMATCH', '/frontmatter/primary_route', 'The supplied route cannot own this durable asset kind.');
-  }
   if (input.canonical_purpose_satisfied === true) {
     return failure('ASSET_REDUNDANT', '/canonical_purpose_satisfied', 'An active owner already satisfies this canonical purpose.');
   }
@@ -148,12 +147,22 @@ export const validateMaterializationRequest = (input = {}) => {
   if (!isDeepStrictEqual(headingLevels(input.body.en), headingLevels(input.body['zh-CN']))) {
     return failure('PAIR_SECTION_MISMATCH', '/body', 'Localized delivery bodies require matching heading structure.');
   }
+  let alignmentCapture = false;
   if (input.frontmatter.artifact_kind === 'feedback') {
     for (const language of ['en', 'zh-CN']) {
       if (!extractFeedbackSections(input.body[language])) {
         return failure('FEEDBACK_STRUCTURE_INVALID', `/body/${language}`, 'Feedback requires exact source, marking, and coverage sections.');
       }
     }
+    const alignment = validateAlignmentFeedbackPair({
+      frontmatter: input.frontmatter,
+      bodies: input.body,
+    });
+    if (!alignment.ok) return alignment;
+    alignmentCapture = alignment.value.marker !== null;
+  }
+  if (!compatibleRoute(input.frontmatter, alignmentCapture)) {
+    return failure('ROUTE_ASSET_MISMATCH', '/frontmatter/primary_route', 'The supplied route cannot own this durable asset kind.');
   }
   return ok(input);
 };

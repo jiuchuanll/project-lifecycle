@@ -32,6 +32,16 @@ obligations: []
 <!-- project-lifecycle:section marking -->
 ## 标记
 仅记录标准化状态标记。
+
+> 可选：仅在业务—实现差异得到确认后插入该标记。以下 fenced 示例不会生效。
+
+```text
+<!-- project-lifecycle:alignment
+schema_version: 1
+classification: BUSINESS_IMPLEMENTATION_DIVERGENCE
+primary_domain_id: sample-domain
+-->
+```
 <!-- /project-lifecycle:section -->
 
 <!-- project-lifecycle:section coverage -->
