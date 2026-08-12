@@ -323,7 +323,7 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
     evidence_refs: ['verification:retirement'],
     closure_ref: 'acceptance:retirement',
   };
-  const resolved = await materializeAsset(request(root, {
+  const resolvedRequest = request(root, {
     frontmatter,
     body: (() => {
       const pair = feedbackBody({
@@ -349,7 +349,29 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
       diffId: 'diff-retirement',
       status: 'APPLIED',
     })],
-  }));
+  });
+  const withoutPersistedClosure = await materializeAsset(resolvedRequest);
+  assert.equal(withoutPersistedClosure.errors[0].code, 'ALIGNMENT_CLOSURE_INVENTORY_INCOMPLETE');
+
+  assert.equal((await materializeAsset(request(root, {
+    frontmatter: baseFrontmatter({
+      artifact_id: 'closure-prd-retire-wiki-density',
+      artifact_kind: 'closure-summary',
+      relationships: {
+        feedback_ids: [feedbackId],
+        prd_ids: ['prd-retire-wiki-density'],
+        legacy_artifact_refs: [],
+      },
+    }),
+    closure_summary: closure,
+    body: ordinaryBody,
+  }))).ok, true);
+  const forgedClosure = structuredClone(resolvedRequest);
+  forgedClosure.alignment_closures[0].evidence_refs.push('verification:forged');
+  const forgedResult = await materializeAsset(forgedClosure);
+  assert.equal(forgedResult.errors[0].code, 'ALIGNMENT_CLOSURE_INVENTORY_INCOMPLETE');
+
+  const resolved = await materializeAsset(resolvedRequest);
   assert.equal(resolved.ok, true);
   const source = await readFile(join(root, 'docs', 'project-lifecycle', 'delivery', `${feedbackId}-en.md`), 'utf8');
   assert.doesNotMatch(source, /project-lifecycle:alignment/u);
@@ -576,6 +598,25 @@ primary_domain_id: wiki-workspace
     'zh-CN': `# Wiki 反馈\n\n${titleless['zh-CN'].replace('旧值', '新值').replace('有效。', alignment)}`,
   };
   const result = await materializeAsset(request(root, { frontmatter, body: rewritten }));
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'HISTORY_BODY_CHANGED');
+});
+
+test('preserves sentinel-shaped user text inside immutable Feedback source sections', async () => {
+  const root = await rootFor();
+  const frontmatter = baseFrontmatter({
+    artifact_id: 'feedback-sentinel-shaped-history',
+    artifact_kind: 'feedback',
+    primary_route: 'PRD_DELIVERY',
+  });
+  const sentinel = '<!-- project-lifecycle:feedback-source-hashes original_problem=user-text -->';
+  const original = feedbackBody({ problem: `The layout is too dense.\n${sentinel}` });
+  assert.equal((await materializeAsset(request(root, { frontmatter, body: original }))).ok, true);
+
+  const rewritten = structuredClone(original);
+  rewritten.en = rewritten.en.replace(sentinel, '<!-- project-lifecycle:feedback-source-hashes original_problem=changed -->');
+  const result = await materializeAsset(request(root, { frontmatter, body: rewritten }));
+
   assert.equal(result.ok, false);
   assert.equal(result.errors[0].code, 'HISTORY_BODY_CHANGED');
 });

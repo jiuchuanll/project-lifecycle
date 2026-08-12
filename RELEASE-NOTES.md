@@ -34,8 +34,10 @@ support claim.
   and closure identities exactly match the bounded canonical bilingual asset
   inventory on disk.
 - Alignment completion fails closed until all active or retained authoritative
-  linked owners have accepted closure and exact externally verified Knowledge
-  application or no-change evidence. Explicit
+  linked owners have accepted closure, each closure has a persisted canonical
+  bilingual summary pair whose managed digest matches the compact closure
+  object, and exact externally verified Knowledge application
+  or no-change evidence exists. Explicit
   no-remediation closure additionally requires human approval and retained
   residual-divergence or no-change evidence.
 - `validate-alignment-feedback` and `sync-alignment-review` expose the bounded

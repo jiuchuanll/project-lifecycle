@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -447,6 +447,10 @@ test('ignores only the exact generated alignment projection filenames in deliver
   await writeFile(join(root, 'delivery', 'alignment-review.md'), `${generatedNotice}# 活动对齐审阅\n`);
 
   assert.equal((await generateIndexesFromRoot({ map, lifecycleRoot: root })).ok, true);
+
+  await unlink(join(root, 'delivery', 'alignment-review.md'));
+  assert.equal((await generateIndexesFromRoot({ map, lifecycleRoot: root })).ok, false);
+  await writeFile(join(root, 'delivery', 'alignment-review.md'), `${generatedNotice}# 活动对齐审阅\n`);
 
   await writeFile(join(root, 'delivery', 'notes.md'), '# This must not be silently ignored\n');
   assert.equal((await generateIndexesFromRoot({ map, lifecycleRoot: root })).ok, false);

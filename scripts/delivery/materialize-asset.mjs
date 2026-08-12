@@ -12,14 +12,23 @@ import { isSafeReference } from '../lib/reference-safety.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 import { validateAlignmentExit, validateAlignmentFeedbackPair } from './alignment-marker.mjs';
+import { validateClosureSummary } from './close-delivery.mjs';
 
 const MAX_BODY_BYTES = 131_072;
 const MAX_DOCUMENT_BYTES = MAX_BODY_BYTES * 2;
 const FEEDBACK_SOURCE_SECTIONS = ['original_problem', 'scenario', 'expectation'];
 const FEEDBACK_MUTABLE_SECTIONS = ['marking', 'coverage'];
+const FEEDBACK_HASH_MARKER = /^<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n?/u;
+const CLOSURE_SUMMARY_MARKER = /^<!-- project-lifecycle:closure-summary sha256=([0-9a-f]{64}) -->\n?/u;
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const hash = (value) => createHash('sha256').update(value).digest('hex');
+const canonicalize = (value) => {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (!record(value)) return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]));
+};
+const closureSummaryHash = (summary) => hash(JSON.stringify(canonicalize(summary)));
 const boundedText = (value) => typeof value === 'string'
   && value.trim().length > 0
   && value.length <= 500
@@ -73,23 +82,60 @@ const extractFeedbackSections = (body) => {
 };
 
 const sourceHashes = (sections) => Object.fromEntries(
-  FEEDBACK_SOURCE_SECTIONS.map((id) => [id, hash(sections[id]
-    .replace(/^<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n?/gmu, ''))]),
+  FEEDBACK_SOURCE_SECTIONS.map((id) => [id, hash(sections[id])]),
 );
 
 const feedbackHashMarker = (hashes) => `<!-- project-lifecycle:feedback-source-hashes ${FEEDBACK_SOURCE_SECTIONS
   .map((id) => `${id}=${hashes[id]}`).join(' ')} -->`;
 
-const addFeedbackHashes = (body, hashes) => {
+const withoutManagedFeedbackHash = (body) => {
   const normalized = body.replaceAll('\r\n', '\n').replace(/^\n/u, '');
-  const withoutMarker = normalized.replace(/^<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n?/mu, '');
-  const firstBreak = withoutMarker.indexOf('\n');
-  if (firstBreak === -1) return `${withoutMarker}\n\n${feedbackHashMarker(hashes)}\n`;
-  return `${withoutMarker.slice(0, firstBreak + 1)}\n${feedbackHashMarker(hashes)}\n${withoutMarker.slice(firstBreak + 1).replace(/^\n/u, '')}`;
+  if (FEEDBACK_HASH_MARKER.test(normalized)) return normalized.replace(FEEDBACK_HASH_MARKER, '');
+  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(normalized);
+  if (!title) return normalized;
+  const rest = normalized.slice(title[0].length);
+  return FEEDBACK_HASH_MARKER.test(rest)
+    ? `${title[0]}${rest.replace(FEEDBACK_HASH_MARKER, '')}`
+    : normalized;
+};
+
+const addFeedbackHashes = (body, hashes) => {
+  const withoutMarker = withoutManagedFeedbackHash(body);
+  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(withoutMarker);
+  if (!title) return `${feedbackHashMarker(hashes)}\n${withoutMarker}`;
+  return `${title[0]}${feedbackHashMarker(hashes)}\n${withoutMarker.slice(title[0].length)}`;
+};
+
+const closureSummaryMarker = (digest) => `<!-- project-lifecycle:closure-summary sha256=${digest} -->`;
+
+const withoutManagedClosureSummaryHash = (body) => {
+  const normalized = body.replaceAll('\r\n', '\n').replace(/^\n/u, '');
+  if (CLOSURE_SUMMARY_MARKER.test(normalized)) return normalized.replace(CLOSURE_SUMMARY_MARKER, '');
+  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(normalized);
+  if (!title) return normalized;
+  const rest = normalized.slice(title[0].length);
+  return CLOSURE_SUMMARY_MARKER.test(rest)
+    ? `${title[0]}${rest.replace(CLOSURE_SUMMARY_MARKER, '')}`
+    : normalized;
+};
+
+const addClosureSummaryHash = (body, digest) => {
+  const withoutMarker = withoutManagedClosureSummaryHash(body);
+  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(withoutMarker);
+  if (!title) return `${closureSummaryMarker(digest)}\n${withoutMarker}`;
+  return `${title[0]}${closureSummaryMarker(digest)}\n${withoutMarker.slice(title[0].length)}`;
+};
+
+const extractClosureSummaryHash = (body) => {
+  const normalized = body.replaceAll('\r\n', '\n').replace(/^\n/u, '');
+  const direct = CLOSURE_SUMMARY_MARKER.exec(normalized);
+  if (direct) return direct[1];
+  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(normalized);
+  return title ? CLOSURE_SUMMARY_MARKER.exec(normalized.slice(title[0].length))?.[1] ?? null : null;
 };
 
 const feedbackSkeleton = (body) => {
-  let output = body.replace(/^<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n?/gmu, '');
+  let output = withoutManagedFeedbackHash(body);
   for (const id of FEEDBACK_MUTABLE_SECTIONS) {
     output = output.replace(sectionPattern(id), `<!-- project-lifecycle:section ${id} -->\n[MUTABLE]\n<!-- /project-lifecycle:section -->`);
   }
@@ -105,8 +151,7 @@ const hasExactCoverageReference = (coverage, reference) => {
 };
 
 const feedbackFrame = (body) => {
-  let output = withoutDocumentTitle(body)
-    .replace(/^<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n?/gmu, '');
+  let output = withoutManagedFeedbackHash(withoutDocumentTitle(body));
   for (const id of [...FEEDBACK_SOURCE_SECTIONS, ...FEEDBACK_MUTABLE_SECTIONS]) {
     output = output.replace(sectionPattern(id), `<!-- project-lifecycle:section-frame ${id} -->`);
   }
@@ -188,6 +233,24 @@ export const validateMaterializationRequest = (input = {}) => {
     });
     if (!alignment.ok) return alignment;
   }
+  if (input.frontmatter.artifact_kind === 'closure-summary') {
+    const managedHashes = ['en', 'zh-CN'].map((language) => extractClosureSummaryHash(input.body[language]));
+    if (input.closure_summary === undefined && managedHashes.some((digest) => digest !== null)) {
+      return failure('CLOSURE_SUMMARY_INVALID', '/closure_summary', 'Managed closure proof cannot be supplied as body text.');
+    }
+    const summary = input.closure_summary;
+    const feedbackIds = summary?.feedback_coverage?.map(({ feedback_id: feedbackId }) => feedbackId).sort();
+    if (summary !== undefined
+      && (!validateClosureSummary(summary).ok
+        || summary.artifact_id !== input.frontmatter.artifact_id
+        || !isDeepStrictEqual(feedbackIds, [...input.frontmatter.relationships.feedback_ids].sort())
+        || (summary.owner_artifact_id.startsWith('prd-')
+          && !input.frontmatter.relationships.prd_ids.includes(summary.owner_artifact_id)))) {
+      return failure('CLOSURE_SUMMARY_INVALID', '/closure_summary', 'Persisted closure proof must match the closure-summary asset identity.');
+    }
+  } else if (input.closure_summary !== undefined) {
+    return failure('CLOSURE_SUMMARY_INVALID', '/closure_summary', 'Persisted closure proof requires a closure-summary asset.');
+  }
   if (!compatibleRoute(input.frontmatter)) {
     return failure('ROUTE_ASSET_MISMATCH', '/frontmatter/primary_route', 'The supplied route cannot own this durable asset kind.');
   }
@@ -205,7 +268,7 @@ const existingFile = async (path) => {
   }
 };
 
-const discoverAlignmentOwners = async (lifecycleRoot, feedbackId) => {
+const discoverAlignmentResolutionInventory = async (lifecycleRoot, feedbackId) => {
   const roots = [await requireRegularDirectory(join(lifecycleRoot, 'delivery'), lifecycleRoot)];
   try {
     roots.push(await requireRegularDirectory(join(lifecycleRoot, 'archive', 'delivery'), lifecycleRoot));
@@ -232,8 +295,11 @@ const discoverAlignmentOwners = async (lifecycleRoot, feedbackId) => {
     if (!document || !validateJson('delivery-frontmatter', document.frontmatter).ok) {
       throw new Error('Delivery owner inventory contains invalid Frontmatter.');
     }
-    if (!['prd', 'non-prd-delivery'].includes(document.frontmatter.artifact_kind)
-      || !document.frontmatter.relationships.feedback_ids.includes(feedbackId)) continue;
+    const linkedOwner = ['prd', 'non-prd-delivery'].includes(document.frontmatter.artifact_kind)
+      && document.frontmatter.relationships.feedback_ids.includes(feedbackId);
+    const closureSummary = document.frontmatter.artifact_kind === 'closure-summary'
+      && document.frontmatter.relationships.feedback_ids.includes(feedbackId);
+    if (!linkedOwner && !closureSummary) continue;
     const id = document.frontmatter.artifact_id;
     const language = name === `${id}-en.md`
       ? 'en'
@@ -243,17 +309,27 @@ const discoverAlignmentOwners = async (lifecycleRoot, feedbackId) => {
     if (language === null) throw new Error('Linked delivery owner uses a non-canonical locator.');
     const pair = pairs.get(id) ?? {};
     if (pair[language]) throw new Error('Linked delivery owner language is duplicated.');
-    pair[language] = document.frontmatter;
+    pair[language] = {
+      frontmatter: document.frontmatter,
+      closureHash: closureSummary ? extractClosureSummaryHash(document.body) : null,
+    };
     pairs.set(id, pair);
   }
   const owners = [];
+  const closureIds = new Set();
   for (const pair of pairs.values()) {
     if (!pair.en || !pair['zh-CN'] || !isDeepStrictEqual(pair.en, pair['zh-CN'])) {
-      throw new Error('Linked delivery owner pair is incomplete or divergent.');
+      throw new Error('Linked delivery evidence pair is incomplete or divergent.');
     }
-    owners.push(pair.en);
+    const frontmatter = pair.en.frontmatter;
+    if (['prd', 'non-prd-delivery'].includes(frontmatter.artifact_kind)
+      && frontmatter.relationships.feedback_ids.includes(feedbackId)) {
+      owners.push(frontmatter);
+    } else if (frontmatter.artifact_kind === 'closure-summary' && pair.en.closureHash !== null) {
+      closureIds.add(`${frontmatter.artifact_id}:${pair.en.closureHash}`);
+    }
   }
-  return owners;
+  return { owners, closureIds };
 };
 
 const rollbackFirstWrite = async ({ write, lifecycleRoot, locator, original }) => {
@@ -314,6 +390,10 @@ export async function materializeAsset(input = {}, operations = {}) {
   }
 
   const bodies = { ...input.body };
+  if (input.frontmatter.artifact_kind === 'closure-summary' && input.closure_summary !== undefined) {
+    const digest = closureSummaryHash(input.closure_summary);
+    for (const language of ['en', 'zh-CN']) bodies[language] = addClosureSummaryHash(bodies[language], digest);
+  }
   if (input.frontmatter.artifact_kind === 'feedback') {
     const nextAlignment = validateAlignmentFeedbackPair({
       frontmatter: input.frontmatter,
@@ -352,18 +432,38 @@ export async function materializeAsset(input = {}, operations = {}) {
       })) {
         return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_owners', 'Marker exit requires validated delivery owners.');
       }
-      let owners;
+      let inventory;
       try {
-        owners = await discoverAlignmentOwners(lifecycleRoot, input.frontmatter.artifact_id);
+        inventory = await discoverAlignmentResolutionInventory(lifecycleRoot, input.frontmatter.artifact_id);
       } catch {
         return failure('ALIGNMENT_OWNER_INVENTORY_INCOMPLETE', '/alignment_owners', 'Marker exit requires a complete valid owner inventory from authoritative delivery assets.');
+      }
+      const linkedOwnerIds = new Set(inventory.owners.map(({ artifact_id: ownerId }) => ownerId));
+      const suppliedClosures = input.alignment_closures ?? [];
+      const suppliedClosureIds = new Set(Array.isArray(suppliedClosures)
+        ? suppliedClosures
+          .map(({ artifact_id: closureId }) => closureId)
+        : []);
+      const suppliedClosureProofs = new Set(Array.isArray(suppliedClosures)
+        ? suppliedClosures
+          .map((closure) => `${closure.artifact_id}:${closureSummaryHash(closure)}`)
+        : []);
+      const authoritativeClosureProofs = new Set([...inventory.closureIds].filter((proof) => {
+        const closureId = proof.slice(0, proof.indexOf(':'));
+        return closureId.startsWith('closure-')
+          && linkedOwnerIds.has(closureId.slice('closure-'.length));
+      }));
+      if (suppliedClosureIds.size !== suppliedClosureProofs.size
+        || suppliedClosureProofs.size !== authoritativeClosureProofs.size
+        || [...suppliedClosureProofs].some((proof) => !authoritativeClosureProofs.has(proof))) {
+        return failure('ALIGNMENT_CLOSURE_INVENTORY_INCOMPLETE', '/alignment_closures', 'Marker exit requires exact persisted bilingual closure-summary evidence.');
       }
       const exit = validateAlignmentExit({
         feedbackId: input.frontmatter.artifact_id,
         feedbackProjectId: input.frontmatter.current_project_id ?? input.frontmatter.project_id_at_creation,
         resolution: input.alignment_resolution,
-        owners,
-        closures: input.alignment_closures ?? [],
+        owners: inventory.owners,
+        closures: suppliedClosures,
         knowledgeResults: input.alignment_knowledge_results ?? [],
         ownerInventoryComplete: true,
       });

@@ -52,6 +52,12 @@ const readFrontmatterPrefix = async (path, maxBytes = 65_536) => {
 };
 
 const validateGeneratedDeliveryViews = async (deliveryRoot, names, overlays) => {
+  const present = [...GENERATED_DELIVERY_VIEWS].map((name) => (
+    overlays.has(`delivery/${name}`) || names.includes(name)
+  ));
+  if (present[0] !== present[1]) {
+    throw Object.assign(new Error('Generated delivery view pair is incomplete.'), { code: 'INDEX_FRONTMATTER_INVALID' });
+  }
   for (const name of GENERATED_DELIVERY_VIEWS) {
     const locator = `delivery/${name}`;
     const overlay = overlays.get(locator);
