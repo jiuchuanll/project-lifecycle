@@ -294,6 +294,20 @@ test('renders localized titles and identical machine columns in the generated pa
   assert.doesNotMatch(rendered.en, /evidence|history|reasoning|code_path/iu);
 });
 
+test('renders Feedback titles as escaped plain text in the generated projection', () => {
+  const review = deriveAlignmentReview({ feedbacks: [feedback('feedback-markdown-title', {
+    titles: {
+      en: '![tracking](https://example.test/pixel) <img src=x>',
+      'zh-CN': '[外链](https://example.test/pixel)',
+    },
+  })] });
+  assert.equal(review.ok, true);
+  const rendered = renderAlignmentReviewPair(review.value);
+  assert.doesNotMatch(rendered.en, /(?<!\\)!\[tracking\]\(https:\/\/example\.test\/pixel\)|(?<!\\)<img/iu);
+  assert.doesNotMatch(rendered['zh-CN'], /(?<!\\)\[外链\]\(https:\/\/example\.test\/pixel\)/u);
+  assert.match(rendered.en, /\\!\\\[tracking\\\]\\\(https:\/\/example\\\.test\/pixel\\\)/u);
+});
+
 test('renders only active rows when hundreds of completed Feedback records exist', () => {
   const completed = Array.from({ length: 500 }, (_, index) => feedback(`feedback-closed-${index}`, { marker: null }));
   const active = ['a', 'b', 'c'].map((suffix) => feedback(`feedback-open-${suffix}`));

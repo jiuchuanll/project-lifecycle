@@ -18387,7 +18387,7 @@ var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}
   const validation = validateJson("alignment-review", review);
   return validation.ok ? ok(review) : failure3("/", "Derived alignment review violates its closed schema.");
 };
-var escapeTable = (value) => value.replaceAll("\\", "\\\\").replaceAll("|", "\\|");
+var escapeTable = (value) => value.replace(/[\\`*_\[\]{}()<>#+.!|~-]/gu, "\\$&");
 var render = (review, language) => {
   const heading = language === "en" ? "Active alignment review" : "活动对齐审阅";
   const lines = [

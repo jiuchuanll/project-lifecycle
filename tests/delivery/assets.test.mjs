@@ -351,6 +351,11 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
   const withoutPersistedClosure = await materializeAsset(resolvedRequest);
   assert.equal(withoutPersistedClosure.errors[0].code, 'ALIGNMENT_CLOSURE_INVENTORY_INCOMPLETE');
 
+  const malformedClosureRequest = structuredClone(resolvedRequest);
+  malformedClosureRequest.alignment_closures = [null];
+  const malformedClosure = await materializeAsset(malformedClosureRequest);
+  assert.equal(malformedClosure.errors[0].code, 'ALIGNMENT_RESOLUTION_INVALID');
+
   assert.equal((await materializeAsset(request(root, {
     frontmatter: baseFrontmatter({
       artifact_id: 'closure-prd-retire-wiki-density',

@@ -440,14 +440,21 @@ export async function materializeAsset(input = {}, operations = {}) {
       }
       const linkedOwnerIds = new Set(inventory.owners.map(({ artifact_id: ownerId }) => ownerId));
       const suppliedClosures = input.alignment_closures ?? [];
+      if (!Array.isArray(suppliedClosures)
+        || suppliedClosures.some((closure) => !validateClosureSummary(closure).ok)) {
+        return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_closures', 'Marker exit requires validated closure summaries.');
+      }
       const suppliedClosureIds = new Set(Array.isArray(suppliedClosures)
         ? suppliedClosures
           .map(({ artifact_id: closureId }) => closureId)
         : []);
-      const suppliedClosureProofs = new Set(Array.isArray(suppliedClosures)
-        ? suppliedClosures
-          .map((closure) => `${closure.artifact_id}:${closureSummaryHash(closure)}`)
-        : []);
+      let suppliedClosureProofs;
+      try {
+        suppliedClosureProofs = new Set(suppliedClosures
+          .map((closure) => `${closure.artifact_id}:${closureSummaryHash(closure)}`));
+      } catch {
+        return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_closures', 'Marker exit requires serializable closure summaries.');
+      }
       const authoritativeClosureProofs = new Set([...inventory.closureIds].filter((proof) => {
         const closureId = proof.slice(0, proof.indexOf(':'));
         return closureId.startsWith('closure-')

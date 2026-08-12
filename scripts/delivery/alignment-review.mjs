@@ -140,7 +140,7 @@ export const deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = 
   return validation.ok ? ok(review) : failure('/', 'Derived alignment review violates its closed schema.');
 };
 
-const escapeTable = (value) => value.replaceAll('\\', '\\\\').replaceAll('|', '\\|');
+const escapeTable = (value) => value.replace(/[\\`*_\[\]{}()<>#+.!|~-]/gu, '\\$&');
 const render = (review, language) => {
   const heading = language === 'en' ? 'Active alignment review' : '活动对齐审阅';
   const lines = [
