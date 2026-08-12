@@ -322,6 +322,55 @@ test('requires the complete accepted owner set and knowledge resolution before m
   }).errors[0].code, 'ALIGNMENT_RESOLUTION_INCOMPLETE');
 });
 
+test('accepts schema-valid generated references containing consecutive hyphens', () => {
+  const feedbackId = 'feedback-double-hyphen';
+  const ownerId = 'prd--owner';
+  const diffId = 'diff--owner';
+  const owner = {
+    artifact_id: ownerId,
+    current_project_id: 'sample-project',
+    knowledge_baseline: 'baseline-7',
+    relationships: { feedback_ids: [feedbackId] },
+  };
+  const closure = {
+    artifact_id: `closure-${ownerId}`,
+    owner_artifact_id: ownerId,
+    outcome: { status: 'ACCEPTED', ref: 'acceptance:owner', residual_risk_refs: [] },
+    verification: { status: 'PASSED', ref: 'verification:owner' },
+    acceptance: {
+      claimed: true,
+      units: [{ unit_id: 'remediation', status: 'ACCEPTED', evidence_refs: ['test:owner'] }],
+    },
+    feedback_coverage: [{
+      feedback_id: feedbackId,
+      status: 'COVERED',
+      covering_prd_ids: [ownerId],
+      evidence_refs: ['acceptance:owner'],
+      remaining_criteria: [],
+    }],
+    obligation_outcomes: [],
+    conflict_disposition: { status: 'NOT_APPLICABLE', ref: 'conflict:none' },
+    baseline: { starting: 'baseline-7', current: 'baseline-7' },
+    knowledge_handoff: {
+      diff_id: diffId,
+      outcome: 'CHANGE',
+      owner: 'run-prd-lifecycle',
+      apply_authority: 'maintain-project-knowledge',
+    },
+    evidence_refs: ['verification:owner'],
+    closure_ref: 'acceptance:owner',
+  };
+  const resolution = {
+    schema_version: 1,
+    feedback_id: feedbackId,
+    disposition: 'DELIVERY_ACCEPTED',
+    owner_refs: [ownerId],
+    closure_refs: [closure.artifact_id],
+    knowledge_resolution_refs: [`knowledge-resolution:${diffId}`],
+  };
+  assert.equal(validateExit({ feedbackId, resolution, owners: [owner], closures: [closure] }).ok, true);
+});
+
 test('requires explicit approval for an accepted no-remediation exit', () => {
   const resolution = {
     schema_version: 1,

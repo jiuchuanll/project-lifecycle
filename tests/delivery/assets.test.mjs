@@ -211,16 +211,14 @@ test('rejects redundant or route-incompatible durable assets before writing', as
 
 test('reserves the generated alignment review artifact ID before materialization', async () => {
   const root = await rootFor();
-  const result = await materializeAsset(request(root, {
-    frontmatter: baseFrontmatter({
-      artifact_id: 'alignment-review',
-      artifact_kind: 'architecture',
-    }),
-    changed_contract_ref: 'contract:alignment-review',
-  }));
-
-  assert.equal(result.ok, false);
-  assert.equal(result.errors[0].code, 'ASSET_FRONTMATTER_INVALID');
+  for (const artifactId of ['alignment-review', 'alignment-review-en']) {
+    const result = await materializeAsset(request(root, {
+      frontmatter: baseFrontmatter({ artifact_id: artifactId, artifact_kind: 'architecture' }),
+      changed_contract_ref: 'contract:alignment-review',
+    }));
+    assert.equal(result.ok, false);
+    assert.equal(result.errors[0].code, 'ASSET_FRONTMATTER_INVALID');
+  }
   assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
 });
 

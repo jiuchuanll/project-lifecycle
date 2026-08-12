@@ -60,7 +60,7 @@
     {
       "not": {
         "type": "object",
-        "properties": { "artifact_id": { "const": "alignment-review" } },
+        "properties": { "artifact_id": { "enum": ["alignment-review", "alignment-review-en"] } },
         "required": ["artifact_id"]
       }
     },

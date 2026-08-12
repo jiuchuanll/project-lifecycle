@@ -31,8 +31,8 @@ support claim.
   not another backlog or history ledger. Every row has exactly five fields and
   derives one of four phases from authoritative Feedback and delivery assets.
   Publication fails closed unless the supplied active Feedback, linked owner,
-  and closure identities exactly match the bounded canonical bilingual asset
-  inventory on disk.
+  and closure proofs exactly match the bounded canonical bilingual asset
+  inventory and managed closure digests on disk.
 - Alignment completion fails closed until all active or retained authoritative
   linked owners have accepted closure, each closure has a persisted canonical
   bilingual summary pair whose managed digest matches the compact closure

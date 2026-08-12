@@ -162,8 +162,6 @@ export const validateAlignmentExit = ({
   }
   if (!validateJson('alignment-resolution', resolution).ok
     || resolution.feedback_id !== feedbackId
-    || !resolution.closure_refs.every(isSafeReference)
-    || !resolution.knowledge_resolution_refs.every(isSafeReference)
     || (resolution.human_approval_ref !== undefined && !isSafeReference(resolution.human_approval_ref))) {
     return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_resolution', 'Alignment resolution must satisfy the closed safe contract.');
   }
@@ -184,7 +182,7 @@ export const validateAlignmentExit = ({
       : ['ref', 'verified', 'feedback_id', 'status', 'diff_id'];
     if (!record(result) || Object.keys(result).length !== allowed.length
       || Object.keys(result).some((key) => !allowed.includes(key))
-      || !isSafeReference(result.ref) || result.verified !== true
+      || !/^knowledge-resolution:[a-z][a-z0-9-]*$/u.test(result.ref ?? '') || result.verified !== true
       || result.feedback_id !== feedbackId
       || !['APPLIED', 'NO_CHANGE', 'RESIDUAL_DIVERGENCE_ACCEPTED'].includes(result.status)
       || (result.diff_id !== undefined

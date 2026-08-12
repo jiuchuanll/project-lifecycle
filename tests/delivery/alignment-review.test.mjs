@@ -8,6 +8,7 @@ import { stringify as stringifyYaml } from 'yaml';
 
 import { atomicWriteValidated } from '../../scripts/lib/atomic-write.mjs';
 import {
+  closureSummaryHash,
   deriveAlignmentReview,
   renderAlignmentReviewPair,
   syncAlignmentReview,
@@ -126,14 +127,17 @@ Coverage pending.
 
 const writePair = async (delivery, record) => {
   const { frontmatter } = record;
+  const closureMarker = record.closure_summary
+    ? `<!-- project-lifecycle:closure-summary sha256=${closureSummaryHash(record.closure_summary)} -->\n`
+    : '';
   const body = frontmatter.artifact_kind === 'feedback'
     ? {
         en: feedbackBody(record.titles.en, record.marker),
         'zh-CN': feedbackBody(record.titles['zh-CN'], record.marker),
       }
     : {
-        en: `# ${frontmatter.artifact_id}\n\nAuthoritative delivery asset.\n`,
-        'zh-CN': `# ${frontmatter.artifact_id}\n\n权威交付资产。\n`,
+        en: `# ${frontmatter.artifact_id}\n${closureMarker}\nAuthoritative delivery asset.\n`,
+        'zh-CN': `# ${frontmatter.artifact_id}\n${closureMarker}\n权威交付资产。\n`,
       };
   const header = `---\n${stringifyYaml(frontmatter, { lineWidth: 0 }).trimEnd()}\n---\n`;
   await writeFile(join(delivery, `${frontmatter.artifact_id}-en.md`), `${header}${body.en}`);
@@ -141,6 +145,7 @@ const writePair = async (delivery, record) => {
 };
 
 const closureAsset = (summary, linkedOwner) => ({
+  closure_summary: summary,
   frontmatter: {
     ...owner(summary.artifact_id, [], {
       artifact_kind: 'closure-summary',
@@ -360,6 +365,11 @@ test('rejects projection publication when authoritative Feedback, owner, or clos
   assert.equal(complete.ok, true);
   assert.equal(complete.value.row_count, 1);
   assert.deepEqual(complete.value.phases, ['KNOWLEDGE_WRITEBACK']);
+
+  const forgedClosures = structuredClone(closures);
+  forgedClosures[0].evidence_refs.push('verification:forged');
+  const forged = await syncAlignmentReview({ root, feedbacks, owners, closures: forgedClosures });
+  assert.equal(forged.errors[0].code, 'ALIGNMENT_REVIEW_INVENTORY_INCOMPLETE');
 });
 
 test('refuses to overwrite or remove a non-generated asset at the projection locators', async () => {
