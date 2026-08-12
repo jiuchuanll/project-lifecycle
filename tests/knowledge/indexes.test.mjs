@@ -431,6 +431,26 @@ test('collects CRLF Frontmatter through the exact bounded delimiter', async (con
   assert.doesNotMatch(result.value.en, /BODY MUST STAY OUT/);
 });
 
+test('ignores only the exact generated alignment projection filenames in delivery discovery', async (context) => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-index-alignment-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, 'knowledge'), { recursive: true });
+  await mkdir(join(root, 'delivery'), { recursive: true });
+  const source = (frontmatter) => `---\n${Object.entries(frontmatter).map(([key, value]) => (
+    Array.isArray(value)
+      ? `${key}:\n${value.map((item) => `  - ${item}`).join('\n')}`
+      : `${key}: ${value}`
+  )).join('\n')}\n---\n`;
+  for (const entry of capabilityPair) await writeFile(join(root, entry.locator), source(entry.frontmatter));
+  await writeFile(join(root, 'delivery', 'alignment-review-en.md'), '# Active alignment review\n');
+  await writeFile(join(root, 'delivery', 'alignment-review.md'), '# 活动对齐审阅\n');
+
+  assert.equal((await generateIndexesFromRoot({ map, lifecycleRoot: root })).ok, true);
+
+  await writeFile(join(root, 'delivery', 'notes.md'), '# This must not be silently ignored\n');
+  assert.equal((await generateIndexesFromRoot({ map, lifecycleRoot: root })).ok, false);
+});
+
 test('collects and renders only the active repository shard from disk', async (context) => {
   const repositoryId = 'backend';
   const crossMap = structuredClone(map);

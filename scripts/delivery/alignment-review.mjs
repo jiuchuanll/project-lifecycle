@@ -1,3 +1,7 @@
+import { lstat, readFile, realpath, unlink } from 'node:fs/promises';
+import { isAbsolute, join, relative, sep } from 'node:path';
+
+import { atomicWriteValidated } from '../lib/atomic-write.mjs';
 import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
 import { fail, ok } from '../lib/result.mjs';
@@ -116,3 +120,125 @@ export const renderAlignmentReviewPair = (review) => ({
   en: render(review, 'en'),
   'zh-CN': render(review, 'zh-CN'),
 });
+
+const inside = (root, candidate) => {
+  const path = relative(root, candidate);
+  return path === '' || (path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path));
+};
+
+const regularDirectory = async (path, parent = null) => {
+  const state = await lstat(path);
+  const physical = await realpath(path);
+  if (!state.isDirectory() || state.isSymbolicLink() || (parent && !inside(parent, physical))) {
+    throw new Error('Unsafe alignment review directory.');
+  }
+  return physical;
+};
+
+const resolveLifecycleRoot = async (root) => {
+  if (typeof root !== 'string' || !isAbsolute(root)) throw new Error('Absolute project root required.');
+  const projectRoot = await regularDirectory(root);
+  const docsRoot = await regularDirectory(join(root, 'docs'), projectRoot);
+  const lifecycleRoot = await regularDirectory(join(root, 'docs', 'project-lifecycle'), docsRoot);
+  await regularDirectory(join(root, 'docs', 'project-lifecycle', 'delivery'), lifecycleRoot);
+  return lifecycleRoot;
+};
+
+const readExisting = async (path) => {
+  try {
+    const state = await lstat(path);
+    if (!state.isFile() || state.isSymbolicLink()) throw new Error('Unsafe projection target.');
+    return readFile(path, 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+};
+
+const writeContent = (write, lifecycleRoot, locator, content) => write({
+  root: lifecycleRoot,
+  target: locator,
+  content,
+  validate: async (source) => source === content
+    ? ok(source)
+    : failure('/', 'Generated projection content changed during publication.'),
+});
+
+const restore = async ({ write, remove, lifecycleRoot, locator, original }) => {
+  if (original === null) {
+    try {
+      await remove(join(lifecycleRoot, locator));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    return;
+  }
+  await writeContent(write, lifecycleRoot, locator, original);
+};
+
+export const syncAlignmentReview = async (input = {}, operations = {}) => {
+  const review = deriveAlignmentReview(input);
+  if (!review.ok) return review;
+  let lifecycleRoot;
+  try {
+    lifecycleRoot = await resolveLifecycleRoot(input.root);
+  } catch {
+    return fail([createError('ALIGNMENT_REVIEW_PATH_INVALID', '/root', 'Projection targets require the fixed regular lifecycle root.')]);
+  }
+  const locators = {
+    en: 'delivery/alignment-review-en.md',
+    'zh-CN': 'delivery/alignment-review.md',
+  };
+  const paths = {
+    en: join(lifecycleRoot, locators.en),
+    'zh-CN': join(lifecycleRoot, locators['zh-CN']),
+  };
+  let existing;
+  try {
+    existing = {
+      en: await readExisting(paths.en),
+      'zh-CN': await readExisting(paths['zh-CN']),
+    };
+  } catch {
+    return fail([createError('ALIGNMENT_REVIEW_PATH_INVALID', '/delivery', 'Projection targets must be regular files.')]);
+  }
+  if ((existing.en === null) !== (existing['zh-CN'] === null)) {
+    return fail([createError('ALIGNMENT_REVIEW_PAIR_INCOMPLETE', '/delivery', 'Generated projection files must exist as a pair.')]);
+  }
+  const write = operations.atomicWriteValidated ?? atomicWriteValidated;
+  const remove = operations.unlink ?? unlink;
+  if (review.value.rows.length === 0) {
+    if (existing.en === null) return ok({ row_count: 0, phases: [], locators, status: 'absent' });
+    try {
+      await remove(paths.en);
+      try {
+        await remove(paths['zh-CN']);
+      } catch (error) {
+        await writeContent(write, lifecycleRoot, locators.en, existing.en);
+        throw error;
+      }
+    } catch {
+      return fail([createError('ALIGNMENT_REVIEW_WRITE_FAILED', '/delivery', 'Projection pair removal failed and was rolled back.')]);
+    }
+    return ok({ row_count: 0, phases: [], locators, status: 'removed' });
+  }
+
+  const pair = renderAlignmentReviewPair(review.value);
+  try {
+    await writeContent(write, lifecycleRoot, locators.en, pair.en);
+    try {
+      await writeContent(write, lifecycleRoot, locators['zh-CN'], pair['zh-CN']);
+    } catch (error) {
+      await restore({ write, remove, lifecycleRoot, locator: locators.en, original: existing.en });
+      throw error;
+    }
+  } catch {
+    return fail([createError('ALIGNMENT_REVIEW_WRITE_FAILED', '/delivery', 'Projection pair publication failed and was rolled back.')]);
+  }
+  return ok({
+    row_count: review.value.rows.length,
+    phases: sortedUnique(review.value.rows.map(({ alignment_phase: phase }) => phase)),
+    locators,
+    status: existing.en === null ? 'created' : 'updated',
+  });
+};

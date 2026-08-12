@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "alignment-resolution",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "feedback_id", "disposition", "owner_refs", "closure_refs", "knowledge_resolution_refs"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "feedback_id": { "type": "string", "pattern": "^feedback-[a-z0-9-]+$" },
+    "disposition": { "enum": ["DELIVERY_ACCEPTED", "NO_REMEDIATION_ACCEPTED"] },
+    "owner_refs": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+    },
+    "closure_refs": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    },
+    "knowledge_resolution_refs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    },
+    "human_approval_ref": { "type": "string", "minLength": 1, "maxLength": 500 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "disposition": { "const": "DELIVERY_ACCEPTED" } }, "required": ["disposition"] },
+      "then": {
+        "properties": {
+          "owner_refs": { "type": "array", "minItems": 1 },
+          "closure_refs": { "type": "array", "minItems": 1 },
+          "human_approval_ref": false
+        }
+      }
+    },
+    {
+      "if": { "properties": { "disposition": { "const": "NO_REMEDIATION_ACCEPTED" } }, "required": ["disposition"] },
+      "then": {
+        "required": ["human_approval_ref"],
+        "properties": {
+          "owner_refs": { "type": "array", "maxItems": 0 },
+          "closure_refs": { "type": "array", "maxItems": 0 }
+        }
+      }
+    }
+  ]
+}

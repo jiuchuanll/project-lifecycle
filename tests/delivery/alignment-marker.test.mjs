@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   extractAlignmentMarker,
+  validateAlignmentExit,
   validateAlignmentFeedbackPair,
 } from '../../scripts/delivery/alignment-marker.mjs';
 
@@ -128,4 +129,62 @@ test('rejects one-language, divergent, and out-of-domain markers', () => {
 
   const outOfDomain = validateAlignmentFeedbackPair(pair({ domainIds: ['wiki-workspace'] }));
   assert.equal(outOfDomain.errors[0].code, 'ALIGNMENT_DOMAIN_INVALID');
+});
+
+test('requires the complete accepted owner set and knowledge resolution before marker exit', () => {
+  const owners = ['prd-backend', 'prd-frontend'].map((artifactId) => ({
+    artifact_id: artifactId,
+    relationships: { feedback_ids: ['feedback-retire-legacy'] },
+  }));
+  const closures = owners.map(({ artifact_id: ownerId }) => ({
+    artifact_id: `closure-${ownerId}`,
+    owner_artifact_id: ownerId,
+    outcome: { status: 'ACCEPTED' },
+    acceptance: { claimed: true },
+    feedback_coverage: [{ feedback_id: 'feedback-retire-legacy', status: 'COVERED' }],
+  }));
+  const resolution = {
+    schema_version: 1,
+    feedback_id: 'feedback-retire-legacy',
+    disposition: 'DELIVERY_ACCEPTED',
+    owner_refs: ['prd-backend', 'prd-frontend'],
+    closure_refs: ['closure-prd-backend', 'closure-prd-frontend'],
+    knowledge_resolution_refs: ['knowledge-diff:backend-applied', 'knowledge-diff:frontend-applied'],
+  };
+
+  assert.equal(validateAlignmentExit({
+    feedbackId: 'feedback-retire-legacy', resolution, owners, closures,
+  }).ok, true);
+  assert.equal(validateAlignmentExit({
+    feedbackId: 'feedback-retire-legacy',
+    resolution: { ...resolution, owner_refs: ['prd-backend'], closure_refs: ['closure-prd-backend'] },
+    owners,
+    closures,
+  }).errors[0].code, 'ALIGNMENT_RESOLUTION_INCOMPLETE');
+  assert.equal(validateAlignmentExit({
+    feedbackId: 'feedback-retire-legacy',
+    resolution: { ...resolution, knowledge_resolution_refs: [] },
+    owners,
+    closures,
+  }).errors[0].code, 'ALIGNMENT_RESOLUTION_INVALID');
+});
+
+test('requires explicit approval for an accepted no-remediation exit', () => {
+  const resolution = {
+    schema_version: 1,
+    feedback_id: 'feedback-retire-legacy',
+    disposition: 'NO_REMEDIATION_ACCEPTED',
+    owner_refs: [],
+    closure_refs: [],
+    knowledge_resolution_refs: ['knowledge:no-change-accepted'],
+  };
+  assert.equal(validateAlignmentExit({
+    feedbackId: 'feedback-retire-legacy', resolution, owners: [], closures: [],
+  }).errors[0].code, 'ALIGNMENT_RESOLUTION_INVALID');
+  assert.equal(validateAlignmentExit({
+    feedbackId: 'feedback-retire-legacy',
+    resolution: { ...resolution, human_approval_ref: 'decision:no-remediation' },
+    owners: [],
+    closures: [],
+  }).ok, true);
 });

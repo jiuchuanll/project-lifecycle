@@ -3,6 +3,7 @@ import addFormats from 'ajv-formats';
 
 import alignmentMarkerSchema from '../schemas/alignment-marker.schema.json' with { type: 'json' };
 import alignmentReviewSchema from '../schemas/alignment-review.schema.json' with { type: 'json' };
+import alignmentResolutionSchema from '../schemas/alignment-resolution.schema.json' with { type: 'json' };
 import archiveAccessReceiptSchema from '../schemas/archive-access-receipt.schema.json' with { type: 'json' };
 import capabilityFrontmatterSchema from '../schemas/capability-frontmatter.schema.json' with { type: 'json' };
 import contextReceiptSchema from '../schemas/context-receipt.schema.json' with { type: 'json' };
@@ -21,6 +22,7 @@ const schemaValidators = new Map(
   [
     alignmentMarkerSchema,
     alignmentReviewSchema,
+    alignmentResolutionSchema,
     projectMapSchema,
     projectPointerSchema,
     projectExtensionsSchema,

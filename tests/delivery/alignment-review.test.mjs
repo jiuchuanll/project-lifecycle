@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, readFile, readdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
+import { atomicWriteValidated } from '../../scripts/lib/atomic-write.mjs';
 import {
   deriveAlignmentReview,
   renderAlignmentReviewPair,
+  syncAlignmentReview,
 } from '../../scripts/delivery/alignment-review.mjs';
 
 const marker = (routing_disposition = undefined) => ({
@@ -138,4 +143,43 @@ test('renders only active rows when hundreds of completed Feedback records exist
   assert.equal(result.ok, true);
   assert.equal(result.value.rows.length, 3);
   assert.doesNotMatch(JSON.stringify(result.value), /evidence_refs|risk|history|reasoning|code_path/iu);
+});
+
+test('publishes and removes the bilingual generated projection as one pair', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-review-'));
+  await mkdir(join(root, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
+  const active = { root, feedbacks: [feedback('feedback-active')], owners: [], closures: [] };
+  const published = await syncAlignmentReview(active);
+  assert.equal(published.ok, true);
+  assert.deepEqual(published.value.locators, {
+    en: 'delivery/alignment-review-en.md',
+    'zh-CN': 'delivery/alignment-review.md',
+  });
+  assert.match(await readFile(join(root, 'docs', 'project-lifecycle', published.value.locators.en), 'utf8'), /feedback-active/u);
+
+  const removed = await syncAlignmentReview({ root, feedbacks: [], owners: [], closures: [] });
+  assert.equal(removed.ok, true);
+  assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
+});
+
+test('restores the prior English projection when the Chinese write fails', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-rollback-'));
+  await mkdir(join(root, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
+  const initial = { root, feedbacks: [feedback('feedback-active')], owners: [], closures: [] };
+  assert.equal((await syncAlignmentReview(initial)).ok, true);
+  const path = join(root, 'docs', 'project-lifecycle', 'delivery', 'alignment-review-en.md');
+  const original = await readFile(path, 'utf8');
+  let writes = 0;
+  const failed = await syncAlignmentReview({
+    ...initial,
+    feedbacks: [feedback('feedback-active', { titles: { en: 'Changed', 'zh-CN': '已更改' } })],
+  }, {
+    atomicWriteValidated: async (options) => {
+      writes += 1;
+      if (writes === 2) throw new Error('injected Chinese write failure');
+      return atomicWriteValidated(options);
+    },
+  });
+  assert.equal(failed.errors[0].code, 'ALIGNMENT_REVIEW_WRITE_FAILED');
+  assert.equal(await readFile(path, 'utf8'), original);
 });

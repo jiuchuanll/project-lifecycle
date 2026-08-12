@@ -1,8 +1,10 @@
 import { isDeepStrictEqual } from 'node:util';
 
+import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
 import { maskFencedMarkdown, parseRestrictedYaml } from '../lib/markdown.mjs';
 import { fail, ok } from '../lib/result.mjs';
+import { isSafeReference } from '../lib/reference-safety.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 
 const failure = (code, path, message) => fail([createError(code, path, message)]);
@@ -65,4 +67,61 @@ export const validateAlignmentFeedbackPair = ({ frontmatter, bodies } = {}) => {
     marker: en.value.marker,
     titles: { en: en.value.title, 'zh-CN': zh.value.title },
   });
+};
+
+const sameSorted = (left, right) => isDeepStrictEqual(
+  [...left].sort(compareCodePoints),
+  [...right].sort(compareCodePoints),
+);
+
+export const validateAlignmentExit = ({ feedbackId, resolution, owners = [], closures = [] } = {}) => {
+  if (resolution === undefined || resolution === null) {
+    return failure('ALIGNMENT_RESOLUTION_REQUIRED', '/alignment_resolution', 'Active alignment removal requires a resolution envelope.');
+  }
+  if (!validateJson('alignment-resolution', resolution).ok
+    || resolution.feedback_id !== feedbackId
+    || !resolution.closure_refs.every(isSafeReference)
+    || !resolution.knowledge_resolution_refs.every(isSafeReference)
+    || (resolution.human_approval_ref !== undefined && !isSafeReference(resolution.human_approval_ref))) {
+    return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_resolution', 'Alignment resolution must satisfy the closed safe contract.');
+  }
+  if (!Array.isArray(owners) || !Array.isArray(closures)) {
+    return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_resolution', 'Alignment resolution requires bounded owner and closure inputs.');
+  }
+  const linkedOwners = owners.filter((owner) => owner?.relationships?.feedback_ids?.includes(feedbackId));
+  const requiredOwnerRefs = linkedOwners.map(({ artifact_id: artifactId }) => artifactId);
+  if (new Set(requiredOwnerRefs).size !== requiredOwnerRefs.length
+    || requiredOwnerRefs.some((ownerId) => !/^[a-z][a-z0-9-]*$/u.test(ownerId))) {
+    return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_owners', 'Alignment owners require unique safe identities.');
+  }
+  if (resolution.disposition === 'NO_REMEDIATION_ACCEPTED') {
+    return requiredOwnerRefs.length === 0
+      ? ok(resolution)
+      : failure('ALIGNMENT_RESOLUTION_INCOMPLETE', '/alignment_resolution/owner_refs', 'No-remediation exit cannot omit linked delivery owners.');
+  }
+  if (!sameSorted(resolution.owner_refs, requiredOwnerRefs)) {
+    return failure('ALIGNMENT_RESOLUTION_INCOMPLETE', '/alignment_resolution/owner_refs', 'Resolution must cover every linked delivery owner.');
+  }
+  const closureByOwner = new Map();
+  for (const closure of closures) {
+    if (typeof closure?.owner_artifact_id !== 'string' || closureByOwner.has(closure.owner_artifact_id)) {
+      return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_closures', 'Closure summaries require unique owner references.');
+    }
+    closureByOwner.set(closure.owner_artifact_id, closure);
+  }
+  const requiredClosureRefs = [];
+  for (const ownerId of requiredOwnerRefs) {
+    const closure = closureByOwner.get(ownerId);
+    if (typeof closure?.artifact_id !== 'string' || closure.outcome?.status !== 'ACCEPTED'
+      || closure.acceptance?.claimed !== true
+      || !closure.feedback_coverage?.some((entry) => entry?.feedback_id === feedbackId && entry.status === 'COVERED')) {
+      return failure('ALIGNMENT_RESOLUTION_INCOMPLETE', '/alignment_closures', 'Every linked owner requires accepted closure and Feedback coverage.');
+    }
+    requiredClosureRefs.push(closure.artifact_id);
+  }
+  if (!sameSorted(resolution.closure_refs, requiredClosureRefs)
+    || resolution.knowledge_resolution_refs.length < requiredOwnerRefs.length) {
+    return failure('ALIGNMENT_RESOLUTION_INCOMPLETE', '/alignment_resolution', 'Every accepted owner requires closure and knowledge resolution.');
+  }
+  return ok(resolution);
 };

@@ -11,7 +11,7 @@ import { parseRestrictedYaml } from '../lib/markdown.mjs';
 import { isSafeReference } from '../lib/reference-safety.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
-import { validateAlignmentFeedbackPair } from './alignment-marker.mjs';
+import { validateAlignmentExit, validateAlignmentFeedbackPair } from './alignment-marker.mjs';
 
 const MAX_BODY_BYTES = 131_072;
 const FEEDBACK_SOURCE_SECTIONS = ['original_problem', 'scenario', 'expectation'];
@@ -108,8 +108,8 @@ const validateRendered = (source, expectedFrontmatter, expectedBody) => {
   return validateJson('delivery-frontmatter', parsed.frontmatter);
 };
 
-const compatibleRoute = ({ artifact_kind: kind, primary_route: route }, alignmentCapture = false) => {
-  if (route === 'KNOWLEDGE_UPDATE') return kind === 'feedback' && alignmentCapture;
+const compatibleRoute = ({ artifact_kind: kind, primary_route: route }) => {
+  if (route === 'KNOWLEDGE_UPDATE') return kind === 'feedback';
   if (route === 'OUTSIDE_PLUGIN') return false;
   if (kind === 'prd') return route === 'PRD_DELIVERY';
   if (kind === 'non-prd-delivery') return route === 'NON_PRD_DELIVERY';
@@ -147,7 +147,6 @@ export const validateMaterializationRequest = (input = {}) => {
   if (!isDeepStrictEqual(headingLevels(input.body.en), headingLevels(input.body['zh-CN']))) {
     return failure('PAIR_SECTION_MISMATCH', '/body', 'Localized delivery bodies require matching heading structure.');
   }
-  let alignmentCapture = false;
   if (input.frontmatter.artifact_kind === 'feedback') {
     for (const language of ['en', 'zh-CN']) {
       if (!extractFeedbackSections(input.body[language])) {
@@ -159,9 +158,8 @@ export const validateMaterializationRequest = (input = {}) => {
       bodies: input.body,
     });
     if (!alignment.ok) return alignment;
-    alignmentCapture = alignment.value.marker !== null;
   }
-  if (!compatibleRoute(input.frontmatter, alignmentCapture)) {
+  if (!compatibleRoute(input.frontmatter)) {
     return failure('ROUTE_ASSET_MISMATCH', '/frontmatter/primary_route', 'The supplied route cannot own this durable asset kind.');
   }
   return ok(input);
@@ -237,6 +235,53 @@ export async function materializeAsset(input = {}, operations = {}) {
 
   const bodies = { ...input.body };
   if (input.frontmatter.artifact_kind === 'feedback') {
+    const nextAlignment = validateAlignmentFeedbackPair({
+      frontmatter: input.frontmatter,
+      bodies,
+    });
+    if (!nextAlignment.ok) return nextAlignment;
+    let priorAlignment = null;
+    if (updating) {
+      const priorDocuments = {
+        en: splitDocument(existing.en),
+        'zh-CN': splitDocument(existing['zh-CN']),
+      };
+      if (!priorDocuments.en || !priorDocuments['zh-CN']) {
+        return failure('HISTORY_BODY_CHANGED', '/body', 'Existing Feedback pair is malformed.');
+      }
+      priorAlignment = validateAlignmentFeedbackPair({
+        frontmatter: priorDocuments.en.frontmatter,
+        bodies: {
+          en: priorDocuments.en.body,
+          'zh-CN': priorDocuments['zh-CN'].body,
+        },
+      });
+      if (!priorAlignment.ok) return priorAlignment;
+    }
+    const removingAlignment = priorAlignment?.value.marker !== null
+      && priorAlignment?.value.marker !== undefined
+      && nextAlignment.value.marker === null;
+    if (Object.hasOwn(input, 'alignment_resolution') && !removingAlignment) {
+      return failure('ALIGNMENT_RESOLUTION_UNEXPECTED', '/alignment_resolution', 'Resolution is allowed only while removing an active marker.');
+    }
+    if (removingAlignment) {
+      const owners = input.alignment_owners ?? [];
+      if (!Array.isArray(owners) || owners.some((owner) => {
+        const validation = validateJson('delivery-frontmatter', owner);
+        return !validation.ok || !['prd', 'non-prd-delivery'].includes(owner.artifact_kind);
+      })) {
+        return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_owners', 'Marker exit requires validated delivery owners.');
+      }
+      const exit = validateAlignmentExit({
+        feedbackId: input.frontmatter.artifact_id,
+        resolution: input.alignment_resolution,
+        owners,
+        closures: input.alignment_closures ?? [],
+      });
+      if (!exit.ok) return exit;
+    } else if (input.frontmatter.primary_route === 'KNOWLEDGE_UPDATE' && nextAlignment.value.marker === null) {
+      return failure('ROUTE_ASSET_MISMATCH', '/frontmatter/primary_route', 'Knowledge-controlled Feedback requires an active alignment marker.');
+    }
     for (const language of ['en', 'zh-CN']) {
       const sections = extractFeedbackSections(bodies[language]);
       bodies[language] = addFeedbackHashes(bodies[language], sourceHashes(sections));

@@ -227,6 +227,55 @@ test('rejects invalid alignment Feedback before writing either language', async 
   }
 });
 
+test('keeps an active marker until complete delivery and knowledge resolution are supplied', async () => {
+  const root = await rootFor();
+  const feedbackId = 'feedback-retire-wiki-density';
+  const frontmatter = baseFrontmatter({
+    artifact_id: feedbackId,
+    artifact_kind: 'feedback',
+    primary_route: 'KNOWLEDGE_UPDATE',
+  });
+  assert.equal((await materializeAsset(request(root, {
+    frontmatter,
+    body: alignmentFeedbackBody(),
+  }))).ok, true);
+
+  const withoutResolution = await materializeAsset(request(root, {
+    frontmatter,
+    body: feedbackBody(),
+  }));
+  assert.equal(withoutResolution.errors[0].code, 'ALIGNMENT_RESOLUTION_REQUIRED');
+
+  const deliveryOwner = baseFrontmatter({
+    artifact_id: 'prd-retire-wiki-density',
+    relationships: { feedback_ids: [feedbackId], prd_ids: [], legacy_artifact_refs: [] },
+  });
+  const closure = {
+    artifact_id: 'closure-prd-retire-wiki-density',
+    owner_artifact_id: 'prd-retire-wiki-density',
+    outcome: { status: 'ACCEPTED' },
+    acceptance: { claimed: true },
+    feedback_coverage: [{ feedback_id: feedbackId, status: 'COVERED' }],
+  };
+  const resolved = await materializeAsset(request(root, {
+    frontmatter,
+    body: feedbackBody({ coverage: 'Covered by PRD.' }),
+    alignment_owners: [deliveryOwner],
+    alignment_closures: [closure],
+    alignment_resolution: {
+      schema_version: 1,
+      feedback_id: feedbackId,
+      disposition: 'DELIVERY_ACCEPTED',
+      owner_refs: ['prd-retire-wiki-density'],
+      closure_refs: ['closure-prd-retire-wiki-density'],
+      knowledge_resolution_refs: ['knowledge-diff:retirement-applied'],
+    },
+  }));
+  assert.equal(resolved.ok, true);
+  const source = await readFile(join(root, 'docs', 'project-lifecycle', 'delivery', `${feedbackId}-en.md`), 'utf8');
+  assert.doesNotMatch(source, /project-lifecycle:alignment/u);
+});
+
 test('allows only Feedback marking and coverage updates without an erratum or successor', async () => {
   const root = await rootFor();
   const frontmatter = baseFrontmatter({
