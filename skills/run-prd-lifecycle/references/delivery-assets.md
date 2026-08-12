@@ -25,6 +25,12 @@ An architecture asset requires an actual changed-contract or boundary declaratio
 
 Do not duplicate content across artifacts. Link to authoritative evidence. Delivery documents may reference code, tests, decisions, and accepted knowledge IDs, but must not embed raw tool logs, secrets, source bodies, or full knowledge documents.
 
+## Active Alignment Projection
+
+`delivery/alignment-review-en.md` and `delivery/alignment-review.md` are generated bilingual activity views, not delivery owners or history ledgers. Regenerate them from validated active Feedback, linked owners, and closure summaries. Each row has exactly five fields: `feedback_id`, localized `title`, `primary_domain_id`, derived `alignment_phase`, and sorted unique `owner_ref` list.
+
+The only active phases are `REVIEW_REQUIRED`, `DELIVERY_OPEN`, `KNOWLEDGE_WRITEBACK`, and `DEFERRED`. `DEFERRED` applies only while no required linked owner exists; once one is linked, linked owner state takes precedence. A row remains `DELIVERY_OPEN` while any required linked owner is open. It reaches `KNOWLEDGE_WRITEBACK` only after every required linked owner has accepted closure and Feedback coverage. Completed items contribute no row. Never place evidence bodies, code paths, original narrative, risk prose, scope, tests, Knowledge Diff bodies, chronology, reasoning, or free-form notes in this projection.
+
 ## Verification
 
 Before acceptance, confirm paired machine fields, declared success criteria, exact evidence references, residual risks, and owner state. Test evidence proves observed behavior; it does not itself approve product meaning or accepted knowledge.

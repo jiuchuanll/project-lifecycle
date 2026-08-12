@@ -55,6 +55,8 @@ gates:
 
 `current` means an accepted fact integrated into the authoritative baseline. `in-progress` belongs to delivery, `proposed` remains unconfirmed, and `superseded` leaves default retrieval. A confirmed domain boundary does not imply a current fact.
 
+When an accepted business decision conflicts with the inspected code baseline, canonical knowledge records the accepted business decision and the verified implementation state separately. Put the accepted disposition in current facts, retain the smallest current implementation entry points in the implementation map, and link the unresolved alignment Feedback from known limits. The asset must not claim that implementation or runtime behavior has been removed before accepted delivery and verification establish that result. Open alignment Feedback does not by itself block `current` when this dual-truth wording is accurate and its limits and provenance are explicit.
+
 Read English by default. Chinese and English files are one logical asset: their stable IDs, state, baseline, fact metadata, dependencies, section structure, and evidence relationships must align. Update the pair in one atomic change. A missing or semantically divergent mirror blocks promotion to current.
 
 Every current fact must retain its current statement, stable ID and revision when independently addressable, evidence references, last verified baseline, and explicit known limits. Do not copy Feedback, PRD bodies, process logs, or historical narrative into current capability knowledge.

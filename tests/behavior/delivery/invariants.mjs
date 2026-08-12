@@ -7,8 +7,9 @@ import { validateRoute } from '../../../scripts/delivery/validate-route.mjs';
 
 const ID = /^[a-z][a-z0-9-]*$/u;
 const ROUTES = new Set(['KNOWLEDGE_UPDATE', 'NON_PRD_DELIVERY', 'OUTSIDE_PLUGIN', 'PRD_DELIVERY']);
-const ASSET_KINDS = new Set(['closure-summary', 'non-prd-delivery', 'prd']);
+const ASSET_KINDS = new Set(['closure-summary', 'feedback', 'non-prd-delivery', 'prd']);
 const HUMAN_GATES = new Set([
+  'BUSINESS_DISPOSITION_CONFIRMATION',
   'CONFLICT_RESOLUTION',
   'KNOWLEDGE_APPROVAL',
   'MULTI_REPOSITORY_ACCEPTANCE',
@@ -107,7 +108,10 @@ export const validateDeliveryScenarios = (scenarios) => {
 };
 
 const artifactIdFor = (scenario) => scenario.proposed_artifact_kind === 'prd'
-  ? `prd-${scenario.scenario_id}` : `${scenario.scenario_id}-delivery`;
+  ? `prd-${scenario.scenario_id}`
+  : scenario.proposed_artifact_kind === 'feedback'
+    ? `feedback-${scenario.scenario_id}`
+    : `${scenario.scenario_id}-delivery`;
 
 export const evaluateDeliveryScenario = (scenario) => {
   const validated = validateDeliveryScenarios([scenario]);
@@ -119,9 +123,15 @@ export const evaluateDeliveryScenario = (scenario) => {
   const gateBlocked = scenario.required_human_gate !== 'NONE' && !scenario.human_gate_satisfied;
   const obligationBlocked = scenario.expected_obligation_kinds.length > 0;
   const closure = outsideDelivery ? 'OUTSIDE_DELIVERY' : (stopped || gateBlocked || obligationBlocked ? 'BLOCKED' : 'ALLOWED');
+  const feedbackOnlyCapture = route.value.primary_route === 'KNOWLEDGE_UPDATE'
+    && scenario.proposed_artifact_kind === 'feedback'
+    && scenario.required_human_gate === 'BUSINESS_DISPOSITION_CONFIRMATION'
+    && scenario.human_gate_satisfied;
 
   let durableKinds = [];
-  if (!outsideDelivery && !stopped && !(scenario.proposed_artifact_kind === 'prd'
+  if (feedbackOnlyCapture) {
+    durableKinds = ['feedback'];
+  } else if (!outsideDelivery && !stopped && !(scenario.proposed_artifact_kind === 'prd'
     && scenario.prd_creation_origin === 'agent_inferred' && !scenario.human_gate_satisfied)) {
     durableKinds = [scenario.proposed_artifact_kind];
     if (closure === 'ALLOWED') durableKinds.push('closure-summary');

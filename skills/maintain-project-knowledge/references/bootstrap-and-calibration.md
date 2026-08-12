@@ -64,6 +64,20 @@ After presenting the initial candidate map and coverage assessment, stop until t
 
 Invite correction using real goals, business boundaries, hidden dependencies, and missing domains. Later corrections reopen only affected boundaries, shared facts, constraints, and dependent assets; unrelated confirmed knowledge remains usable. New user input becomes evidence for a candidate, never current truth by itself.
 
+## Business-to-Implementation Alignment Feedback
+
+When the user explicitly confirms that an implemented capability is obsolete, invalid, or outside the accepted business model, keep `KNOWLEDGE_UPDATE` as the controlling route. Record the accepted business decision and the still-observed implementation as separate claims, create or reuse one bilingual Feedback pair with the controlled alignment marker, synchronize the active alignment projection, and return control to knowledge construction or maintenance.
+
+The bounded handoff obeys this contract:
+
+```text
+Feedback captured != PRD materialized != delivery started
+```
+
+It creates no PRD or non-PRD owner, Context Receipt, batch, worktree, code change, or test run. `pending-changes.json` remains knowledge-only and never becomes the remediation backlog. During initial bootstrap, collect active items for one bounded closing review. During later maintenance, review the current maintenance batch. If the user requests immediate remediation, capture Feedback first and then present the smallest defensible owner boundary for confirmation. Immediate safety, security, destructive-data, or compliance risk receives immediate attention without silently authorizing delivery.
+
+Reuse an existing Feedback only when its immutable original problem is semantically the same. If equivalence or the meaning of “deprecated” remains material, use the temporary user stop instead of guessing or duplicating the record.
+
 ## Whole-Map Consistency Review
 
 Run the whole-map consistency review after authorized domain deepening and before writing a new or materially changed complex skeleton. Check missing capabilities, overlapping or unowned responsibility, false parent-child containment, hidden horizontal dependencies, shared ownership, known extensions, and undeclared downstream impact.

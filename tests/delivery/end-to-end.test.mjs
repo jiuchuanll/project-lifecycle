@@ -18,6 +18,7 @@ test('validates the complete bounded Phase 3 behavior matrix', () => {
     'explicit-prd',
     'genuine-ambiguity',
     'inferred-prd',
+    'knowledge-alignment-feedback-capture',
     'knowledge-only',
     'main-flow-correction',
     'multi-repository-acceptance',
@@ -84,4 +85,18 @@ test('limits durable files to the exact paired delivery assets derived by the sc
     assert.equal(result.value.allowed_files.every((locator) => locator.startsWith('delivery/')), true);
     assert.equal(result.value.allowed_files.some((locator) => locator.includes('project-map') || locator.includes('obligations.json')), false);
   }
+});
+
+test('captures confirmed alignment Feedback without creating a delivery owner or closure candidate', () => {
+  const scenario = scenarios.find(({ scenario_id: id }) => id === 'knowledge-alignment-feedback-capture');
+  const result = evaluateDeliveryScenario(scenario);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.durable_asset_kinds, ['feedback']);
+  assert.deepEqual(result.value.allowed_files, [
+    'delivery/feedback-knowledge-alignment-feedback-capture-en.md',
+    'delivery/feedback-knowledge-alignment-feedback-capture.md',
+  ]);
+  assert.equal(result.value.closure, 'OUTSIDE_DELIVERY');
+  assert.equal(result.value.knowledge_candidate_owner, null);
+  assert.equal(result.value.current_knowledge_written, false);
 });

@@ -1,6 +1,6 @@
 # Codex installation
 
-Candidate version: `0.3.1`. Evidence status: `FAILED` based on retained `0.1.0` evidence for Codex `0.147.0-alpha.6.5`; see the root support matrix. Those traces are historical evidence, not validation of this candidate.
+Candidate version: `0.4.0`. Evidence status: `FAILED` based on retained `0.1.0` evidence for Codex `0.147.0-alpha.6.5`; see the root support matrix. Those traces are historical evidence, not validation of this candidate.
 
 ```text
 codex plugin marketplace add https://github.com/jiuchuanll/project-lifecycle

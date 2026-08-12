@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "alignment-review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rows"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "rows": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feedback_id", "title", "primary_domain_id", "alignment_phase", "owner_ref"],
+        "properties": {
+          "feedback_id": { "type": "string", "pattern": "^feedback-[a-z0-9-]+$" },
+          "title": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["en", "zh-CN"],
+            "properties": {
+              "en": { "type": "string", "minLength": 1, "maxLength": 200 },
+              "zh-CN": { "type": "string", "minLength": 1, "maxLength": 200 }
+            }
+          },
+          "primary_domain_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "alignment_phase": { "enum": ["REVIEW_REQUIRED", "DELIVERY_OPEN", "KNOWLEDGE_WRITEBACK", "DEFERRED"] },
+          "owner_ref": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+          }
+        }
+      }
+    }
+  }
+}

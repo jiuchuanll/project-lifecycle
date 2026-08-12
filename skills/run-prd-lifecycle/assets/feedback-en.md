@@ -32,6 +32,16 @@ Record the user's expected outcome.
 <!-- project-lifecycle:section marking -->
 ## Marking
 Record standardized status markings only.
+
+> Optional: insert this marker only after the business-to-implementation divergence is confirmed. This fenced example is inert.
+
+```text
+<!-- project-lifecycle:alignment
+schema_version: 1
+classification: BUSINESS_IMPLEMENTATION_DIVERGENCE
+primary_domain_id: sample-domain
+-->
+```
 <!-- /project-lifecycle:section -->
 
 <!-- project-lifecycle:section coverage -->
