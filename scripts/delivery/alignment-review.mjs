@@ -1,0 +1,118 @@
+import { compareCodePoints } from '../lib/deterministic-order.mjs';
+import { createError } from '../lib/errors.mjs';
+import { fail, ok } from '../lib/result.mjs';
+import { validateJson } from '../lib/validate-json.mjs';
+
+const failure = (path, message) => fail([
+  createError('ALIGNMENT_REVIEW_INPUT_INVALID', path, message),
+]);
+const safeTitle = (value) => typeof value === 'string'
+  && value.trim() === value
+  && value.length > 0
+  && value.length <= 200
+  && !/[\r\n\p{Cc}\p{Cf}]/u.test(value);
+const sortedUnique = (values) => [...new Set(values)].sort(compareCodePoints);
+
+const acceptedClosure = (closure, feedbackId) => closure?.outcome?.status === 'ACCEPTED'
+  && closure?.acceptance?.claimed === true
+  && Array.isArray(closure.feedback_coverage)
+  && closure.feedback_coverage.some((entry) => entry?.feedback_id === feedbackId && entry.status === 'COVERED');
+
+const rejectedClosure = (closure) => ['ABANDONED', 'CANCELLED', 'REJECTED'].includes(closure?.outcome?.status);
+
+export const deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}) => {
+  if (!Array.isArray(feedbacks) || !Array.isArray(owners) || !Array.isArray(closures)) {
+    return failure('/', 'Alignment review inputs must be bounded arrays.');
+  }
+  const closureByOwner = new Map();
+  for (const [index, closure] of closures.entries()) {
+    if (typeof closure?.owner_artifact_id !== 'string' || closureByOwner.has(closure.owner_artifact_id)) {
+      return failure(`/closures/${index}`, 'Closure summaries require unique owner references.');
+    }
+    closureByOwner.set(closure.owner_artifact_id, closure);
+  }
+
+  const ownerRecords = [];
+  for (const [index, candidate] of owners.entries()) {
+    const validation = validateJson('delivery-frontmatter', candidate);
+    if (!validation.ok || !['prd', 'non-prd-delivery'].includes(candidate.artifact_kind)) {
+      return failure(`/owners/${index}`, 'Alignment owners must be valid PRD or non-PRD delivery assets.');
+    }
+    ownerRecords.push(candidate);
+  }
+
+  const ids = new Set();
+  const rows = [];
+  for (const [index, record] of feedbacks.entries()) {
+    const validation = validateJson('delivery-frontmatter', record?.frontmatter);
+    if (!validation.ok || record.frontmatter.artifact_kind !== 'feedback') {
+      return failure(`/feedbacks/${index}`, 'Alignment entries must reference valid Feedback Frontmatter.');
+    }
+    const feedbackId = record.frontmatter.artifact_id;
+    if (ids.has(feedbackId)) return failure(`/feedbacks/${index}`, 'Feedback IDs must be unique.');
+    ids.add(feedbackId);
+    if (record.marker === null) continue;
+    if (!validateJson('alignment-marker', record.marker).ok
+      || record.marker.primary_domain_id !== record.frontmatter.domain_ids.find((id) => id === record.marker.primary_domain_id)
+      || !safeTitle(record.titles?.en) || !safeTitle(record.titles?.['zh-CN'])) {
+      return failure(`/feedbacks/${index}`, 'Active alignment Feedback must have one validated marker and localized titles.');
+    }
+
+    const linkedOwners = ownerRecords.filter((candidate) => candidate.relationships.feedback_ids.includes(feedbackId));
+    const requiredOwners = [];
+    const acceptedOwners = new Set();
+    for (const candidate of linkedOwners) {
+      const closure = closureByOwner.get(candidate.artifact_id);
+      if (rejectedClosure(closure)) continue;
+      requiredOwners.push(candidate.artifact_id);
+      if (closure?.outcome?.status === 'ACCEPTED') {
+        if (!acceptedClosure(closure, feedbackId)) {
+          return failure(`/closures/${candidate.artifact_id}`, 'Accepted closure must explicitly cover linked Feedback.');
+        }
+        acceptedOwners.add(candidate.artifact_id);
+      }
+    }
+    const ownerRef = sortedUnique(requiredOwners);
+    const allAccepted = ownerRef.length > 0 && ownerRef.every((ownerId) => acceptedOwners.has(ownerId));
+    const alignmentPhase = ownerRef.length > 0 && !allAccepted
+      ? 'DELIVERY_OPEN'
+      : allAccepted
+        ? 'KNOWLEDGE_WRITEBACK'
+        : record.marker.routing_disposition === 'DEFERRED'
+          ? 'DEFERRED'
+          : 'REVIEW_REQUIRED';
+    rows.push({
+      feedback_id: feedbackId,
+      title: { en: record.titles.en, 'zh-CN': record.titles['zh-CN'] },
+      primary_domain_id: record.marker.primary_domain_id,
+      alignment_phase: alignmentPhase,
+      owner_ref: ownerRef,
+    });
+  }
+  rows.sort((left, right) => compareCodePoints(left.feedback_id, right.feedback_id));
+  const review = { schema_version: 1, rows };
+  const validation = validateJson('alignment-review', review);
+  return validation.ok ? ok(review) : failure('/', 'Derived alignment review violates its closed schema.');
+};
+
+const escapeTable = (value) => value.replaceAll('\\', '\\\\').replaceAll('|', '\\|');
+const render = (review, language) => {
+  const heading = language === 'en' ? 'Active alignment review' : '活动对齐审阅';
+  const lines = [
+    '<!-- Generated by Project Lifecycle from validated active alignment state; do not edit. -->',
+    `# ${heading}`,
+    '',
+    '| feedback_id | title | primary_domain_id | alignment_phase | owner_ref |',
+    '| --- | --- | --- | --- | --- |',
+  ];
+  for (const row of review.rows) {
+    const owners = row.owner_ref.length === 0 ? '-' : row.owner_ref.map((value) => `\`${value}\``).join(', ');
+    lines.push(`| \`${row.feedback_id}\` | ${escapeTable(row.title[language])} | \`${row.primary_domain_id}\` | \`${row.alignment_phase}\` | ${owners} |`);
+  }
+  return `${lines.join('\n')}\n`;
+};
+
+export const renderAlignmentReviewPair = (review) => ({
+  en: render(review, 'en'),
+  'zh-CN': render(review, 'zh-CN'),
+});

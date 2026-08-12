@@ -97,6 +97,17 @@ test('validates one identical marker against the Feedback domain set', () => {
   assert.equal(result.value.titles['zh-CN'], '废弃旧审批');
 });
 
+test('allows localized table delimiters in titles for escaped projection rendering', () => {
+  const result = validateAlignmentFeedbackPair({
+    frontmatter: frontmatter(),
+    bodies: {
+      en: body({ title: 'Retire | legacy approval' }),
+      'zh-CN': body({ language: 'zh-CN', title: '废弃 | 旧审批' }),
+    },
+  });
+  assert.equal(result.ok, true);
+});
+
 test('rejects duplicate and malformed markers with stable errors', () => {
   const duplicate = extractAlignmentMarker(`${marker()}\n${marker()}`, '/marking');
   assert.equal(duplicate.errors[0].code, 'ALIGNMENT_MARKER_DUPLICATE');

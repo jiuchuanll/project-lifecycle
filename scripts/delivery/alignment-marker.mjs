@@ -40,7 +40,7 @@ const extractBody = (body, language) => {
   const marker = extractAlignmentMarker(matches[0][1], `/body/${language}/marking`);
   if (!marker.ok) return marker;
   const title = /^#[ \t]+(.+)$/mu.exec(maskFencedMarkdown(body))?.[1]?.trim();
-  if (!title || title.length > 200 || /[\p{Cc}\p{Cf}|]/u.test(title)) {
+  if (!title || title.length > 200 || /[\p{Cc}\p{Cf}]/u.test(title)) {
     return failure('ALIGNMENT_MARKER_INVALID', `/body/${language}/title`, 'Feedback requires one safe bounded H1 title.');
   }
   return ok({ marker: marker.value, title });
