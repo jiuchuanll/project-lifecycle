@@ -7,14 +7,22 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
-const runCli = (args) => new Promise((resolve, reject) => {
+const runCli = (args, { timeoutMs = null } = {}) => new Promise((resolve, reject) => {
   const child = spawn(process.execPath, ['scripts/bin/project-lifecycle.mjs', ...args], { cwd: repositoryRoot });
   let stdout = '';
   let stderr = '';
+  let timedOut = false;
+  const timeout = timeoutMs === null ? null : setTimeout(() => {
+    timedOut = true;
+    child.kill();
+  }, timeoutMs);
   child.stdout.on('data', (chunk) => { stdout += chunk; });
   child.stderr.on('data', (chunk) => { stderr += chunk; });
   child.on('error', reject);
-  child.on('close', (status) => resolve({ status, stderr, stdout }));
+  child.on('close', (status) => {
+    if (timeout !== null) clearTimeout(timeout);
+    resolve({ status, stderr, stdout, timedOut });
+  });
 });
 const envelope = (result) => {
   assert.equal(result.stderr, '');
@@ -194,7 +202,7 @@ test('rejects an oversized sync envelope without echoing private input', async (
   assert.doesNotMatch(result.stdout, /private_marker/u);
 });
 
-test('rejects a non-regular bounded input instead of reading an unbounded stream', async (context) => {
+test('rejects a FIFO with no writer before bounded input open can block', async (context) => {
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-fifo-cli-'));
   context.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
@@ -204,10 +212,11 @@ test('rejects a non-regular bounded input instead of reading an unbounded stream
     child.on('error', reject);
     child.on('close', (status) => status === 0 ? resolve() : reject(new Error(`mkfifo exited ${status}`)));
   });
-  const writer = writeFile(state, JSON.stringify({ feedbacks: [], owners: [], closures: [] }))
-    .catch(() => undefined);
-  const result = await runCli(['sync-alignment-review', '--root', root, '--input', state]);
-  await writer;
+  const result = await runCli(
+    ['sync-alignment-review', '--root', root, '--input', state],
+    { timeoutMs: 1_000 },
+  );
+  assert.equal(result.timedOut, false);
   assert.equal(result.status, 2);
   assert.equal(envelope(result).errors[0].code, 'CLI_READ_ERROR');
 });

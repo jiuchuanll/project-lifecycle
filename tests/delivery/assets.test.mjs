@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { stringify as stringifyYaml } from 'yaml';
+
 import { parseRestrictedYaml } from '../../scripts/lib/markdown.mjs';
 import { atomicWriteValidated } from '../../scripts/lib/atomic-write.mjs';
 import { materializeAsset, validateMaterializationRequest } from '../../scripts/delivery/materialize-asset.mjs';
@@ -466,6 +468,67 @@ test('reuses titleless legacy Feedback by allowing one bounded alignment title m
   }));
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.value.status, 'updated');
+});
+
+test('normalizes one leading newline while adding the first alignment title and marker', async () => {
+  const root = await rootFor();
+  const feedbackId = 'feedback-title-leading-newline';
+  const frontmatter = baseFrontmatter({
+    artifact_id: feedbackId,
+    artifact_kind: 'feedback',
+    primary_route: 'PRD_DELIVERY',
+  });
+  const titleless = feedbackBody();
+  titleless.en = titleless.en.replace(/^# .*\n\n/u, '');
+  titleless['zh-CN'] = titleless['zh-CN'].replace(/^# .*\n\n/u, '');
+  assert.equal((await materializeAsset(request(root, { frontmatter, body: titleless }))).ok, true);
+
+  const aligned = alignmentFeedbackBody();
+  aligned.en = `\n${aligned.en}`;
+  aligned['zh-CN'] = `\n${aligned['zh-CN']}`;
+  const result = await materializeAsset(request(root, { frontmatter, body: aligned }));
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.value.status, 'updated');
+});
+
+test('rejects a Feedback document that exceeds the bound after managed hashes are inserted', async () => {
+  const root = await rootFor();
+  const longRefs = (group) => Array.from({ length: 50 }, (_, index) => (
+    `${group}-${index}-`.padEnd(500, 'x')
+  )).sort();
+  const obligations = Array.from({ length: 2 }, (_, index) => ({
+    obligation_id: `size-bound-${index}`,
+    kind: 'DEPENDENCY_RESOLUTION_REQUIRED',
+    status: 'OPEN',
+    trigger_refs: longRefs(`trigger-${index}`),
+    scope_refs: longRefs(`scope-${index}`),
+    responsible_refs: longRefs(`responsible-${index}`),
+    required_before: 'closure',
+    evidence_refs: longRefs(`evidence-${index}`),
+  }));
+  const frontmatter = baseFrontmatter({
+    artifact_id: 'feedback-managed-hash-bound',
+    artifact_kind: 'feedback',
+    primary_route: 'PRD_DELIVERY',
+    obligations,
+  });
+  const bodies = feedbackBody();
+  const renderedPrefix = `---\n${stringifyYaml(frontmatter, { lineWidth: 0 }).trimEnd()}\n---\n\n`;
+  const targetBytes = 262_144;
+  for (const language of ['en', 'zh-CN']) {
+    const paddingBytes = targetBytes - Buffer.byteLength(renderedPrefix) - Buffer.byteLength(bodies[language]);
+    assert.equal(paddingBytes > 0 && paddingBytes < 131_072, true);
+    bodies[language] = bodies[language].replace(
+      language === 'en' ? 'Open.' : '待处理。',
+      `${language === 'en' ? 'Open.' : '待处理。'}${'x'.repeat(paddingBytes)}`,
+    );
+  }
+
+  const result = await materializeAsset(request(root, { frontmatter, body: bodies }));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'ASSET_BODY_INVALID');
 });
 
 test('rejects fenced source rewrites while adding the first alignment title and marker', async () => {

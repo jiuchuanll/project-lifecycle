@@ -18543,6 +18543,8 @@ var emit = (result, status = result.ok ? 0 : 1) => {
 var readInput = async (file, path = "/file", maximumBytes = null) => {
   try {
     if (maximumBytes === null) return { ok: true, value: await readFile5(file, "utf8") };
+    const pathState = await stat(file);
+    if (!pathState.isFile()) return cliFailure("CLI_READ_ERROR", path, "Bounded input must be a regular file.");
     const handle = await open3(file, "r");
     try {
       const state = await handle.stat();

@@ -81,7 +81,8 @@ const feedbackHashMarker = (hashes) => `<!-- project-lifecycle:feedback-source-h
   .map((id) => `${id}=${hashes[id]}`).join(' ')} -->`;
 
 const addFeedbackHashes = (body, hashes) => {
-  const withoutMarker = body.replace(/^<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n?/mu, '');
+  const normalized = body.replaceAll('\r\n', '\n').replace(/^\n/u, '');
+  const withoutMarker = normalized.replace(/^<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n?/mu, '');
   const firstBreak = withoutMarker.indexOf('\n');
   if (firstBreak === -1) return `${withoutMarker}\n\n${feedbackHashMarker(hashes)}\n`;
   return `${withoutMarker.slice(0, firstBreak + 1)}\n${feedbackHashMarker(hashes)}\n${withoutMarker.slice(firstBreak + 1).replace(/^\n/u, '')}`;
@@ -95,7 +96,8 @@ const feedbackSkeleton = (body) => {
   return output.replaceAll('\r\n', '\n').replace(/^\n/u, '');
 };
 
-const withoutDocumentTitle = (body) => body.replace(/^#[ \t]+[^\n]+\n(?:\n)?/u, '');
+const withoutDocumentTitle = (body) => body.replaceAll('\r\n', '\n').replace(/^\n/u, '')
+  .replace(/^#[ \t]+[^\n]+\n(?:\n)?/u, '');
 
 const hasExactCoverageReference = (coverage, reference) => {
   const escaped = reference.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
@@ -418,6 +420,11 @@ export async function materializeAsset(input = {}, operations = {}) {
     en: renderDocument(input.frontmatter, bodies.en),
     'zh-CN': renderDocument(input.frontmatter, bodies['zh-CN']),
   };
+  for (const language of ['en', 'zh-CN']) {
+    if (Buffer.byteLength(documents[language]) > MAX_DOCUMENT_BYTES) {
+      return failure('ASSET_BODY_INVALID', `/body/${language}`, 'Complete localized delivery document must remain bounded.');
+    }
+  }
   const write = operations.atomicWriteValidated ?? atomicWriteValidated;
   try {
     await write({
