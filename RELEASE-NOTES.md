@@ -30,6 +30,9 @@ support claim.
 - The generated bilingual `alignment-review` pair is a sparse activity view,
   not another backlog or history ledger. Every row has exactly five fields and
   derives one of four phases from authoritative Feedback and delivery assets.
+  Publication fails closed unless the supplied active Feedback, linked owner,
+  and closure identities exactly match the bounded canonical bilingual asset
+  inventory on disk.
 - Alignment completion fails closed until all active or retained authoritative
   linked owners have accepted closure and exact externally verified Knowledge
   application or no-change evidence. Explicit

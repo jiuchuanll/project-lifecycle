@@ -340,6 +340,14 @@ test('requires explicit approval for an accepted no-remediation exit', () => {
     owners: [],
     closures: [],
   }).ok, true);
+  for (const humanApprovalRef of ['decision:committee,2026', 'decision:committee;2026']) {
+    assert.equal(validateExit({
+      feedbackId: 'feedback-retire-legacy',
+      resolution: { ...resolution, human_approval_ref: humanApprovalRef },
+      owners: [],
+      closures: [],
+    }).errors[0].code, 'ALIGNMENT_RESOLUTION_INVALID');
+  }
 });
 
 test('requires externally verified knowledge results before marker exit', () => {

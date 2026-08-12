@@ -103,7 +103,7 @@ Feedback captured != PRD materialized != delivery started
 
 不存在 `COMPLETED` 行。完成项退出活动投影，持久历史保留在 Feedback 和关闭资产中。
 
-投影值必须能够确定性生成。`feedback_id`、有界的本地化 H1 标题和 `primary_domain_id` 来自已验证的 Feedback 对及其受控标记。没有文档级标题的旧 Feedback 可以在首次获得标记时增加且仅增加一条有界的本地化 H1，其不可变来源段保持不变。两份投影的机器字段与行顺序一致，`title` 则来自对应语言资产。`owner_ref` 通过反向查找活动或已归档保留、且关系中覆盖该 Feedback 的已接受 PRD 或非 PRD Owner 获得；使用列表可以在不增加第六个字段的情况下保留现有 Feedback/Owner 多对多契约。`alignment_phase` 根据完整 Owner 集合、其已接受关闭结果、Feedback 处置和外部验证的 Knowledge Diff 应用或无变更结果计算，不是可独立编辑的进度字段。
+投影值必须能够确定性生成。`feedback_id`、有界的本地化 H1 标题和 `primary_domain_id` 来自已验证的 Feedback 对及其受控标记。没有文档级标题的旧 Feedback 可以在首次获得标记时增加且仅增加一条有界的本地化 H1，其不可变来源段保持不变。两份投影的机器字段与行顺序一致，`title` 则来自对应语言资产。`owner_ref` 通过反向查找活动或已归档保留、且关系中覆盖该 Feedback 的已接受 PRD 或非 PRD Owner 获得；使用列表可以在不增加第六个字段的情况下保留现有 Feedback/Owner 多对多契约。发布前，调用方提供的 Feedback、Owner 与关闭摘要身份必须和活动及保留交付根下有界的规范双语资产清单完全一致；任何漏传或分歧都将失败关闭。`alignment_phase` 根据这份完整 Owner 集合、其已接受关闭结果、Feedback 处置和外部验证的 Knowledge Diff 应用或无变更结果计算，不是可独立编辑的进度字段。
 
 投影绝不能保存代码路径、证据正文、用户原始叙述、风险、PRD 范围、验收标准、测试结果、Knowledge Diff 正文、状态历史、Agent 推理或自由文本备注。这些内容必须留在各自的权威资产中。
 
@@ -126,6 +126,8 @@ Feedback captured != PRD materialized != delivery started
 3. 发生交付时，交付验证与剩余风险处理已经完成；
 4. Knowledge Diff 应用、明确的无变更结果或已接受剩余差异结果具有精确的外部验证绑定；
 5. 规范知识准确表示最终业务与实现对齐状态，包括有意识接受的剩余差异。
+
+Feedback 覆盖区使用空白、逗号或分号分隔保留引用。因此 alignment-resolution 引用本身不得包含这些分隔符；schema 接受规则与精确覆盖匹配使用同一种表示。
 
 仅创建 PRD、合并代码或关闭 PRD 都不是退出条件。
 

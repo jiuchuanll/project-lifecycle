@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { stringify as stringifyYaml } from 'yaml';
+
 import { atomicWriteValidated } from '../../scripts/lib/atomic-write.mjs';
 import {
   deriveAlignmentReview,
@@ -96,6 +98,77 @@ const row = (feedbackId, alignmentPhase, ownerRef = []) => ({
   alignment_phase: alignmentPhase,
   owner_ref: ownerRef,
 });
+
+const feedbackBody = (title, alignmentMarker) => `# ${title}
+
+<!-- project-lifecycle:section original_problem -->
+Original problem.
+<!-- /project-lifecycle:section -->
+
+<!-- project-lifecycle:section scenario -->
+Current scenario.
+<!-- /project-lifecycle:section -->
+
+<!-- project-lifecycle:section expectation -->
+Expected behavior.
+<!-- /project-lifecycle:section -->
+
+<!-- project-lifecycle:section marking -->
+${alignmentMarker === null ? 'No active alignment.' : `<!-- project-lifecycle:alignment
+${stringifyYaml(alignmentMarker, { lineWidth: 0 }).trimEnd()}
+-->`}
+<!-- /project-lifecycle:section -->
+
+<!-- project-lifecycle:section coverage -->
+Coverage pending.
+<!-- /project-lifecycle:section -->
+`;
+
+const writePair = async (delivery, record) => {
+  const { frontmatter } = record;
+  const body = frontmatter.artifact_kind === 'feedback'
+    ? {
+        en: feedbackBody(record.titles.en, record.marker),
+        'zh-CN': feedbackBody(record.titles['zh-CN'], record.marker),
+      }
+    : {
+        en: `# ${frontmatter.artifact_id}\n\nAuthoritative delivery asset.\n`,
+        'zh-CN': `# ${frontmatter.artifact_id}\n\n权威交付资产。\n`,
+      };
+  const header = `---\n${stringifyYaml(frontmatter, { lineWidth: 0 }).trimEnd()}\n---\n`;
+  await writeFile(join(delivery, `${frontmatter.artifact_id}-en.md`), `${header}${body.en}`);
+  await writeFile(join(delivery, `${frontmatter.artifact_id}.md`), `${header}${body['zh-CN']}`);
+};
+
+const closureAsset = (summary, linkedOwner) => ({
+  frontmatter: {
+    ...owner(summary.artifact_id, [], {
+      artifact_kind: 'closure-summary',
+      primary_route: linkedOwner.primary_route,
+      relationships: {
+        feedback_ids: [...linkedOwner.relationships.feedback_ids],
+        prd_ids: linkedOwner.artifact_kind === 'prd' ? [linkedOwner.artifact_id] : [],
+        legacy_artifact_refs: [],
+      },
+      retention_tier: 'closed-summary',
+      current_project_id: undefined,
+    }),
+  },
+});
+
+const writeInventory = async (root, { feedbacks = [], owners = [], closures = [] }) => {
+  const delivery = join(root, 'docs', 'project-lifecycle', 'delivery');
+  await mkdir(delivery, { recursive: true });
+  for (const record of feedbacks) await writePair(delivery, record);
+  for (const frontmatter of owners) await writePair(delivery, { frontmatter });
+  for (const summary of closures) {
+    const linkedOwner = owners.find(({ artifact_id: id }) => id === summary.owner_artifact_id);
+    assert.ok(linkedOwner, `missing owner for ${summary.artifact_id}`);
+    const asset = closureAsset(summary, linkedOwner);
+    delete asset.frontmatter.current_project_id;
+    await writePair(delivery, asset);
+  }
+};
 
 test('derives all four active phases from Feedback, owners, and accepted closure coverage', () => {
   const feedbacks = [
@@ -248,6 +321,7 @@ test('publishes and removes the bilingual generated projection as one pair', asy
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-review-'));
   await mkdir(join(root, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
   const active = { root, feedbacks: [feedback('feedback-active')], owners: [], closures: [] };
+  await writeInventory(root, active);
   const published = await syncAlignmentReview(active);
   assert.equal(published.ok, true);
   assert.deepEqual(published.value.locators, {
@@ -256,9 +330,36 @@ test('publishes and removes the bilingual generated projection as one pair', asy
   });
   assert.match(await readFile(join(root, 'docs', 'project-lifecycle', published.value.locators.en), 'utf8'), /feedback-active/u);
 
+  await writeInventory(root, { feedbacks: [feedback('feedback-active', { marker: null })] });
   const removed = await syncAlignmentReview({ root, feedbacks: [], owners: [], closures: [] });
   assert.equal(removed.ok, true);
-  assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
+  assert.deepEqual(
+    await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')),
+    ['feedback-active-en.md', 'feedback-active.md'],
+  );
+});
+
+test('rejects projection publication when authoritative Feedback, owner, or closure inventory is omitted', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-inventory-'));
+  const feedbacks = [feedback('feedback-authoritative')];
+  const owners = [owner('prd-authoritative', ['feedback-authoritative'])];
+  const closures = [closure('prd-authoritative', ['feedback-authoritative'])];
+  await writeInventory(root, { feedbacks, owners, closures });
+
+  for (const omitted of [
+    { feedbacks: [], owners, closures },
+    { feedbacks, owners: [], closures },
+    { feedbacks, owners, closures: [] },
+  ]) {
+    const result = await syncAlignmentReview({ root, ...omitted });
+    assert.equal(result.ok, false);
+    assert.equal(result.errors[0].code, 'ALIGNMENT_REVIEW_INVENTORY_INCOMPLETE');
+  }
+
+  const complete = await syncAlignmentReview({ root, feedbacks, owners, closures });
+  assert.equal(complete.ok, true);
+  assert.equal(complete.value.row_count, 1);
+  assert.deepEqual(complete.value.phases, ['KNOWLEDGE_WRITEBACK']);
 });
 
 test('refuses to overwrite or remove a non-generated asset at the projection locators', async () => {
@@ -284,13 +385,16 @@ test('restores the prior English projection when the Chinese write fails', async
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-rollback-'));
   await mkdir(join(root, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
   const initial = { root, feedbacks: [feedback('feedback-active')], owners: [], closures: [] };
+  await writeInventory(root, initial);
   assert.equal((await syncAlignmentReview(initial)).ok, true);
   const path = join(root, 'docs', 'project-lifecycle', 'delivery', 'alignment-review-en.md');
   const original = await readFile(path, 'utf8');
   let writes = 0;
+  const changed = feedback('feedback-active', { titles: { en: 'Changed', 'zh-CN': '已更改' } });
+  await writeInventory(root, { feedbacks: [changed] });
   const failed = await syncAlignmentReview({
     ...initial,
-    feedbacks: [feedback('feedback-active', { titles: { en: 'Changed', 'zh-CN': '已更改' } })],
+    feedbacks: [changed],
   }, {
     atomicWriteValidated: async (options) => {
       writes += 1;
@@ -306,11 +410,14 @@ test('reports manual recovery when the second write and rollback both fail', asy
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-recovery-'));
   await mkdir(join(root, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
   const initial = { root, feedbacks: [feedback('feedback-active')], owners: [], closures: [] };
+  await writeInventory(root, initial);
   assert.equal((await syncAlignmentReview(initial)).ok, true);
   let writes = 0;
+  const changed = feedback('feedback-active', { titles: { en: 'Changed', 'zh-CN': '已更改' } });
+  await writeInventory(root, { feedbacks: [changed] });
   const failed = await syncAlignmentReview({
     ...initial,
-    feedbacks: [feedback('feedback-active', { titles: { en: 'Changed', 'zh-CN': '已更改' } })],
+    feedbacks: [changed],
   }, {
     atomicWriteValidated: async (options) => {
       writes += 1;

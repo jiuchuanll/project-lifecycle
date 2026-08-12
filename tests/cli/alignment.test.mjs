@@ -164,7 +164,10 @@ test('rejects one physical Feedback file supplied as both bilingual inputs', asy
 test('syncs one bounded active projection from an ephemeral absolute input', async (context) => {
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-sync-cli-'));
   context.after(() => rm(root, { recursive: true, force: true }));
-  await mkdir(join(root, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
+  const delivery = join(root, 'docs', 'project-lifecycle', 'delivery');
+  await mkdir(delivery, { recursive: true });
+  await writeFile(join(delivery, 'feedback-retire-legacy-en.md'), document('en'));
+  await writeFile(join(delivery, 'feedback-retire-legacy.md'), document('zh-CN'));
   const state = join(root, 'alignment-state.json');
   await writeFile(state, JSON.stringify({
     feedbacks: [{

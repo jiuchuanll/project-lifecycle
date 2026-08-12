@@ -103,7 +103,7 @@ The only active projection phases are:
 
 There is no `COMPLETED` row. A completed item leaves the active projection. Durable history remains in Feedback and closure assets.
 
-Projection values are deterministic. `feedback_id`, the bounded localized H1 titles, and `primary_domain_id` come from the validated Feedback pair and its controlled marker. A titleless legacy Feedback may add exactly one bounded localized H1 while acquiring its first marker; its immutable source sections remain unchanged. The two projections have identical machine fields and row order while `title` is rendered from the corresponding language asset. `owner_ref` is reverse-resolved from active or retained accepted PRD or non-PRD owners whose relationships cover the Feedback; retaining a list preserves the existing many-to-many Feedback/owner contract without adding a sixth field. `alignment_phase` is computed from the complete owner set, its accepted closures, the Feedback disposition, and externally verified Knowledge Diff application or no-change results. It is not an independently editable progress field.
+Projection values are deterministic. `feedback_id`, the bounded localized H1 titles, and `primary_domain_id` come from the validated Feedback pair and its controlled marker. A titleless legacy Feedback may add exactly one bounded localized H1 while acquiring its first marker; its immutable source sections remain unchanged. The two projections have identical machine fields and row order while `title` is rendered from the corresponding language asset. `owner_ref` is reverse-resolved from active or retained accepted PRD or non-PRD owners whose relationships cover the Feedback; retaining a list preserves the existing many-to-many Feedback/owner contract without adding a sixth field. Before publication, the supplied Feedback, owner, and closure-summary identities must exactly match the bounded canonical bilingual inventory under active and retained delivery roots; an omitted or divergent record fails closed. `alignment_phase` is computed from that complete owner set, its accepted closures, the Feedback disposition, and externally verified Knowledge Diff application or no-change results. It is not an independently editable progress field.
 
 The projection must never contain code paths, evidence bodies, the original user narrative, risks, PRD scope, acceptance criteria, test results, Knowledge Diff bodies, status history, Agent reasoning, or free-form notes. Those belong to their authoritative assets.
 
@@ -126,6 +126,8 @@ An item exits the active projection only when:
 3. delivery verification and residual-risk handling are complete where delivery occurred;
 4. the Knowledge Diff application, explicit no-change result, or accepted residual-divergence result has an exact externally verified binding; and
 5. canonical knowledge accurately represents the final business and implementation alignment, including any consciously accepted residual divergence.
+
+References retained in Feedback coverage use whitespace, comma, or semicolon as separators. Alignment-resolution references therefore cannot contain those separators; schema acceptance and exact coverage matching use the same representation.
 
 PRD creation, code merge, or PRD closure alone is not an exit condition.
 

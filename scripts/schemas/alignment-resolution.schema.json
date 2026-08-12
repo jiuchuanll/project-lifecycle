@@ -18,16 +18,16 @@
       "type": "array",
       "maxItems": 20,
       "uniqueItems": true,
-      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+      "items": { "type": "string", "minLength": 1, "maxLength": 500, "pattern": "^[^\\s,;；，]+$" }
     },
     "knowledge_resolution_refs": {
       "type": "array",
       "minItems": 1,
       "maxItems": 20,
       "uniqueItems": true,
-      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+      "items": { "type": "string", "minLength": 1, "maxLength": 500, "pattern": "^[^\\s,;；，]+$" }
     },
-    "human_approval_ref": { "type": "string", "minLength": 1, "maxLength": 500 }
+    "human_approval_ref": { "type": "string", "minLength": 1, "maxLength": 500, "pattern": "^[^\\s,;；，]+$" }
   },
   "allOf": [
     {
