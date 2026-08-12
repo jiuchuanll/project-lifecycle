@@ -49,9 +49,10 @@ const extractBody = (body, language) => {
     return failure('ALIGNMENT_MARKER_INVALID', `/body/${language}`, 'Feedback body must be text.');
   }
   const normalized = body.replaceAll('\r\n', '\n').replace(/^\n/u, '');
+  const visible = maskFencedMarkdown(normalized);
   const sections = {};
   for (const id of FEEDBACK_SECTIONS) {
-    const matches = [...normalized.matchAll(sectionPattern(id))];
+    const matches = [...visible.matchAll(sectionPattern(id))];
     if (matches.length !== 1 || matches[0][1].trim().length === 0) {
       return failure('ALIGNMENT_MARKER_INVALID', `/body/${language}/${id}`, 'Feedback requires one complete bounded section set.');
     }
@@ -59,7 +60,6 @@ const extractBody = (body, language) => {
   }
   const marker = extractAlignmentMarker(sections.marking, `/body/${language}/marking`);
   if (!marker.ok) return marker;
-  const visible = maskFencedMarkdown(normalized);
   const documentTitles = [...visible.matchAll(/^#[ \t]+(.+)$/gmu)];
   const title = documentTitles[0]?.[1]?.trim() ?? null;
   if (marker.value && (documentTitles.length !== 1 || documentTitles[0]?.index !== 0
@@ -136,7 +136,13 @@ const sameSorted = (left, right) => isDeepStrictEqual(
   [...right].sort(compareCodePoints),
 );
 
-export const validateAlignmentExit = ({ feedbackId, resolution, owners = [], closures = [] } = {}) => {
+export const validateAlignmentExit = ({
+  feedbackId,
+  resolution,
+  owners = [],
+  closures = [],
+  ownerInventoryComplete = false,
+} = {}) => {
   if (resolution === undefined || resolution === null) {
     return failure('ALIGNMENT_RESOLUTION_REQUIRED', '/alignment_resolution', 'Active alignment removal requires a resolution envelope.');
   }
@@ -149,6 +155,9 @@ export const validateAlignmentExit = ({ feedbackId, resolution, owners = [], clo
   }
   if (!Array.isArray(owners) || !Array.isArray(closures)) {
     return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_resolution', 'Alignment resolution requires bounded owner and closure inputs.');
+  }
+  if (ownerInventoryComplete !== true) {
+    return failure('ALIGNMENT_OWNER_INVENTORY_INCOMPLETE', '/alignment_owners', 'Marker exit requires a complete owner inventory derived from authoritative delivery assets.');
   }
   const closureByOwner = new Map();
   for (const closure of closures) {

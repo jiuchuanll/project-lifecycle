@@ -63,6 +63,8 @@ const pair = (overrides = {}) => ({
   },
 });
 
+const validateExit = (input) => validateAlignmentExit({ ...input, ownerInventoryComplete: true });
+
 test('parses one bounded business-to-implementation marker', () => {
   assert.deepEqual(extractAlignmentMarker(`## Marking\n\n${marker()}`, '/marking'), {
     ok: true,
@@ -84,6 +86,16 @@ test('parses one bounded business-to-implementation marker', () => {
 test('keeps ordinary Feedback and fenced marker examples inactive', () => {
   assert.equal(extractAlignmentMarker('## Marking\n\nActive.', '/marking').value, null);
   assert.equal(extractAlignmentMarker(`## Marking\n\n\`\`\`text\n${marker()}\n\`\`\``, '/marking').value, null);
+});
+
+test('does not treat a complete Feedback example inside one outer fence as an active document', () => {
+  const fenced = `~~~markdown\n${body()}~~~\n`;
+  const result = validateAlignmentFeedbackPair({
+    frontmatter: frontmatter(),
+    bodies: { en: fenced, 'zh-CN': fenced },
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'ALIGNMENT_MARKER_INVALID');
 });
 
 test('validates one identical marker against the Feedback domain set', () => {
@@ -201,22 +213,22 @@ test('requires the complete accepted owner set and knowledge resolution before m
     ],
   };
 
-  assert.equal(validateAlignmentExit({
+  assert.equal(validateExit({
     feedbackId: 'feedback-retire-legacy', resolution, owners, closures,
   }).ok, true);
-  assert.equal(validateAlignmentExit({
+  assert.equal(validateExit({
     feedbackId: 'feedback-retire-legacy',
     resolution: { ...resolution, owner_refs: ['prd-backend'], closure_refs: ['closure-prd-backend'] },
     owners,
     closures,
   }).errors[0].code, 'ALIGNMENT_RESOLUTION_INCOMPLETE');
-  assert.equal(validateAlignmentExit({
+  assert.equal(validateExit({
     feedbackId: 'feedback-retire-legacy',
     resolution: { ...resolution, knowledge_resolution_refs: [] },
     owners,
     closures,
   }).errors[0].code, 'ALIGNMENT_RESOLUTION_INVALID');
-  assert.equal(validateAlignmentExit({
+  assert.equal(validateExit({
     feedbackId: 'feedback-retire-legacy',
     resolution: {
       ...resolution,
@@ -239,15 +251,33 @@ test('requires explicit approval for an accepted no-remediation exit', () => {
     closure_refs: [],
     knowledge_resolution_refs: ['knowledge-resolution:no-remediation-accepted'],
   };
-  assert.equal(validateAlignmentExit({
+  assert.equal(validateExit({
     feedbackId: 'feedback-retire-legacy', resolution, owners: [], closures: [],
   }).errors[0].code, 'ALIGNMENT_RESOLUTION_INVALID');
-  assert.equal(validateAlignmentExit({
+  assert.equal(validateExit({
     feedbackId: 'feedback-retire-legacy',
     resolution: { ...resolution, human_approval_ref: 'decision:no-remediation' },
     owners: [],
     closures: [],
   }).ok, true);
+});
+
+test('fails closed unless the owner inventory is explicitly complete', () => {
+  const result = validateAlignmentExit({
+    feedbackId: 'feedback-retire-legacy',
+    resolution: {
+      schema_version: 1,
+      feedback_id: 'feedback-retire-legacy',
+      disposition: 'NO_REMEDIATION_ACCEPTED',
+      owner_refs: [],
+      closure_refs: [],
+      knowledge_resolution_refs: ['knowledge-resolution:no-remediation-accepted'],
+      human_approval_ref: 'decision:no-remediation',
+    },
+    owners: [],
+    closures: [],
+  });
+  assert.equal(result.errors[0].code, 'ALIGNMENT_OWNER_INVENTORY_INCOMPLETE');
 });
 
 test('ignores rejected historical owners after an accepted successor covers the Feedback', () => {
@@ -291,7 +321,7 @@ test('ignores rejected historical owners after an accepted successor covers the 
     closure_refs: ['closure-prd-new'],
     knowledge_resolution_refs: ['knowledge-resolution:diff-prd-new'],
   };
-  assert.equal(validateAlignmentExit({
+  assert.equal(validateExit({
     feedbackId: 'feedback-retire-legacy',
     resolution,
     owners,

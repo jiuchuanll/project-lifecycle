@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile, realpath, unlink } from 'node:fs/promises';
+import { lstat, readFile, readdir, realpath, unlink } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -7,7 +7,7 @@ import { stringify as stringifyYaml } from 'yaml';
 
 import { atomicWriteValidated } from '../lib/atomic-write.mjs';
 import { createError } from '../lib/errors.mjs';
-import { parseRestrictedYaml } from '../lib/markdown.mjs';
+import { maskFencedMarkdown, parseRestrictedYaml } from '../lib/markdown.mjs';
 import { isSafeReference } from '../lib/reference-safety.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
@@ -56,9 +56,10 @@ const sectionPattern = (id) => new RegExp(
 );
 
 const extractFeedbackSections = (body) => {
+  const visible = maskFencedMarkdown(body.replaceAll('\r\n', '\n'));
   const sections = {};
   for (const id of [...FEEDBACK_SOURCE_SECTIONS, ...FEEDBACK_MUTABLE_SECTIONS]) {
-    const matches = [...body.matchAll(new RegExp(sectionPattern(id).source, 'gu'))];
+    const matches = [...visible.matchAll(new RegExp(sectionPattern(id).source, 'gu'))];
     if (matches.length !== 1 || matches[0][1].trim().length === 0) return null;
     sections[id] = matches[0][1].replaceAll('\r\n', '\n').trim();
   }
@@ -176,6 +177,46 @@ const existingFile = async (path) => {
   }
 };
 
+const discoverAlignmentOwners = async (lifecycleRoot, feedbackId) => {
+  const deliveryRoot = join(lifecycleRoot, 'delivery');
+  const names = (await readdir(deliveryRoot))
+    .filter((name) => name.endsWith('.md')
+      && !['alignment-review-en.md', 'alignment-review.md'].includes(name));
+  if (names.length > 2000) throw new Error('Delivery owner inventory is unbounded.');
+  const pairs = new Map();
+  for (const name of names) {
+    const source = await existingFile(join(deliveryRoot, name));
+    if (source === null || Buffer.byteLength(source) > MAX_BODY_BYTES * 2) {
+      throw new Error('Delivery owner inventory contains an invalid file.');
+    }
+    const document = splitDocument(source);
+    if (!document || !validateJson('delivery-frontmatter', document.frontmatter).ok) {
+      throw new Error('Delivery owner inventory contains invalid Frontmatter.');
+    }
+    if (!['prd', 'non-prd-delivery'].includes(document.frontmatter.artifact_kind)
+      || !document.frontmatter.relationships.feedback_ids.includes(feedbackId)) continue;
+    const id = document.frontmatter.artifact_id;
+    const language = name === `${id}-en.md`
+      ? 'en'
+      : name === `${id}.md`
+        ? 'zh-CN'
+        : null;
+    if (language === null) throw new Error('Linked delivery owner uses a non-canonical locator.');
+    const pair = pairs.get(id) ?? {};
+    if (pair[language]) throw new Error('Linked delivery owner language is duplicated.');
+    pair[language] = document.frontmatter;
+    pairs.set(id, pair);
+  }
+  const owners = [];
+  for (const pair of pairs.values()) {
+    if (!pair.en || !pair['zh-CN'] || !isDeepStrictEqual(pair.en, pair['zh-CN'])) {
+      throw new Error('Linked delivery owner pair is incomplete or divergent.');
+    }
+    owners.push(pair.en);
+  }
+  return owners;
+};
+
 const rollbackFirstWrite = async ({ write, lifecycleRoot, locator, original }) => {
   const path = join(lifecycleRoot, locator);
   if (original === null) {
@@ -265,38 +306,45 @@ export async function materializeAsset(input = {}, operations = {}) {
       return failure('ALIGNMENT_RESOLUTION_UNEXPECTED', '/alignment_resolution', 'Resolution is allowed only while removing an active marker.');
     }
     if (removingAlignment) {
-      const owners = input.alignment_owners ?? [];
-      if (!Array.isArray(owners) || owners.some((owner) => {
+      const suppliedOwners = input.alignment_owners ?? [];
+      if (!Array.isArray(suppliedOwners) || suppliedOwners.some((owner) => {
         const validation = validateJson('delivery-frontmatter', owner);
         return !validation.ok || !['prd', 'non-prd-delivery'].includes(owner.artifact_kind);
       })) {
         return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_owners', 'Marker exit requires validated delivery owners.');
+      }
+      let owners;
+      try {
+        owners = await discoverAlignmentOwners(lifecycleRoot, input.frontmatter.artifact_id);
+      } catch {
+        return failure('ALIGNMENT_OWNER_INVENTORY_INCOMPLETE', '/alignment_owners', 'Marker exit requires a complete valid owner inventory from authoritative delivery assets.');
       }
       const exit = validateAlignmentExit({
         feedbackId: input.frontmatter.artifact_id,
         resolution: input.alignment_resolution,
         owners,
         closures: input.alignment_closures ?? [],
+        ownerInventoryComplete: true,
       });
       if (!exit.ok) return exit;
-      if (exit.value.disposition === 'NO_REMEDIATION_ACCEPTED') {
-        const requiredEvidence = [
-          exit.value.disposition,
+      const requiredEvidence = exit.value.disposition === 'NO_REMEDIATION_ACCEPTED'
+        ? [exit.value.disposition,
           exit.value.human_approval_ref,
-          ...exit.value.knowledge_resolution_refs,
-        ];
-        for (const language of ['en', 'zh-CN']) {
-          const coverage = extractFeedbackSections(bodies[language])?.coverage;
-          if (!coverage || requiredEvidence.some((reference) => !coverage.includes(reference))) {
-            return failure(
-              'ALIGNMENT_RESOLUTION_EVIDENCE_MISSING',
-              `/body/${language}/coverage`,
-              'No-remediation exit must retain its disposition, approval, and knowledge resolution references in Feedback coverage.',
-            );
-          }
+          ...exit.value.knowledge_resolution_refs]
+        : [exit.value.disposition,
+          ...exit.value.closure_refs,
+          ...exit.value.knowledge_resolution_refs];
+      for (const language of ['en', 'zh-CN']) {
+        const coverage = extractFeedbackSections(bodies[language])?.coverage;
+        if (!coverage || requiredEvidence.some((reference) => !coverage.includes(reference))) {
+          return failure(
+            'ALIGNMENT_RESOLUTION_EVIDENCE_MISSING',
+            `/body/${language}/coverage`,
+            'Alignment exit must retain its disposition, closure or approval, and knowledge resolution references in Feedback coverage.',
+          );
         }
       }
-    } else if (input.frontmatter.primary_route === 'KNOWLEDGE_UPDATE' && nextAlignment.value.marker === null) {
+    } else if (!updating && input.frontmatter.primary_route === 'KNOWLEDGE_UPDATE' && nextAlignment.value.marker === null) {
       return failure('ROUTE_ASSET_MISMATCH', '/frontmatter/primary_route', 'Knowledge-controlled Feedback requires an active alignment marker.');
     }
     for (const language of ['en', 'zh-CN']) {

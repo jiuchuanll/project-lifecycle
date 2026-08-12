@@ -451,6 +451,39 @@ test('ignores only the exact generated alignment projection filenames in deliver
   assert.equal((await generateIndexesFromRoot({ map, lifecycleRoot: root })).ok, false);
 });
 
+test('does not exclude nested delivery overlays that share projection basenames', async (context) => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-index-alignment-overlay-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, 'knowledge'), { recursive: true });
+  const capabilitySource = (frontmatter) => `---\nid: ${frontmatter.id}\nknowledge_state: current\npaired_asset: ${frontmatter.paired_asset}\nlast_verified_baseline: ${frontmatter.last_verified_baseline}\nimplementation_refs:\n  - repo:src/alpha\nverification_refs:\n  - repo:test/alpha\n---\n`;
+  for (const entry of capabilityPair) await writeFile(join(root, entry.locator), capabilitySource(entry.frontmatter));
+  const deliverySource = `---
+schema_version: 1
+artifact_id: prd-alignment-overlay
+artifact_kind: prd
+primary_route: PRD_DELIVERY
+project_id_at_creation: sample-project
+current_project_id: sample-project
+domain_ids: [alpha-workspace]
+knowledge_baseline: baseline-2
+relationships: { feedback_ids: [], prd_ids: [], legacy_artifact_refs: [] }
+retention_tier: active
+reclassified_from_refs: []
+obligations: []
+---
+`;
+  const result = await generateIndexesFromRoot({
+    map,
+    lifecycleRoot: root,
+    overlays: {
+      'delivery/archive/alignment-review-en.md': deliverySource,
+      'delivery/archive/alignment-review.md': deliverySource,
+    },
+  });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.match(result.value.en, /prd-alignment-overlay/u);
+});
+
 test('collects and renders only the active repository shard from disk', async (context) => {
   const repositoryId = 'backend';
   const crossMap = structuredClone(map);

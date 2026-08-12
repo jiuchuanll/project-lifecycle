@@ -261,6 +261,10 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
     artifact_id: 'prd-retire-wiki-density',
     relationships: { feedback_ids: [feedbackId], prd_ids: [], legacy_artifact_refs: [] },
   });
+  assert.equal((await materializeAsset(request(root, {
+    frontmatter: deliveryOwner,
+    body: ordinaryBody,
+  }))).ok, true);
   const closure = {
     artifact_id: 'closure-prd-retire-wiki-density',
     owner_artifact_id: 'prd-retire-wiki-density',
@@ -291,8 +295,16 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
   };
   const resolved = await materializeAsset(request(root, {
     frontmatter,
-    body: feedbackBody({ coverage: 'Covered by PRD.' }),
-    alignment_owners: [deliveryOwner],
+    body: (() => {
+      const pair = feedbackBody({
+        coverage: 'DELIVERY_ACCEPTED; closure-prd-retire-wiki-density; knowledge-resolution:diff-retirement',
+      });
+      pair['zh-CN'] = pair['zh-CN'].replace(
+        '已由 PRD 覆盖。',
+        'DELIVERY_ACCEPTED；closure-prd-retire-wiki-density；knowledge-resolution:diff-retirement',
+      );
+      return pair;
+    })(),
     alignment_closures: [closure],
     alignment_resolution: {
       schema_version: 1,
@@ -306,6 +318,13 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
   assert.equal(resolved.ok, true);
   const source = await readFile(join(root, 'docs', 'project-lifecycle', 'delivery', `${feedbackId}-en.md`), 'utf8');
   assert.doesNotMatch(source, /project-lifecycle:alignment/u);
+
+  const laterUpdate = await materializeAsset(request(root, {
+    frontmatter,
+    body: feedbackBody({ coverage: 'Accepted delivery remains aligned.' }),
+  }));
+  assert.equal(laterUpdate.ok, true);
+  assert.equal(laterUpdate.value.status, 'updated');
 });
 
 test('requires no-remediation approval and knowledge evidence in retained Feedback coverage', async () => {
@@ -357,6 +376,50 @@ test('requires no-remediation approval and knowledge evidence in retained Feedba
     assert.match(source, /decision:retain-divergence/u);
     assert.match(source, /knowledge-resolution:retained-divergence/u);
   }
+});
+
+test('discovers linked delivery owners from authoritative assets before no-remediation exit', async () => {
+  const root = await rootFor();
+  const feedbackId = 'feedback-owner-discovery';
+  const frontmatter = baseFrontmatter({
+    artifact_id: feedbackId,
+    artifact_kind: 'feedback',
+    primary_route: 'KNOWLEDGE_UPDATE',
+  });
+  assert.equal((await materializeAsset(request(root, {
+    frontmatter,
+    body: alignmentFeedbackBody(),
+  }))).ok, true);
+  assert.equal((await materializeAsset(request(root, {
+    frontmatter: baseFrontmatter({
+      artifact_id: 'prd-owner-discovery',
+      relationships: { feedback_ids: [feedbackId], prd_ids: [], legacy_artifact_refs: [] },
+    }),
+    body: ordinaryBody,
+  }))).ok, true);
+  const bodyWithEvidence = feedbackBody({
+    coverage: 'NO_REMEDIATION_ACCEPTED; decision:ignore-owner; knowledge-resolution:owner-discovery',
+  });
+  bodyWithEvidence['zh-CN'] = bodyWithEvidence['zh-CN'].replace(
+    '已由 PRD 覆盖。',
+    'NO_REMEDIATION_ACCEPTED；decision:ignore-owner；knowledge-resolution:owner-discovery',
+  );
+
+  const result = await materializeAsset(request(root, {
+    frontmatter,
+    body: bodyWithEvidence,
+    alignment_owners: [],
+    alignment_resolution: {
+      schema_version: 1,
+      feedback_id: feedbackId,
+      disposition: 'NO_REMEDIATION_ACCEPTED',
+      owner_refs: [],
+      closure_refs: [],
+      knowledge_resolution_refs: ['knowledge-resolution:owner-discovery'],
+      human_approval_ref: 'decision:ignore-owner',
+    },
+  }));
+  assert.equal(result.errors[0].code, 'ALIGNMENT_RESOLUTION_INCOMPLETE');
 });
 
 test('allows only Feedback marking and coverage updates without an erratum or successor', async () => {

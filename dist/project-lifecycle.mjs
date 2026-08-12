@@ -18192,9 +18192,10 @@ var extractBody = (body, language) => {
     return failure2("ALIGNMENT_MARKER_INVALID", `/body/${language}`, "Feedback body must be text.");
   }
   const normalized = body.replaceAll("\r\n", "\n").replace(/^\n/u, "");
+  const visible = maskFencedMarkdown(normalized);
   const sections = {};
   for (const id of FEEDBACK_SECTIONS) {
-    const matches = [...normalized.matchAll(sectionPattern(id))];
+    const matches = [...visible.matchAll(sectionPattern(id))];
     if (matches.length !== 1 || matches[0][1].trim().length === 0) {
       return failure2("ALIGNMENT_MARKER_INVALID", `/body/${language}/${id}`, "Feedback requires one complete bounded section set.");
     }
@@ -18202,7 +18203,6 @@ var extractBody = (body, language) => {
   }
   const marker = extractAlignmentMarker(sections.marking, `/body/${language}/marking`);
   if (!marker.ok) return marker;
-  const visible = maskFencedMarkdown(normalized);
   const documentTitles = [...visible.matchAll(/^#[ \t]+(.+)$/gmu)];
   const title = documentTitles[0]?.[1]?.trim() ?? null;
   if (marker.value && (documentTitles.length !== 1 || documentTitles[0]?.index !== 0 || !title || title.length > 200 || /[\p{Cc}\p{Cf}]/u.test(title))) {

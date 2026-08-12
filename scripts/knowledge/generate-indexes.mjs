@@ -585,7 +585,7 @@ export const generateIndexesFromRoot = async ({
     }
     for (const locator of overlayMap.keys()) {
       if (!locator.startsWith('delivery/') || !locator.endsWith('.md')
-        || GENERATED_DELIVERY_VIEWS.has(basename(locator))
+        || [...GENERATED_DELIVERY_VIEWS].some((name) => locator === `delivery/${name}`)
         || names.includes(basename(locator))) continue;
       deliveries.push({
         language: locator.endsWith('-en.md') ? 'en' : 'zh-CN',
