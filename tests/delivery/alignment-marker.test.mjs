@@ -131,6 +131,20 @@ test('rejects one-language, divergent, and out-of-domain markers', () => {
   assert.equal(outOfDomain.errors[0].code, 'ALIGNMENT_DOMAIN_INVALID');
 });
 
+test('requires exactly one document-level H1 before bounded Feedback sections', () => {
+  const withoutDocumentTitle = body().replace('# Retire legacy approval\n\n', '')
+    .replace('## Original problem', '# Private original problem');
+  const nestedH1 = body().replace('## Original problem', '# Private original problem');
+  for (const en of [withoutDocumentTitle, nestedH1]) {
+    const result = validateAlignmentFeedbackPair({
+      frontmatter: frontmatter(),
+      bodies: { en, 'zh-CN': body({ language: 'zh-CN' }) },
+    });
+    assert.equal(result.errors[0].code, 'ALIGNMENT_MARKER_INVALID');
+    assert.equal(result.errors[0].path, '/body/en/title');
+  }
+});
+
 test('requires the complete accepted owner set and knowledge resolution before marker exit', () => {
   const owners = ['prd-backend', 'prd-frontend'].map((artifactId) => ({
     artifact_id: artifactId,
@@ -139,9 +153,30 @@ test('requires the complete accepted owner set and knowledge resolution before m
   const closures = owners.map(({ artifact_id: ownerId }) => ({
     artifact_id: `closure-${ownerId}`,
     owner_artifact_id: ownerId,
-    outcome: { status: 'ACCEPTED' },
-    acceptance: { claimed: true },
-    feedback_coverage: [{ feedback_id: 'feedback-retire-legacy', status: 'COVERED' }],
+    outcome: { status: 'ACCEPTED', ref: `acceptance:${ownerId}`, residual_risk_refs: [] },
+    verification: { status: 'PASSED', ref: `verification:${ownerId}` },
+    acceptance: {
+      claimed: true,
+      units: [{ unit_id: 'remediation', status: 'ACCEPTED', evidence_refs: [`test:${ownerId}`] }],
+    },
+    feedback_coverage: [{
+      feedback_id: 'feedback-retire-legacy',
+      status: 'COVERED',
+      covering_prd_ids: [ownerId],
+      evidence_refs: [`acceptance:${ownerId}`],
+      remaining_criteria: [],
+    }],
+    obligation_outcomes: [],
+    conflict_disposition: { status: 'NOT_APPLICABLE', ref: `conflict:${ownerId}` },
+    baseline: { starting: 'baseline-7', current: 'baseline-7' },
+    knowledge_handoff: {
+      diff_id: `diff-${ownerId}`,
+      outcome: 'CHANGE',
+      owner: 'run-prd-lifecycle',
+      apply_authority: 'maintain-project-knowledge',
+    },
+    evidence_refs: [`verification:${ownerId}`],
+    closure_ref: `acceptance:${ownerId}`,
   }));
   const resolution = {
     schema_version: 1,
@@ -149,7 +184,10 @@ test('requires the complete accepted owner set and knowledge resolution before m
     disposition: 'DELIVERY_ACCEPTED',
     owner_refs: ['prd-backend', 'prd-frontend'],
     closure_refs: ['closure-prd-backend', 'closure-prd-frontend'],
-    knowledge_resolution_refs: ['knowledge-diff:backend-applied', 'knowledge-diff:frontend-applied'],
+    knowledge_resolution_refs: [
+      'knowledge-resolution:diff-prd-backend',
+      'knowledge-resolution:diff-prd-frontend',
+    ],
   };
 
   assert.equal(validateAlignmentExit({
@@ -167,6 +205,18 @@ test('requires the complete accepted owner set and knowledge resolution before m
     owners,
     closures,
   }).errors[0].code, 'ALIGNMENT_RESOLUTION_INVALID');
+  assert.equal(validateAlignmentExit({
+    feedbackId: 'feedback-retire-legacy',
+    resolution: {
+      ...resolution,
+      knowledge_resolution_refs: [
+        'knowledge-resolution:diff-prd-backend',
+        'knowledge-resolution:unrelated-diff',
+      ],
+    },
+    owners,
+    closures,
+  }).errors[0].code, 'ALIGNMENT_RESOLUTION_INCOMPLETE');
 });
 
 test('requires explicit approval for an accepted no-remediation exit', () => {
@@ -176,7 +226,7 @@ test('requires explicit approval for an accepted no-remediation exit', () => {
     disposition: 'NO_REMEDIATION_ACCEPTED',
     owner_refs: [],
     closure_refs: [],
-    knowledge_resolution_refs: ['knowledge:no-change-accepted'],
+    knowledge_resolution_refs: ['knowledge-resolution:no-remediation-accepted'],
   };
   assert.equal(validateAlignmentExit({
     feedbackId: 'feedback-retire-legacy', resolution, owners: [], closures: [],

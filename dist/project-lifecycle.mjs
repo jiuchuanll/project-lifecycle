@@ -15364,6 +15364,10 @@ var alignment_resolution_schema_default = {
         properties: {
           owner_refs: { type: "array", minItems: 1 },
           closure_refs: { type: "array", minItems: 1 },
+          knowledge_resolution_refs: {
+            type: "array",
+            items: { type: "string", pattern: "^knowledge-resolution:[a-z][a-z0-9-]*$" }
+          },
           human_approval_ref: false
         }
       }
@@ -15374,7 +15378,11 @@ var alignment_resolution_schema_default = {
         required: ["human_approval_ref"],
         properties: {
           owner_refs: { type: "array", maxItems: 0 },
-          closure_refs: { type: "array", maxItems: 0 }
+          closure_refs: { type: "array", maxItems: 0 },
+          knowledge_resolution_refs: {
+            type: "array",
+            items: { type: "string", pattern: "^knowledge-resolution:[a-z][a-z0-9-]*$" }
+          }
         }
       }
     }
@@ -18086,7 +18094,67 @@ var validateFixtures = async (rootValue) => {
 
 // scripts/delivery/alignment-marker.mjs
 import { isDeepStrictEqual } from "node:util";
+
+// scripts/lib/reference-safety.mjs
+var credentialBearingUrl = /[a-z][a-z0-9+.-]*:\/\/[^/\s]*@/iu;
+var isSafeReference = (value) => typeof value === "string" && value.length > 0 && value.length <= 500 && !/[\p{Cc}\p{Cf}\p{Z}`<>\\]/u.test(value) && !value.includes("--") && !credentialBearingUrl.test(value);
+
+// scripts/delivery/close-delivery.mjs
+var ID = /^[a-z][a-z0-9-]*$/u;
+var OUTCOMES = /* @__PURE__ */ new Set(["ABANDONED", "ACCEPTED", "CANCELLED", "REJECTED"]);
+var VERIFICATION = /* @__PURE__ */ new Set(["FAILED", "NOT_RUN", "PASSED"]);
 var failure = (code, path, message) => fail([createError(code, path, message)]);
+var record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var safeRefs = (values, { nonEmpty = false } = {}) => Array.isArray(values) && (!nonEmpty || values.length > 0) && new Set(values).size === values.length && values.every(isSafeReference);
+var exactKeys = (value, required, optional = []) => record(value) && required.every((key) => Object.hasOwn(value, key)) && Object.keys(value).every((key) => required.includes(key) || optional.includes(key));
+var validateClosureSummary = (summary) => {
+  const topLevel = [
+    "artifact_id",
+    "owner_artifact_id",
+    "outcome",
+    "verification",
+    "acceptance",
+    "feedback_coverage",
+    "obligation_outcomes",
+    "conflict_disposition",
+    "baseline",
+    "knowledge_handoff",
+    "evidence_refs",
+    "closure_ref"
+  ];
+  if (!exactKeys(summary, topLevel) || !ID.test(summary.owner_artifact_id ?? "") || summary.artifact_id !== `closure-${summary.owner_artifact_id}` || !exactKeys(summary.outcome, ["status", "ref", "residual_risk_refs"]) || !OUTCOMES.has(summary.outcome.status) || !isSafeReference(summary.outcome.ref) || !safeRefs(summary.outcome.residual_risk_refs) || !exactKeys(summary.verification, ["status", "ref"]) || !VERIFICATION.has(summary.verification.status) || !isSafeReference(summary.verification.ref) || !exactKeys(summary.acceptance, ["claimed", "units"]) || typeof summary.acceptance.claimed !== "boolean" || !Array.isArray(summary.acceptance.units) || !Array.isArray(summary.feedback_coverage) || !Array.isArray(summary.obligation_outcomes) || !exactKeys(summary.conflict_disposition, ["status", "ref"]) || !["NOT_APPLICABLE", "RESOLVED"].includes(summary.conflict_disposition.status) || !isSafeReference(summary.conflict_disposition.ref) || !exactKeys(summary.baseline, ["starting", "current"], ["reconciliation_ref"]) || !isSafeReference(summary.baseline.starting) || !isSafeReference(summary.baseline.current) || summary.baseline.starting !== summary.baseline.current && !isSafeReference(summary.baseline.reconciliation_ref) || !exactKeys(summary.knowledge_handoff, ["diff_id", "outcome", "owner", "apply_authority"]) || !ID.test(summary.knowledge_handoff.diff_id ?? "") || !["CHANGE", "NO_CHANGE"].includes(summary.knowledge_handoff.outcome) || summary.knowledge_handoff.owner !== "run-prd-lifecycle" || summary.knowledge_handoff.apply_authority !== "maintain-project-knowledge" || !safeRefs(summary.evidence_refs, { nonEmpty: true }) || summary.closure_ref !== summary.outcome.ref) {
+    return failure("CLOSURE_SUMMARY_INVALID", "/", "Closure summary must satisfy the compact closed contract.");
+  }
+  for (const unit of summary.acceptance.units) {
+    if (!exactKeys(unit, ["unit_id", "status", "evidence_refs"]) || !ID.test(unit.unit_id ?? "") || !["ACCEPTED", "OPEN", "REJECTED"].includes(unit.status) || !safeRefs(unit.evidence_refs)) {
+      return failure("CLOSURE_SUMMARY_INVALID", "/acceptance/units", "Closure acceptance units are malformed.");
+    }
+  }
+  for (const coverage of summary.feedback_coverage) {
+    if (!exactKeys(coverage, [
+      "feedback_id",
+      "status",
+      "covering_prd_ids",
+      "evidence_refs",
+      "remaining_criteria"
+    ]) || !/^feedback-[a-z0-9-]+$/u.test(coverage.feedback_id ?? "") || !["COVERED", "NOT_COVERED", "PARTIAL"].includes(coverage.status) || !Array.isArray(coverage.covering_prd_ids) || new Set(coverage.covering_prd_ids).size !== coverage.covering_prd_ids.length || !coverage.covering_prd_ids.every((id) => /^prd-[a-z0-9-]+$/u.test(id)) || !safeRefs(coverage.evidence_refs) || !Array.isArray(coverage.remaining_criteria) || !coverage.remaining_criteria.every((value) => typeof value === "string" && value.length > 0 && value.length <= 1e3)) {
+      return failure("CLOSURE_SUMMARY_INVALID", "/feedback_coverage", "Closure Feedback coverage is malformed.");
+    }
+  }
+  for (const outcome of summary.obligation_outcomes) {
+    if (!exactKeys(outcome, ["qualified_id", "status", "evidence_refs"], ["resolution_ref", "human_approval_ref"]) || !/^[a-z][a-z0-9-]*#[a-z][a-z0-9-]*$/u.test(outcome.qualified_id ?? "") || !["RESOLVED", "WAIVED"].includes(outcome.status) || !safeRefs(outcome.evidence_refs, { nonEmpty: true }) || outcome.status === "RESOLVED" && !isSafeReference(outcome.resolution_ref) || outcome.status === "WAIVED" && !isSafeReference(outcome.human_approval_ref)) {
+      return failure("CLOSURE_SUMMARY_INVALID", "/obligation_outcomes", "Closure obligation outcomes are malformed.");
+    }
+  }
+  const accepted = summary.outcome.status === "ACCEPTED";
+  if (summary.acceptance.claimed !== accepted || accepted && (summary.verification.status !== "PASSED" || summary.acceptance.units.length === 0 || summary.acceptance.units.some((unit) => unit.status !== "ACCEPTED" || unit.evidence_refs.length === 0) || summary.feedback_coverage.some((coverage) => coverage.status !== "COVERED" || coverage.covering_prd_ids.length === 0 || coverage.evidence_refs.length === 0 || coverage.remaining_criteria.length > 0))) {
+    return failure("CLOSURE_SUMMARY_INVALID", "/", "Closure summary acceptance claims are incomplete.");
+  }
+  return ok(summary);
+};
+
+// scripts/delivery/alignment-marker.mjs
+var failure2 = (code, path, message) => fail([createError(code, path, message)]);
 var MARKER = /<!-- project-lifecycle:alignment\n([\s\S]*?)\n-->/gu;
 var FEEDBACK_SECTIONS = ["original_problem", "scenario", "expectation", "marking", "coverage"];
 var sectionPattern = (id) => new RegExp(
@@ -18105,60 +18173,63 @@ var splitDeliveryDocument = (source) => {
 };
 var extractAlignmentMarker = (marking, path = "/marking") => {
   if (typeof marking !== "string") {
-    return failure("ALIGNMENT_MARKER_INVALID", path, "Alignment marking must be bounded text.");
+    return failure2("ALIGNMENT_MARKER_INVALID", path, "Alignment marking must be bounded text.");
   }
   const visible = maskFencedMarkdown(marking);
   const matches = [...visible.matchAll(MARKER)];
   if (matches.length === 0) return ok(null);
   if (matches.length !== 1) {
-    return failure("ALIGNMENT_MARKER_DUPLICATE", path, "Feedback may contain at most one alignment marker.");
+    return failure2("ALIGNMENT_MARKER_DUPLICATE", path, "Feedback may contain at most one alignment marker.");
   }
   const parsed = parseRestrictedYaml(matches[0][1], path);
   if (!parsed.ok || !validateJson("alignment-marker", parsed.value).ok) {
-    return failure("ALIGNMENT_MARKER_INVALID", path, "Alignment marker must satisfy the closed contract.");
+    return failure2("ALIGNMENT_MARKER_INVALID", path, "Alignment marker must satisfy the closed contract.");
   }
   return ok(parsed.value);
 };
 var extractBody = (body, language) => {
   if (typeof body !== "string") {
-    return failure("ALIGNMENT_MARKER_INVALID", `/body/${language}`, "Feedback body must be text.");
+    return failure2("ALIGNMENT_MARKER_INVALID", `/body/${language}`, "Feedback body must be text.");
   }
+  const normalized = body.replaceAll("\r\n", "\n").replace(/^\n/u, "");
   const sections = {};
   for (const id of FEEDBACK_SECTIONS) {
-    const matches = [...body.matchAll(sectionPattern(id))];
+    const matches = [...normalized.matchAll(sectionPattern(id))];
     if (matches.length !== 1 || matches[0][1].trim().length === 0) {
-      return failure("ALIGNMENT_MARKER_INVALID", `/body/${language}/${id}`, "Feedback requires one complete bounded section set.");
+      return failure2("ALIGNMENT_MARKER_INVALID", `/body/${language}/${id}`, "Feedback requires one complete bounded section set.");
     }
     sections[id] = matches[0][1];
   }
   const marker = extractAlignmentMarker(sections.marking, `/body/${language}/marking`);
   if (!marker.ok) return marker;
-  const title = /^#[ \t]+(.+)$/mu.exec(maskFencedMarkdown(body))?.[1]?.trim();
-  if (!title || title.length > 200 || /[\p{Cc}\p{Cf}]/u.test(title)) {
-    return failure("ALIGNMENT_MARKER_INVALID", `/body/${language}/title`, "Feedback requires one safe bounded H1 title.");
+  const visible = maskFencedMarkdown(normalized);
+  const documentTitles = [...visible.matchAll(/^#[ \t]+(.+)$/gmu)];
+  const title = documentTitles[0]?.[1]?.trim();
+  if (documentTitles.length !== 1 || documentTitles[0]?.index !== 0 || !title || title.length > 200 || /[\p{Cc}\p{Cf}]/u.test(title)) {
+    return failure2("ALIGNMENT_MARKER_INVALID", `/body/${language}/title`, "Feedback requires one safe bounded H1 title.");
   }
   return ok({
     marker: marker.value,
     title,
-    heading_levels: [...maskFencedMarkdown(body).matchAll(/^(#{1,6})[ \t]+\S.*$/gmu)].map((match) => match[1].length)
+    heading_levels: [...visible.matchAll(/^(#{1,6})[ \t]+\S.*$/gmu)].map((match) => match[1].length)
   });
 };
 var validateAlignmentFeedbackPair = ({ frontmatter, bodies } = {}) => {
   if (frontmatter?.artifact_kind !== "feedback" || !Array.isArray(frontmatter.domain_ids) || typeof bodies?.en !== "string" || typeof bodies?.["zh-CN"] !== "string") {
-    return failure("ALIGNMENT_MARKER_INVALID", "/", "Alignment validation requires one bilingual Feedback pair.");
+    return failure2("ALIGNMENT_MARKER_INVALID", "/", "Alignment validation requires one bilingual Feedback pair.");
   }
   const en = extractBody(bodies.en, "en");
   if (!en.ok) return en;
   const zh = extractBody(bodies["zh-CN"], "zh-CN");
   if (!zh.ok) return zh;
   if (!isDeepStrictEqual(en.value.marker, zh.value.marker)) {
-    return failure("ALIGNMENT_PAIR_MISMATCH", "/body", "Localized Feedback must share one alignment marker.");
+    return failure2("ALIGNMENT_PAIR_MISMATCH", "/body", "Localized Feedback must share one alignment marker.");
   }
   if (!isDeepStrictEqual(en.value.heading_levels, zh.value.heading_levels)) {
-    return failure("ALIGNMENT_PAIR_MISMATCH", "/body", "Localized Feedback requires matching heading structure.");
+    return failure2("ALIGNMENT_PAIR_MISMATCH", "/body", "Localized Feedback requires matching heading structure.");
   }
   if (en.value.marker && !frontmatter.domain_ids.includes(en.value.marker.primary_domain_id)) {
-    return failure("ALIGNMENT_DOMAIN_INVALID", "/body", "Alignment primary domain must belong to Feedback domain_ids.");
+    return failure2("ALIGNMENT_DOMAIN_INVALID", "/body", "Alignment primary domain must belong to Feedback domain_ids.");
   }
   return ok({
     marker: en.value.marker,
@@ -18167,11 +18238,11 @@ var validateAlignmentFeedbackPair = ({ frontmatter, bodies } = {}) => {
 };
 var validateAlignmentFeedbackDocuments = ({ documents, projectMap } = {}) => {
   const map = validateJson("project-map", projectMap);
-  if (!map.ok) return failure("ALIGNMENT_PROJECT_MAP_INVALID", "/project_map", "Alignment validation requires a valid project map.");
+  if (!map.ok) return failure2("ALIGNMENT_PROJECT_MAP_INVALID", "/project_map", "Alignment validation requires a valid project map.");
   const en = splitDeliveryDocument(documents?.en);
   const zh = splitDeliveryDocument(documents?.["zh-CN"]);
   if (!en || !zh || !isDeepStrictEqual(en.frontmatter, zh.frontmatter)) {
-    return failure("ALIGNMENT_PAIR_MISMATCH", "/documents", "Alignment Feedback documents require identical valid Frontmatter.");
+    return failure2("ALIGNMENT_PAIR_MISMATCH", "/documents", "Alignment Feedback documents require identical valid Frontmatter.");
   }
   const pair = validateAlignmentFeedbackPair({
     frontmatter: en.frontmatter,
@@ -18179,11 +18250,11 @@ var validateAlignmentFeedbackDocuments = ({ documents, projectMap } = {}) => {
   });
   if (!pair.ok) return pair;
   if (!pair.value.marker) {
-    return failure("ALIGNMENT_MARKER_REQUIRED", "/documents", "Alignment validation requires one active marker.");
+    return failure2("ALIGNMENT_MARKER_REQUIRED", "/documents", "Alignment validation requires one active marker.");
   }
   const domain = projectMap.domains.find(({ id }) => id === pair.value.marker.primary_domain_id);
   if (!domain || !["confirmed", "materialized"].includes(domain.domain_state) || en.frontmatter.current_project_id !== projectMap.project_id) {
-    return failure("ALIGNMENT_DOMAIN_INVALID", "/documents", "Alignment marker must reference one current routable project domain.");
+    return failure2("ALIGNMENT_DOMAIN_INVALID", "/documents", "Alignment marker must reference one current routable project domain.");
   }
   return ok({
     feedback_id: en.frontmatter.artifact_id,
@@ -18200,7 +18271,7 @@ var validateAlignmentFeedbackDocuments = ({ documents, projectMap } = {}) => {
 // scripts/delivery/alignment-review.mjs
 import { lstat as lstat4, readFile as readFile4, realpath as realpath5, unlink as unlink2 } from "node:fs/promises";
 import { isAbsolute as isAbsolute5, join as join4, relative as relative4, sep as sep4 } from "node:path";
-var failure2 = (path, message) => fail([
+var failure3 = (path, message) => fail([
   createError("ALIGNMENT_REVIEW_INPUT_INVALID", path, message)
 ]);
 var safeTitle = (value) => typeof value === "string" && value.trim() === value && value.length > 0 && value.length <= 200 && !/[\r\n\p{Cc}\p{Cf}]/u.test(value);
@@ -18209,12 +18280,12 @@ var acceptedClosure = (closure, feedbackId) => closure?.outcome?.status === "ACC
 var rejectedClosure = (closure) => ["ABANDONED", "CANCELLED", "REJECTED"].includes(closure?.outcome?.status);
 var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}) => {
   if (!Array.isArray(feedbacks) || !Array.isArray(owners) || !Array.isArray(closures)) {
-    return failure2("/", "Alignment review inputs must be bounded arrays.");
+    return failure3("/", "Alignment review inputs must be bounded arrays.");
   }
   const closureByOwner = /* @__PURE__ */ new Map();
   for (const [index, closure] of closures.entries()) {
-    if (typeof closure?.owner_artifact_id !== "string" || closureByOwner.has(closure.owner_artifact_id)) {
-      return failure2(`/closures/${index}`, "Closure summaries require unique owner references.");
+    if (!validateClosureSummary(closure).ok || closureByOwner.has(closure.owner_artifact_id)) {
+      return failure3(`/closures/${index}`, "Closure summaries require unique owner references.");
     }
     closureByOwner.set(closure.owner_artifact_id, closure);
   }
@@ -18222,23 +18293,23 @@ var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}
   for (const [index, candidate] of owners.entries()) {
     const validation2 = validateJson("delivery-frontmatter", candidate);
     if (!validation2.ok || !["prd", "non-prd-delivery"].includes(candidate.artifact_kind)) {
-      return failure2(`/owners/${index}`, "Alignment owners must be valid PRD or non-PRD delivery assets.");
+      return failure3(`/owners/${index}`, "Alignment owners must be valid PRD or non-PRD delivery assets.");
     }
     ownerRecords.push(candidate);
   }
   const ids = /* @__PURE__ */ new Set();
   const rows = [];
-  for (const [index, record] of feedbacks.entries()) {
-    const validation2 = validateJson("delivery-frontmatter", record?.frontmatter);
-    if (!validation2.ok || record.frontmatter.artifact_kind !== "feedback") {
-      return failure2(`/feedbacks/${index}`, "Alignment entries must reference valid Feedback Frontmatter.");
+  for (const [index, record2] of feedbacks.entries()) {
+    const validation2 = validateJson("delivery-frontmatter", record2?.frontmatter);
+    if (!validation2.ok || record2.frontmatter.artifact_kind !== "feedback") {
+      return failure3(`/feedbacks/${index}`, "Alignment entries must reference valid Feedback Frontmatter.");
     }
-    const feedbackId = record.frontmatter.artifact_id;
-    if (ids.has(feedbackId)) return failure2(`/feedbacks/${index}`, "Feedback IDs must be unique.");
+    const feedbackId = record2.frontmatter.artifact_id;
+    if (ids.has(feedbackId)) return failure3(`/feedbacks/${index}`, "Feedback IDs must be unique.");
     ids.add(feedbackId);
-    if (record.marker === null) continue;
-    if (!validateJson("alignment-marker", record.marker).ok || record.marker.primary_domain_id !== record.frontmatter.domain_ids.find((id) => id === record.marker.primary_domain_id) || !safeTitle(record.titles?.en) || !safeTitle(record.titles?.["zh-CN"])) {
-      return failure2(`/feedbacks/${index}`, "Active alignment Feedback must have one validated marker and localized titles.");
+    if (record2.marker === null) continue;
+    if (!validateJson("alignment-marker", record2.marker).ok || record2.marker.primary_domain_id !== record2.frontmatter.domain_ids.find((id) => id === record2.marker.primary_domain_id) || !safeTitle(record2.titles?.en) || !safeTitle(record2.titles?.["zh-CN"])) {
+      return failure3(`/feedbacks/${index}`, "Active alignment Feedback must have one validated marker and localized titles.");
     }
     const linkedOwners = ownerRecords.filter((candidate) => candidate.relationships.feedback_ids.includes(feedbackId));
     const requiredOwners = [];
@@ -18249,18 +18320,18 @@ var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}
       requiredOwners.push(candidate.artifact_id);
       if (closure?.outcome?.status === "ACCEPTED") {
         if (!acceptedClosure(closure, feedbackId)) {
-          return failure2(`/closures/${candidate.artifact_id}`, "Accepted closure must explicitly cover linked Feedback.");
+          return failure3(`/closures/${candidate.artifact_id}`, "Accepted closure must explicitly cover linked Feedback.");
         }
         acceptedOwners.add(candidate.artifact_id);
       }
     }
     const ownerRef = sortedUnique(requiredOwners);
     const allAccepted = ownerRef.length > 0 && ownerRef.every((ownerId) => acceptedOwners.has(ownerId));
-    const alignmentPhase = ownerRef.length > 0 && !allAccepted ? "DELIVERY_OPEN" : allAccepted ? "KNOWLEDGE_WRITEBACK" : record.marker.routing_disposition === "DEFERRED" ? "DEFERRED" : "REVIEW_REQUIRED";
+    const alignmentPhase = ownerRef.length > 0 && !allAccepted ? "DELIVERY_OPEN" : allAccepted ? "KNOWLEDGE_WRITEBACK" : record2.marker.routing_disposition === "DEFERRED" ? "DEFERRED" : "REVIEW_REQUIRED";
     rows.push({
       feedback_id: feedbackId,
-      title: { en: record.titles.en, "zh-CN": record.titles["zh-CN"] },
-      primary_domain_id: record.marker.primary_domain_id,
+      title: { en: record2.titles.en, "zh-CN": record2.titles["zh-CN"] },
+      primary_domain_id: record2.marker.primary_domain_id,
       alignment_phase: alignmentPhase,
       owner_ref: ownerRef
     });
@@ -18268,7 +18339,7 @@ var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}
   rows.sort((left, right) => compareCodePoints(left.feedback_id, right.feedback_id));
   const review = { schema_version: 1, rows };
   const validation = validateJson("alignment-review", review);
-  return validation.ok ? ok(review) : failure2("/", "Derived alignment review violates its closed schema.");
+  return validation.ok ? ok(review) : failure3("/", "Derived alignment review violates its closed schema.");
 };
 var escapeTable = (value) => value.replaceAll("\\", "\\\\").replaceAll("|", "\\|");
 var render = (review, language) => {
@@ -18325,7 +18396,7 @@ var writeContent = (write, lifecycleRoot, locator, content) => write({
   root: lifecycleRoot,
   target: locator,
   content,
-  validate: async (source) => source === content ? ok(source) : failure2("/", "Generated projection content changed during publication.")
+  validate: async (source) => source === content ? ok(source) : failure3("/", "Generated projection content changed during publication.")
 });
 var restore = async ({ write, remove, lifecycleRoot, locator, original }) => {
   if (original === null) {
@@ -18373,13 +18444,17 @@ var syncAlignmentReview = async (input = {}, operations = {}) => {
     if (existing.en === null) return ok({ row_count: 0, phases: [], locators, status: "absent" });
     try {
       await remove(paths.en);
-      try {
-        await remove(paths["zh-CN"]);
-      } catch (error) {
-        await writeContent(write, lifecycleRoot, locators.en, existing.en);
-        throw error;
-      }
     } catch {
+      return fail([createError("ALIGNMENT_REVIEW_WRITE_FAILED", "/delivery", "Projection pair removal failed and was rolled back.")]);
+    }
+    try {
+      await remove(paths["zh-CN"]);
+    } catch {
+      try {
+        await writeContent(write, lifecycleRoot, locators.en, existing.en);
+      } catch {
+        return fail([createError("ALIGNMENT_REVIEW_RECOVERY_REQUIRED", "/delivery", "Projection removal and rollback both failed; manual recovery is required.")]);
+      }
       return fail([createError("ALIGNMENT_REVIEW_WRITE_FAILED", "/delivery", "Projection pair removal failed and was rolled back.")]);
     }
     return ok({ row_count: 0, phases: [], locators, status: "removed" });
@@ -18387,13 +18462,17 @@ var syncAlignmentReview = async (input = {}, operations = {}) => {
   const pair = renderAlignmentReviewPair(review.value);
   try {
     await writeContent(write, lifecycleRoot, locators.en, pair.en);
-    try {
-      await writeContent(write, lifecycleRoot, locators["zh-CN"], pair["zh-CN"]);
-    } catch (error) {
-      await restore({ write, remove, lifecycleRoot, locator: locators.en, original: existing.en });
-      throw error;
-    }
   } catch {
+    return fail([createError("ALIGNMENT_REVIEW_WRITE_FAILED", "/delivery", "English projection publication failed before the pair completed.")]);
+  }
+  try {
+    await writeContent(write, lifecycleRoot, locators["zh-CN"], pair["zh-CN"]);
+  } catch {
+    try {
+      await restore({ write, remove, lifecycleRoot, locator: locators.en, original: existing.en });
+    } catch {
+      return fail([createError("ALIGNMENT_REVIEW_RECOVERY_REQUIRED", "/delivery", "Projection publication and rollback both failed; manual recovery is required.")]);
+    }
     return fail([createError("ALIGNMENT_REVIEW_WRITE_FAILED", "/delivery", "Projection pair publication failed and was rolled back.")]);
   }
   return ok({

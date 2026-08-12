@@ -6,6 +6,7 @@ import { maskFencedMarkdown, parseRestrictedYaml } from '../lib/markdown.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { isSafeReference } from '../lib/reference-safety.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
+import { validateClosureSummary } from './close-delivery.mjs';
 
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const MARKER = /<!-- project-lifecycle:alignment\n([\s\S]*?)\n-->/gu;
@@ -47,9 +48,10 @@ const extractBody = (body, language) => {
   if (typeof body !== 'string') {
     return failure('ALIGNMENT_MARKER_INVALID', `/body/${language}`, 'Feedback body must be text.');
   }
+  const normalized = body.replaceAll('\r\n', '\n').replace(/^\n/u, '');
   const sections = {};
   for (const id of FEEDBACK_SECTIONS) {
-    const matches = [...body.matchAll(sectionPattern(id))];
+    const matches = [...normalized.matchAll(sectionPattern(id))];
     if (matches.length !== 1 || matches[0][1].trim().length === 0) {
       return failure('ALIGNMENT_MARKER_INVALID', `/body/${language}/${id}`, 'Feedback requires one complete bounded section set.');
     }
@@ -57,14 +59,17 @@ const extractBody = (body, language) => {
   }
   const marker = extractAlignmentMarker(sections.marking, `/body/${language}/marking`);
   if (!marker.ok) return marker;
-  const title = /^#[ \t]+(.+)$/mu.exec(maskFencedMarkdown(body))?.[1]?.trim();
-  if (!title || title.length > 200 || /[\p{Cc}\p{Cf}]/u.test(title)) {
+  const visible = maskFencedMarkdown(normalized);
+  const documentTitles = [...visible.matchAll(/^#[ \t]+(.+)$/gmu)];
+  const title = documentTitles[0]?.[1]?.trim();
+  if (documentTitles.length !== 1 || documentTitles[0]?.index !== 0
+    || !title || title.length > 200 || /[\p{Cc}\p{Cf}]/u.test(title)) {
     return failure('ALIGNMENT_MARKER_INVALID', `/body/${language}/title`, 'Feedback requires one safe bounded H1 title.');
   }
   return ok({
     marker: marker.value,
     title,
-    heading_levels: [...maskFencedMarkdown(body).matchAll(/^(#{1,6})[ \t]+\S.*$/gmu)]
+    heading_levels: [...visible.matchAll(/^(#{1,6})[ \t]+\S.*$/gmu)]
       .map((match) => match[1].length),
   });
 };
@@ -169,15 +174,18 @@ export const validateAlignmentExit = ({ feedbackId, resolution, owners = [], clo
   const requiredClosureRefs = [];
   for (const ownerId of requiredOwnerRefs) {
     const closure = closureByOwner.get(ownerId);
-    if (typeof closure?.artifact_id !== 'string' || closure.outcome?.status !== 'ACCEPTED'
-      || closure.acceptance?.claimed !== true
+    if (!validateClosureSummary(closure).ok || closure.owner_artifact_id !== ownerId
+      || closure.outcome.status !== 'ACCEPTED'
       || !closure.feedback_coverage?.some((entry) => entry?.feedback_id === feedbackId && entry.status === 'COVERED')) {
       return failure('ALIGNMENT_RESOLUTION_INCOMPLETE', '/alignment_closures', 'Every linked owner requires accepted closure and Feedback coverage.');
     }
     requiredClosureRefs.push(closure.artifact_id);
   }
+  const requiredKnowledgeResolutionRefs = requiredOwnerRefs.map((ownerId) => (
+    `knowledge-resolution:${closureByOwner.get(ownerId).knowledge_handoff.diff_id}`
+  ));
   if (!sameSorted(resolution.closure_refs, requiredClosureRefs)
-    || resolution.knowledge_resolution_refs.length < requiredOwnerRefs.length) {
+    || !sameSorted(resolution.knowledge_resolution_refs, requiredKnowledgeResolutionRefs)) {
     return failure('ALIGNMENT_RESOLUTION_INCOMPLETE', '/alignment_resolution', 'Every accepted owner requires closure and knowledge resolution.');
   }
   return ok(resolution);

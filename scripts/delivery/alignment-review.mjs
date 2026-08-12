@@ -6,6 +6,7 @@ import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
+import { validateClosureSummary } from './close-delivery.mjs';
 
 const failure = (path, message) => fail([
   createError('ALIGNMENT_REVIEW_INPUT_INVALID', path, message),
@@ -30,7 +31,7 @@ export const deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = 
   }
   const closureByOwner = new Map();
   for (const [index, closure] of closures.entries()) {
-    if (typeof closure?.owner_artifact_id !== 'string' || closureByOwner.has(closure.owner_artifact_id)) {
+    if (!validateClosureSummary(closure).ok || closureByOwner.has(closure.owner_artifact_id)) {
       return failure(`/closures/${index}`, 'Closure summaries require unique owner references.');
     }
     closureByOwner.set(closure.owner_artifact_id, closure);
@@ -211,13 +212,17 @@ export const syncAlignmentReview = async (input = {}, operations = {}) => {
     if (existing.en === null) return ok({ row_count: 0, phases: [], locators, status: 'absent' });
     try {
       await remove(paths.en);
-      try {
-        await remove(paths['zh-CN']);
-      } catch (error) {
-        await writeContent(write, lifecycleRoot, locators.en, existing.en);
-        throw error;
-      }
     } catch {
+      return fail([createError('ALIGNMENT_REVIEW_WRITE_FAILED', '/delivery', 'Projection pair removal failed and was rolled back.')]);
+    }
+    try {
+      await remove(paths['zh-CN']);
+    } catch {
+      try {
+        await writeContent(write, lifecycleRoot, locators.en, existing.en);
+      } catch {
+        return fail([createError('ALIGNMENT_REVIEW_RECOVERY_REQUIRED', '/delivery', 'Projection removal and rollback both failed; manual recovery is required.')]);
+      }
       return fail([createError('ALIGNMENT_REVIEW_WRITE_FAILED', '/delivery', 'Projection pair removal failed and was rolled back.')]);
     }
     return ok({ row_count: 0, phases: [], locators, status: 'removed' });
@@ -226,13 +231,17 @@ export const syncAlignmentReview = async (input = {}, operations = {}) => {
   const pair = renderAlignmentReviewPair(review.value);
   try {
     await writeContent(write, lifecycleRoot, locators.en, pair.en);
-    try {
-      await writeContent(write, lifecycleRoot, locators['zh-CN'], pair['zh-CN']);
-    } catch (error) {
-      await restore({ write, remove, lifecycleRoot, locator: locators.en, original: existing.en });
-      throw error;
-    }
   } catch {
+    return fail([createError('ALIGNMENT_REVIEW_WRITE_FAILED', '/delivery', 'English projection publication failed before the pair completed.')]);
+  }
+  try {
+    await writeContent(write, lifecycleRoot, locators['zh-CN'], pair['zh-CN']);
+  } catch {
+    try {
+      await restore({ write, remove, lifecycleRoot, locator: locators.en, original: existing.en });
+    } catch {
+      return fail([createError('ALIGNMENT_REVIEW_RECOVERY_REQUIRED', '/delivery', 'Projection publication and rollback both failed; manual recovery is required.')]);
+    }
     return fail([createError('ALIGNMENT_REVIEW_WRITE_FAILED', '/delivery', 'Projection pair publication failed and was rolled back.')]);
   }
   return ok({

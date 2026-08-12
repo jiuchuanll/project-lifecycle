@@ -14,6 +14,9 @@ const failure = (code, path, message) => fail([createError(code, path, message)]
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const safeRefs = (values, { nonEmpty = false } = {}) => Array.isArray(values)
   && (!nonEmpty || values.length > 0) && new Set(values).size === values.length && values.every(isSafeReference);
+const exactKeys = (value, required, optional = []) => record(value)
+  && required.every((key) => Object.hasOwn(value, key))
+  && Object.keys(value).every((key) => required.includes(key) || optional.includes(key));
 const freeze = (value) => {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
     Object.freeze(value);
@@ -22,6 +25,93 @@ const freeze = (value) => {
   return value;
 };
 const sortedRecords = (values, field) => [...values].sort((left, right) => compareCodePoints(left[field], right[field]));
+
+export const validateClosureSummary = (summary) => {
+  const topLevel = [
+    'artifact_id', 'owner_artifact_id', 'outcome', 'verification', 'acceptance',
+    'feedback_coverage', 'obligation_outcomes', 'conflict_disposition', 'baseline',
+    'knowledge_handoff', 'evidence_refs', 'closure_ref',
+  ];
+  if (!exactKeys(summary, topLevel)
+    || !ID.test(summary.owner_artifact_id ?? '')
+    || summary.artifact_id !== `closure-${summary.owner_artifact_id}`
+    || !exactKeys(summary.outcome, ['status', 'ref', 'residual_risk_refs'])
+    || !OUTCOMES.has(summary.outcome.status)
+    || !isSafeReference(summary.outcome.ref)
+    || !safeRefs(summary.outcome.residual_risk_refs)
+    || !exactKeys(summary.verification, ['status', 'ref'])
+    || !VERIFICATION.has(summary.verification.status)
+    || !isSafeReference(summary.verification.ref)
+    || !exactKeys(summary.acceptance, ['claimed', 'units'])
+    || typeof summary.acceptance.claimed !== 'boolean'
+    || !Array.isArray(summary.acceptance.units)
+    || !Array.isArray(summary.feedback_coverage)
+    || !Array.isArray(summary.obligation_outcomes)
+    || !exactKeys(summary.conflict_disposition, ['status', 'ref'])
+    || !['NOT_APPLICABLE', 'RESOLVED'].includes(summary.conflict_disposition.status)
+    || !isSafeReference(summary.conflict_disposition.ref)
+    || !exactKeys(summary.baseline, ['starting', 'current'], ['reconciliation_ref'])
+    || !isSafeReference(summary.baseline.starting)
+    || !isSafeReference(summary.baseline.current)
+    || (summary.baseline.starting !== summary.baseline.current
+      && !isSafeReference(summary.baseline.reconciliation_ref))
+    || !exactKeys(summary.knowledge_handoff, ['diff_id', 'outcome', 'owner', 'apply_authority'])
+    || !ID.test(summary.knowledge_handoff.diff_id ?? '')
+    || !['CHANGE', 'NO_CHANGE'].includes(summary.knowledge_handoff.outcome)
+    || summary.knowledge_handoff.owner !== 'run-prd-lifecycle'
+    || summary.knowledge_handoff.apply_authority !== 'maintain-project-knowledge'
+    || !safeRefs(summary.evidence_refs, { nonEmpty: true })
+    || summary.closure_ref !== summary.outcome.ref) {
+    return failure('CLOSURE_SUMMARY_INVALID', '/', 'Closure summary must satisfy the compact closed contract.');
+  }
+  for (const unit of summary.acceptance.units) {
+    if (!exactKeys(unit, ['unit_id', 'status', 'evidence_refs'])
+      || !ID.test(unit.unit_id ?? '')
+      || !['ACCEPTED', 'OPEN', 'REJECTED'].includes(unit.status)
+      || !safeRefs(unit.evidence_refs)) {
+      return failure('CLOSURE_SUMMARY_INVALID', '/acceptance/units', 'Closure acceptance units are malformed.');
+    }
+  }
+  for (const coverage of summary.feedback_coverage) {
+    if (!exactKeys(coverage, [
+      'feedback_id', 'status', 'covering_prd_ids', 'evidence_refs', 'remaining_criteria',
+    ])
+      || !/^feedback-[a-z0-9-]+$/u.test(coverage.feedback_id ?? '')
+      || !['COVERED', 'NOT_COVERED', 'PARTIAL'].includes(coverage.status)
+      || !Array.isArray(coverage.covering_prd_ids)
+      || new Set(coverage.covering_prd_ids).size !== coverage.covering_prd_ids.length
+      || !coverage.covering_prd_ids.every((id) => /^prd-[a-z0-9-]+$/u.test(id))
+      || !safeRefs(coverage.evidence_refs)
+      || !Array.isArray(coverage.remaining_criteria)
+      || !coverage.remaining_criteria.every((value) => (
+        typeof value === 'string' && value.length > 0 && value.length <= 1000
+      ))) {
+      return failure('CLOSURE_SUMMARY_INVALID', '/feedback_coverage', 'Closure Feedback coverage is malformed.');
+    }
+  }
+  for (const outcome of summary.obligation_outcomes) {
+    if (!exactKeys(outcome, ['qualified_id', 'status', 'evidence_refs'], ['resolution_ref', 'human_approval_ref'])
+      || !/^[a-z][a-z0-9-]*#[a-z][a-z0-9-]*$/u.test(outcome.qualified_id ?? '')
+      || !['RESOLVED', 'WAIVED'].includes(outcome.status)
+      || !safeRefs(outcome.evidence_refs, { nonEmpty: true })
+      || (outcome.status === 'RESOLVED' && !isSafeReference(outcome.resolution_ref))
+      || (outcome.status === 'WAIVED' && !isSafeReference(outcome.human_approval_ref))) {
+      return failure('CLOSURE_SUMMARY_INVALID', '/obligation_outcomes', 'Closure obligation outcomes are malformed.');
+    }
+  }
+  const accepted = summary.outcome.status === 'ACCEPTED';
+  if (summary.acceptance.claimed !== accepted
+    || (accepted && (summary.verification.status !== 'PASSED'
+      || summary.acceptance.units.length === 0
+      || summary.acceptance.units.some((unit) => unit.status !== 'ACCEPTED' || unit.evidence_refs.length === 0)
+      || summary.feedback_coverage.some((coverage) => coverage.status !== 'COVERED'
+        || coverage.covering_prd_ids.length === 0
+        || coverage.evidence_refs.length === 0
+        || coverage.remaining_criteria.length > 0)))) {
+    return failure('CLOSURE_SUMMARY_INVALID', '/', 'Closure summary acceptance claims are incomplete.');
+  }
+  return ok(summary);
+};
 
 const validateFeedbackCoverage = (owner, coverage, accepted) => {
   if (!Array.isArray(coverage)) return failure('FEEDBACK_COVERAGE_INVALID', '/feedback_coverage', 'Feedback coverage must be explicit.');

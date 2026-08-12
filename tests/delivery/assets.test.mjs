@@ -253,9 +253,30 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
   const closure = {
     artifact_id: 'closure-prd-retire-wiki-density',
     owner_artifact_id: 'prd-retire-wiki-density',
-    outcome: { status: 'ACCEPTED' },
-    acceptance: { claimed: true },
-    feedback_coverage: [{ feedback_id: feedbackId, status: 'COVERED' }],
+    outcome: { status: 'ACCEPTED', ref: 'acceptance:retirement', residual_risk_refs: [] },
+    verification: { status: 'PASSED', ref: 'verification:retirement' },
+    acceptance: {
+      claimed: true,
+      units: [{ unit_id: 'retirement', status: 'ACCEPTED', evidence_refs: ['test:retirement'] }],
+    },
+    feedback_coverage: [{
+      feedback_id: feedbackId,
+      status: 'COVERED',
+      covering_prd_ids: ['prd-retire-wiki-density'],
+      evidence_refs: ['acceptance:retirement'],
+      remaining_criteria: [],
+    }],
+    obligation_outcomes: [],
+    conflict_disposition: { status: 'NOT_APPLICABLE', ref: 'conflict:none' },
+    baseline: { starting: 'baseline-7', current: 'baseline-7' },
+    knowledge_handoff: {
+      diff_id: 'diff-retirement',
+      outcome: 'CHANGE',
+      owner: 'run-prd-lifecycle',
+      apply_authority: 'maintain-project-knowledge',
+    },
+    evidence_refs: ['verification:retirement'],
+    closure_ref: 'acceptance:retirement',
   };
   const resolved = await materializeAsset(request(root, {
     frontmatter,
@@ -268,7 +289,7 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
       disposition: 'DELIVERY_ACCEPTED',
       owner_refs: ['prd-retire-wiki-density'],
       closure_refs: ['closure-prd-retire-wiki-density'],
-      knowledge_resolution_refs: ['knowledge-diff:retirement-applied'],
+      knowledge_resolution_refs: ['knowledge-resolution:diff-retirement'],
     },
   }));
   assert.equal(resolved.ok, true);

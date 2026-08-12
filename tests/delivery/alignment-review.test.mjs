@@ -57,13 +57,36 @@ const owner = (id, feedbackIds, overrides = {}) => ({
 const closure = (ownerId, feedbackIds, accepted = true) => ({
   artifact_id: `closure-${ownerId}`,
   owner_artifact_id: ownerId,
-  outcome: { status: accepted ? 'ACCEPTED' : 'REJECTED' },
-  acceptance: { claimed: accepted },
+  outcome: {
+    status: accepted ? 'ACCEPTED' : 'REJECTED',
+    ref: `outcome:${ownerId}`,
+    residual_risk_refs: [],
+  },
+  verification: { status: accepted ? 'PASSED' : 'FAILED', ref: `verification:${ownerId}` },
+  acceptance: {
+    claimed: accepted,
+    units: accepted
+      ? [{ unit_id: 'remediation', status: 'ACCEPTED', evidence_refs: [`test:${ownerId}`] }]
+      : [],
+  },
   feedback_coverage: feedbackIds.map((feedbackId) => ({
     feedback_id: feedbackId,
     status: accepted ? 'COVERED' : 'NOT_COVERED',
+    covering_prd_ids: [ownerId],
+    evidence_refs: [`outcome:${ownerId}`],
+    remaining_criteria: accepted ? [] : ['Delivery was not accepted.'],
   })),
-  knowledge_handoff: { diff_id: `diff-${ownerId}`, outcome: 'CHANGE' },
+  obligation_outcomes: [],
+  conflict_disposition: { status: 'NOT_APPLICABLE', ref: `conflict:${ownerId}` },
+  baseline: { starting: 'baseline-7', current: 'baseline-7' },
+  knowledge_handoff: {
+    diff_id: `diff-${ownerId}`,
+    outcome: 'CHANGE',
+    owner: 'run-prd-lifecycle',
+    apply_authority: 'maintain-project-knowledge',
+  },
+  evidence_refs: [`verification:${ownerId}`],
+  closure_ref: `outcome:${ownerId}`,
 });
 
 const row = (feedbackId, alignmentPhase, ownerRef = []) => ({
@@ -112,6 +135,22 @@ test('does not advance multiple owners by comparing closure counts alone', () =>
   });
   assert.equal(result.ok, true);
   assert.equal(result.value.rows[0].alignment_phase, 'DELIVERY_OPEN');
+});
+
+test('rejects an accepted-looking object that is not a validated closure summary', () => {
+  const result = deriveAlignmentReview({
+    feedbacks: [feedback('feedback-fake-closure')],
+    owners: [owner('prd-fake', ['feedback-fake-closure'])],
+    closures: [{
+      artifact_id: 'closure-prd-fake',
+      owner_artifact_id: 'prd-fake',
+      outcome: { status: 'ACCEPTED' },
+      acceptance: { claimed: true },
+      feedback_coverage: [{ feedback_id: 'feedback-fake-closure', status: 'COVERED' }],
+    }],
+  });
+  assert.equal(result.errors[0].code, 'ALIGNMENT_REVIEW_INPUT_INVALID');
+  assert.equal(result.errors[0].path, '/closures/0');
 });
 
 test('returns rejected or cancelled ownership to review when no active owner remains', () => {
@@ -182,4 +221,24 @@ test('restores the prior English projection when the Chinese write fails', async
   });
   assert.equal(failed.errors[0].code, 'ALIGNMENT_REVIEW_WRITE_FAILED');
   assert.equal(await readFile(path, 'utf8'), original);
+});
+
+test('reports manual recovery when the second write and rollback both fail', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-recovery-'));
+  await mkdir(join(root, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
+  const initial = { root, feedbacks: [feedback('feedback-active')], owners: [], closures: [] };
+  assert.equal((await syncAlignmentReview(initial)).ok, true);
+  let writes = 0;
+  const failed = await syncAlignmentReview({
+    ...initial,
+    feedbacks: [feedback('feedback-active', { titles: { en: 'Changed', 'zh-CN': '已更改' } })],
+  }, {
+    atomicWriteValidated: async (options) => {
+      writes += 1;
+      if (writes >= 2) throw new Error('injected publication and recovery failure');
+      return atomicWriteValidated(options);
+    },
+  });
+  assert.equal(failed.errors[0].code, 'ALIGNMENT_REVIEW_RECOVERY_REQUIRED');
+  assert.match(failed.errors[0].message, /manual recovery/iu);
 });
