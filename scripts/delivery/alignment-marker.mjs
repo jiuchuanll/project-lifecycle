@@ -147,6 +147,7 @@ const closureCoversFeedback = (closure, feedbackId) => Array.isArray(closure?.fe
 
 export const validateAlignmentExit = ({
   feedbackId,
+  feedbackProjectId,
   resolution,
   owners = [],
   closures = [],
@@ -155,6 +156,9 @@ export const validateAlignmentExit = ({
 } = {}) => {
   if (resolution === undefined || resolution === null) {
     return failure('ALIGNMENT_RESOLUTION_REQUIRED', '/alignment_resolution', 'Active alignment removal requires a resolution envelope.');
+  }
+  if (!/^[a-z][a-z0-9-]*$/u.test(feedbackProjectId ?? '')) {
+    return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_owners', 'Marker exit requires the Feedback project identity.');
   }
   if (!validateJson('alignment-resolution', resolution).ok
     || resolution.feedback_id !== feedbackId
@@ -204,6 +208,10 @@ export const validateAlignmentExit = ({
   }
   const linkedOwners = owners.filter((owner) => owner?.relationships?.feedback_ids?.includes(feedbackId));
   for (const owner of linkedOwners) {
+    const ownerProjectId = owner.current_project_id ?? owner.project_id_at_creation;
+    if (ownerProjectId !== feedbackProjectId) {
+      return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_owners', 'Linked alignment owners must belong to the Feedback project.');
+    }
     const ownerId = owner.artifact_id;
     const closure = closureByOwner.get(ownerId);
     if (closure && closure.baseline.starting !== owner.knowledge_baseline) {

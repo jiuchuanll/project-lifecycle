@@ -409,43 +409,46 @@ test('requires no-remediation approval and knowledge evidence in retained Feedba
 });
 
 test('requires exact retained resolution tokens instead of prefix matches', async () => {
-  const root = await rootFor();
-  const feedbackId = 'feedback-prefix-evidence';
-  const frontmatter = baseFrontmatter({
-    artifact_id: feedbackId,
-    artifact_kind: 'feedback',
-    primary_route: 'KNOWLEDGE_UPDATE',
-  });
-  assert.equal((await materializeAsset(request(root, {
-    frontmatter,
-    body: alignmentFeedbackBody(),
-  }))).ok, true);
-  const bodyWithPrefix = feedbackBody({
-    coverage: 'NO_REMEDIATION_ACCEPTED; decision:retain-prefix-old; knowledge-resolution:prefix-old',
-  });
-  bodyWithPrefix['zh-CN'] = bodyWithPrefix['zh-CN'].replace(
-    '已由 PRD 覆盖。',
-    'NO_REMEDIATION_ACCEPTED；decision:retain-prefix-old；knowledge-resolution:prefix-old',
-  );
-  const result = await materializeAsset(request(root, {
-    frontmatter,
-    body: bodyWithPrefix,
-    alignment_resolution: {
-      schema_version: 1,
-      feedback_id: feedbackId,
-      disposition: 'NO_REMEDIATION_ACCEPTED',
-      owner_refs: [],
-      closure_refs: [],
-      knowledge_resolution_refs: ['knowledge-resolution:prefix'],
-      human_approval_ref: 'decision:retain-prefix',
-    },
-    alignment_knowledge_results: [knowledgeResult({
-      feedbackId,
-      ref: 'knowledge-resolution:prefix',
-      status: 'RESIDUAL_DIVERGENCE_ACCEPTED',
-    })],
-  }));
-  assert.equal(result.errors[0].code, 'ALIGNMENT_RESOLUTION_EVIDENCE_MISSING');
+  for (const [index, suffix] of ['/old', '.old', '#old', '@old'].entries()) {
+    const root = await rootFor();
+    const feedbackId = `feedback-prefix-evidence-${index}`;
+    const frontmatter = baseFrontmatter({
+      artifact_id: feedbackId,
+      artifact_kind: 'feedback',
+      primary_route: 'KNOWLEDGE_UPDATE',
+    });
+    assert.equal((await materializeAsset(request(root, {
+      frontmatter,
+      body: alignmentFeedbackBody(),
+    }))).ok, true);
+    const bodyWithPrefix = feedbackBody({
+      coverage: `NO_REMEDIATION_ACCEPTED; decision:retain-prefix${suffix}; knowledge-resolution:prefix${suffix}`,
+    });
+    bodyWithPrefix['zh-CN'] = bodyWithPrefix['zh-CN'].replace(
+      '已由 PRD 覆盖。',
+      `NO_REMEDIATION_ACCEPTED；decision:retain-prefix${suffix}；knowledge-resolution:prefix${suffix}`,
+    );
+    const result = await materializeAsset(request(root, {
+      frontmatter,
+      body: bodyWithPrefix,
+      alignment_resolution: {
+        schema_version: 1,
+        feedback_id: feedbackId,
+        disposition: 'NO_REMEDIATION_ACCEPTED',
+        owner_refs: [],
+        closure_refs: [],
+        knowledge_resolution_refs: ['knowledge-resolution:prefix'],
+        human_approval_ref: 'decision:retain-prefix',
+      },
+      alignment_knowledge_results: [knowledgeResult({
+        feedbackId,
+        ref: 'knowledge-resolution:prefix',
+        status: 'RESIDUAL_DIVERGENCE_ACCEPTED',
+      })],
+    }));
+    assert.equal(result.ok, false, suffix);
+    assert.equal(result.errors[0].code, 'ALIGNMENT_RESOLUTION_EVIDENCE_MISSING', suffix);
+  }
 });
 
 test('reuses titleless legacy Feedback by allowing one bounded alignment title migration', async () => {

@@ -100,8 +100,8 @@ const withoutDocumentTitle = (body) => body.replaceAll('\r\n', '\n').replace(/^\
   .replace(/^#[ \t]+[^\n]+\n(?:\n)?/u, '');
 
 const hasExactCoverageReference = (coverage, reference) => {
-  const escaped = reference.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-  return new RegExp(`(?<![A-Za-z0-9:_-])${escaped}(?![A-Za-z0-9:_-])`, 'u').test(coverage);
+  const tokens = coverage.split(/[\s;,；，]+/u).filter((token) => token.length > 0);
+  return tokens.includes(reference);
 };
 
 const feedbackFrame = (body) => {
@@ -360,6 +360,7 @@ export async function materializeAsset(input = {}, operations = {}) {
       }
       const exit = validateAlignmentExit({
         feedbackId: input.frontmatter.artifact_id,
+        feedbackProjectId: input.frontmatter.current_project_id ?? input.frontmatter.project_id_at_creation,
         resolution: input.alignment_resolution,
         owners,
         closures: input.alignment_closures ?? [],

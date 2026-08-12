@@ -77,6 +77,7 @@ const knowledgeResultsFor = ({ resolution, closures = [] }) => resolution.knowle
 
 const validateExit = (input) => validateAlignmentExit({
   ...input,
+  feedbackProjectId: input.feedbackProjectId ?? 'sample-project',
   ownerInventoryComplete: true,
   knowledgeResults: input.knowledgeResults ?? knowledgeResultsFor(input),
 });
@@ -225,6 +226,7 @@ test('does not require a document-level H1 when Feedback has no active alignment
 test('requires the complete accepted owner set and knowledge resolution before marker exit', () => {
   const owners = ['prd-backend', 'prd-frontend'].map((artifactId) => ({
     artifact_id: artifactId,
+    current_project_id: 'sample-project',
     knowledge_baseline: 'baseline-7',
     relationships: { feedback_ids: ['feedback-retire-legacy'] },
   }));
@@ -270,6 +272,7 @@ test('requires the complete accepted owner set and knowledge resolution before m
 
   assert.equal(validateAlignmentExit({
     feedbackId: 'feedback-retire-legacy',
+    feedbackProjectId: 'sample-project',
     resolution,
     owners,
     closures,
@@ -351,6 +354,7 @@ test('requires externally verified knowledge results before marker exit', () => 
   };
   const missing = validateAlignmentExit({
     feedbackId: resolution.feedback_id,
+    feedbackProjectId: 'sample-project',
     resolution,
     owners: [],
     closures: [],
@@ -360,6 +364,7 @@ test('requires externally verified knowledge results before marker exit', () => 
 
   const unverified = validateAlignmentExit({
     feedbackId: resolution.feedback_id,
+    feedbackProjectId: 'sample-project',
     resolution,
     owners: [],
     closures: [],
@@ -377,6 +382,7 @@ test('requires externally verified knowledge results before marker exit', () => 
 test('fails closed unless the owner inventory is explicitly complete', () => {
   const result = validateAlignmentExit({
     feedbackId: 'feedback-retire-legacy',
+    feedbackProjectId: 'sample-project',
     resolution: {
       schema_version: 1,
       feedback_id: 'feedback-retire-legacy',
@@ -406,9 +412,40 @@ test('does not exclude a rejected owner whose closure is not bound to the linked
   const result = validateExit({
     feedbackId,
     resolution,
-    owners: [{ artifact_id: 'prd-unbound', knowledge_baseline: 'baseline-7', relationships: { feedback_ids: [feedbackId] } }],
+    owners: [{
+      artifact_id: 'prd-unbound',
+      current_project_id: 'sample-project',
+      knowledge_baseline: 'baseline-7',
+      relationships: { feedback_ids: [feedbackId] },
+    }],
     closures: [rejectedClosure('prd-unbound')],
   });
+  assert.equal(result.errors[0].code, 'ALIGNMENT_RESOLUTION_INVALID');
+});
+
+test('rejects a linked alignment owner from another project', () => {
+  const feedbackId = 'feedback-retire-legacy';
+  const result = validateExit({
+    feedbackId,
+    feedbackProjectId: 'sample-project',
+    resolution: {
+      schema_version: 1,
+      feedback_id: feedbackId,
+      disposition: 'NO_REMEDIATION_ACCEPTED',
+      owner_refs: [],
+      closure_refs: [],
+      knowledge_resolution_refs: ['knowledge-resolution:no-remediation-accepted'],
+      human_approval_ref: 'decision:no-remediation',
+    },
+    owners: [{
+      artifact_id: 'prd-foreign',
+      current_project_id: 'foreign-project',
+      knowledge_baseline: 'baseline-7',
+      relationships: { feedback_ids: [feedbackId] },
+    }],
+    closures: [],
+  });
+
   assert.equal(result.errors[0].code, 'ALIGNMENT_RESOLUTION_INVALID');
 });
 
@@ -443,6 +480,7 @@ test('ignores rejected historical owners after an accepted successor covers the 
   });
   const owners = ['prd-old', 'prd-new'].map((artifactId) => ({
     artifact_id: artifactId,
+    current_project_id: 'sample-project',
     knowledge_baseline: 'baseline-7',
     relationships: { feedback_ids: ['feedback-retire-legacy'] },
   }));
