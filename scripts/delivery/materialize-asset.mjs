@@ -66,7 +66,7 @@ const sectionPattern = (id) => new RegExp(
 );
 
 const extractFeedbackSections = (body) => {
-  const normalized = body.replaceAll('\r\n', '\n');
+  const normalized = withoutManagedFeedbackHash(body);
   const visible = maskFencedMarkdown(normalized);
   const sections = {};
   for (const id of [...FEEDBACK_SOURCE_SECTIONS, ...FEEDBACK_MUTABLE_SECTIONS]) {
@@ -92,10 +92,17 @@ const withoutManagedFeedbackHash = (body) => {
   const normalized = body.replaceAll('\r\n', '\n').replace(/^\n/u, '');
   if (FEEDBACK_HASH_MARKER.test(normalized)) return normalized.replace(FEEDBACK_HASH_MARKER, '');
   const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(normalized);
-  if (!title) return normalized;
-  const rest = normalized.slice(title[0].length);
+  if (title) {
+    const rest = normalized.slice(title[0].length);
+    return FEEDBACK_HASH_MARKER.test(rest)
+      ? `${title[0]}${rest.replace(FEEDBACK_HASH_MARKER, '')}`
+      : normalized;
+  }
+  const legacyPrefix = /^(<!-- project-lifecycle:section original_problem -->\n\n)/u.exec(normalized);
+  if (!legacyPrefix) return normalized;
+  const rest = normalized.slice(legacyPrefix[0].length);
   return FEEDBACK_HASH_MARKER.test(rest)
-    ? `${title[0]}${rest.replace(FEEDBACK_HASH_MARKER, '')}`
+    ? `${legacyPrefix[0]}${rest.replace(FEEDBACK_HASH_MARKER, '')}`
     : normalized;
 };
 

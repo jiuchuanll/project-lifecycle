@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, readdir, rename, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rename, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -509,6 +509,39 @@ test('reuses titleless legacy Feedback by allowing one bounded alignment title m
     frontmatter,
     body: aligned,
   }));
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.value.status, 'updated');
+});
+
+test('reuses titleless 0.3.1 Feedback whose managed hash follows the first line', async () => {
+  const root = await rootFor();
+  const feedbackId = 'feedback-title-legacy-hash-placement';
+  const frontmatter = baseFrontmatter({
+    artifact_id: feedbackId,
+    artifact_kind: 'feedback',
+    primary_route: 'PRD_DELIVERY',
+  });
+  const titleless = feedbackBody();
+  titleless.en = titleless.en.replace(/^# .*\n\n/u, '');
+  titleless['zh-CN'] = titleless['zh-CN'].replace(/^# .*\n\n/u, '');
+  assert.equal((await materializeAsset(request(root, { frontmatter, body: titleless }))).ok, true);
+
+  for (const suffix of ['-en', '']) {
+    const path = join(root, 'docs', 'project-lifecycle', 'delivery', `${feedbackId}${suffix}.md`);
+    const source = await readFile(path, 'utf8');
+    const legacy = source.replace(
+      /(\n---\n\n)(<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n)(<!-- project-lifecycle:section original_problem -->\n)/u,
+      '$1$3\n$2',
+    );
+    assert.notEqual(legacy, source);
+    await writeFile(path, legacy);
+  }
+
+  const result = await materializeAsset(request(root, {
+    frontmatter,
+    body: alignmentFeedbackBody(),
+  }));
+
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.value.status, 'updated');
 });
