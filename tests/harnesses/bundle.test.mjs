@@ -95,7 +95,10 @@ Open.
     }],
   }));
   const project = join(install, 'project');
-  await mkdir(join(project, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
+  const projectDelivery = join(project, 'docs', 'project-lifecycle', 'delivery');
+  await mkdir(projectDelivery, { recursive: true });
+  await copyFile(join(fixtures, 'alignment-en.md'), join(projectDelivery, 'feedback-retire-legacy-en.md'));
+  await copyFile(join(fixtures, 'alignment.md'), join(projectDelivery, 'feedback-retire-legacy.md'));
   const alignmentState = join(fixtures, 'alignment-state.json');
   await writeFile(alignmentState, JSON.stringify({
     feedbacks: [{
