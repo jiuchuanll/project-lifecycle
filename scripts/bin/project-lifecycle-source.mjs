@@ -16,6 +16,7 @@ import { validateAlignmentFeedbackDocuments } from '../delivery/alignment-marker
 import { syncAlignmentReview } from '../delivery/alignment-review.mjs';
 
 const version = '0.4.0';
+const MAX_ALIGNMENT_DOCUMENT_BYTES = 262_144;
 const command = process.argv[2] ?? 'help';
 
 const cliFailure = (code, path, message) => fail([createError(code, path, message)]);
@@ -262,8 +263,8 @@ if (command === 'help') {
     emit(cliFailure('CLI_USAGE', '/arguments', 'Usage: validate-alignment-feedback <en-path> <zh-path> <project-map>.'), 2);
   } else {
     const [en, zh, mapSource] = await Promise.all([
-      readInput(enPath, '/documents/en', 131_072),
-      readInput(zhPath, '/documents/zh-CN', 131_072),
+      readInput(enPath, '/documents/en', MAX_ALIGNMENT_DOCUMENT_BYTES),
+      readInput(zhPath, '/documents/zh-CN', MAX_ALIGNMENT_DOCUMENT_BYTES),
       readInput(mapPath, '/project_map', 1_048_576),
     ]);
     if (!en.ok || !zh.ok || !mapSource.ok) {

@@ -103,6 +103,26 @@ test('validates a bilingual alignment Feedback pair without returning its prose'
   assert.doesNotMatch(result.stdout, /Retire legacy approval|废弃旧审批/u);
 });
 
+test('accepts a complete Feedback document whose valid bounded body exceeds the body-only file limit', async (context) => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-full-size-cli-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const en = join(root, 'feedback-en.md');
+  const zh = join(root, 'feedback.md');
+  const projectMap = join(root, 'project-map.json');
+  const paddedDocument = (language) => {
+    const source = body(language);
+    const padding = 'x'.repeat(131_072 - Buffer.byteLength(source));
+    return `---\n${JSON.stringify(frontmatter)}\n---\n${source.replace('Open.', `Open.${padding}`)}`;
+  };
+  await writeFile(en, paddedDocument('en'));
+  await writeFile(zh, paddedDocument('zh-CN'));
+  await writeFile(projectMap, JSON.stringify(map));
+
+  const result = await runCli(['validate-alignment-feedback', en, zh, projectMap]);
+  assert.equal(result.status, 0, result.stdout);
+  assert.equal(envelope(result).value.feedback_id, 'feedback-retire-legacy');
+});
+
 test('rejects an incomplete Feedback document instead of validating only its marker', async (context) => {
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-incomplete-cli-'));
   context.after(() => rm(root, { recursive: true, force: true }));

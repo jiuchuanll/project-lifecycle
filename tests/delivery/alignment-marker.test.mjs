@@ -81,6 +81,32 @@ const validateExit = (input) => validateAlignmentExit({
   knowledgeResults: input.knowledgeResults ?? knowledgeResultsFor(input),
 });
 
+const rejectedClosure = (ownerId, feedbackIds = []) => ({
+  artifact_id: `closure-${ownerId}`,
+  owner_artifact_id: ownerId,
+  outcome: { status: 'REJECTED', ref: `outcome:${ownerId}`, residual_risk_refs: [] },
+  verification: { status: 'FAILED', ref: `verification:${ownerId}` },
+  acceptance: { claimed: false, units: [] },
+  feedback_coverage: feedbackIds.map((feedbackId) => ({
+    feedback_id: feedbackId,
+    status: 'NOT_COVERED',
+    covering_prd_ids: [ownerId],
+    evidence_refs: [`outcome:${ownerId}`],
+    remaining_criteria: ['Delivery was rejected.'],
+  })),
+  obligation_outcomes: [],
+  conflict_disposition: { status: 'NOT_APPLICABLE', ref: `conflict:${ownerId}` },
+  baseline: { starting: 'baseline-7', current: 'baseline-7' },
+  knowledge_handoff: {
+    diff_id: `diff-${ownerId}`,
+    outcome: 'NO_CHANGE',
+    owner: 'run-prd-lifecycle',
+    apply_authority: 'maintain-project-knowledge',
+  },
+  evidence_refs: [`verification:${ownerId}`],
+  closure_ref: `outcome:${ownerId}`,
+});
+
 test('parses one bounded business-to-implementation marker', () => {
   assert.deepEqual(extractAlignmentMarker(`## Marking\n\n${marker()}`, '/marking'), {
     ok: true,
@@ -346,6 +372,26 @@ test('fails closed unless the owner inventory is explicitly complete', () => {
     closures: [],
   });
   assert.equal(result.errors[0].code, 'ALIGNMENT_OWNER_INVENTORY_INCOMPLETE');
+});
+
+test('does not exclude a rejected owner whose closure is not bound to the linked Feedback', () => {
+  const feedbackId = 'feedback-retire-legacy';
+  const resolution = {
+    schema_version: 1,
+    feedback_id: feedbackId,
+    disposition: 'NO_REMEDIATION_ACCEPTED',
+    owner_refs: [],
+    closure_refs: [],
+    knowledge_resolution_refs: ['knowledge-resolution:no-remediation-accepted'],
+    human_approval_ref: 'decision:no-remediation',
+  };
+  const result = validateExit({
+    feedbackId,
+    resolution,
+    owners: [{ artifact_id: 'prd-unbound', relationships: { feedback_ids: [feedbackId] } }],
+    closures: [rejectedClosure('prd-unbound')],
+  });
+  assert.equal(result.errors[0].code, 'ALIGNMENT_RESOLUTION_INVALID');
 });
 
 test('ignores rejected historical owners after an accepted successor covers the Feedback', () => {

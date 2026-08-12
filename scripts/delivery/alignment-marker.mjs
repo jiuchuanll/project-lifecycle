@@ -136,6 +136,10 @@ const sameSorted = (left, right) => isDeepStrictEqual(
   [...left].sort(compareCodePoints),
   [...right].sort(compareCodePoints),
 );
+const terminalClosure = (closure) => ['ABANDONED', 'CANCELLED', 'REJECTED']
+  .includes(closure?.outcome?.status);
+const closureCoversFeedback = (closure, feedbackId) => Array.isArray(closure?.feedback_coverage)
+  && closure.feedback_coverage.some((entry) => entry?.feedback_id === feedbackId);
 
 export const validateAlignmentExit = ({
   feedbackId,
@@ -195,9 +199,14 @@ export const validateAlignmentExit = ({
     closureByOwner.set(closure.owner_artifact_id, closure);
   }
   const linkedOwners = owners.filter((owner) => owner?.relationships?.feedback_ids?.includes(feedbackId));
+  for (const { artifact_id: ownerId } of linkedOwners) {
+    const closure = closureByOwner.get(ownerId);
+    if (terminalClosure(closure) && !closureCoversFeedback(closure, feedbackId)) {
+      return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_closures', 'Terminal owner closure must explicitly cover its linked Feedback.');
+    }
+  }
   const requiredOwnerRefs = linkedOwners
-    .filter(({ artifact_id: artifactId }) => !['ABANDONED', 'CANCELLED', 'REJECTED']
-      .includes(closureByOwner.get(artifactId)?.outcome?.status))
+    .filter(({ artifact_id: artifactId }) => !terminalClosure(closureByOwner.get(artifactId)))
     .map(({ artifact_id: artifactId }) => artifactId);
   if (new Set(requiredOwnerRefs).size !== requiredOwnerRefs.length
     || requiredOwnerRefs.some((ownerId) => !/^[a-z][a-z0-9-]*$/u.test(ownerId))) {

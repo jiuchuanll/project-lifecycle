@@ -163,6 +163,16 @@ test('returns rejected or cancelled ownership to review when no active owner rem
   assert.deepEqual(result.value.rows[0], row('feedback-rejected', 'REVIEW_REQUIRED'));
 });
 
+test('rejects a terminal owner closure that omits its linked Feedback coverage', () => {
+  const result = deriveAlignmentReview({
+    feedbacks: [feedback('feedback-unbound-rejection')],
+    owners: [owner('prd-unbound-rejection', ['feedback-unbound-rejection'])],
+    closures: [closure('prd-unbound-rejection', [], false)],
+  });
+  assert.equal(result.errors[0].code, 'ALIGNMENT_REVIEW_INPUT_INVALID');
+  assert.equal(result.errors[0].path, '/closures/prd-unbound-rejection');
+});
+
 test('renders localized titles and identical machine columns in the generated pair', () => {
   const review = deriveAlignmentReview({ feedbacks: [feedback('feedback-title', {
     titles: { en: 'Retire | legacy approval', 'zh-CN': '废弃 | 旧审批' },

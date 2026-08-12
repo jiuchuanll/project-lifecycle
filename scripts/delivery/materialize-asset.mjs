@@ -14,6 +14,7 @@ import { validateJson } from '../lib/validate-json.mjs';
 import { validateAlignmentExit, validateAlignmentFeedbackPair } from './alignment-marker.mjs';
 
 const MAX_BODY_BYTES = 131_072;
+const MAX_DOCUMENT_BYTES = MAX_BODY_BYTES * 2;
 const FEEDBACK_SOURCE_SECTIONS = ['original_problem', 'scenario', 'expectation'];
 const FEEDBACK_MUTABLE_SECTIONS = ['marking', 'coverage'];
 const failure = (code, path, message) => fail([createError(code, path, message)]);
@@ -165,6 +166,9 @@ export const validateMaterializationRequest = (input = {}) => {
     const body = input.body[language];
     if (body.trim().length === 0 || Buffer.byteLength(body) > MAX_BODY_BYTES) {
       return failure('ASSET_BODY_INVALID', `/body/${language}`, 'Localized delivery body must be non-empty and bounded.');
+    }
+    if (Buffer.byteLength(renderDocument(input.frontmatter, body)) > MAX_DOCUMENT_BYTES) {
+      return failure('ASSET_BODY_INVALID', `/body/${language}`, 'Complete localized delivery document must remain bounded.');
     }
   }
   if (!isDeepStrictEqual(headingLevels(input.body.en), headingLevels(input.body['zh-CN']))) {

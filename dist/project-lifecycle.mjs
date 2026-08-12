@@ -18279,6 +18279,7 @@ var safeTitle = (value) => typeof value === "string" && value.trim() === value &
 var sortedUnique = (values) => [...new Set(values)].sort(compareCodePoints);
 var acceptedClosure = (closure, feedbackId) => closure?.outcome?.status === "ACCEPTED" && closure?.acceptance?.claimed === true && Array.isArray(closure.feedback_coverage) && closure.feedback_coverage.some((entry) => entry?.feedback_id === feedbackId && entry.status === "COVERED");
 var rejectedClosure = (closure) => ["ABANDONED", "CANCELLED", "REJECTED"].includes(closure?.outcome?.status);
+var coversFeedback = (closure, feedbackId) => Array.isArray(closure?.feedback_coverage) && closure.feedback_coverage.some((entry) => entry?.feedback_id === feedbackId);
 var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}) => {
   if (!Array.isArray(feedbacks) || !Array.isArray(owners) || !Array.isArray(closures)) {
     return failure3("/", "Alignment review inputs must be bounded arrays.");
@@ -18317,7 +18318,12 @@ var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}
     const acceptedOwners = /* @__PURE__ */ new Set();
     for (const candidate of linkedOwners) {
       const closure = closureByOwner.get(candidate.artifact_id);
-      if (rejectedClosure(closure)) continue;
+      if (rejectedClosure(closure)) {
+        if (!coversFeedback(closure, feedbackId)) {
+          return failure3(`/closures/${candidate.artifact_id}`, "Terminal closure must explicitly cover linked Feedback.");
+        }
+        continue;
+      }
       requiredOwners.push(candidate.artifact_id);
       if (closure?.outcome?.status === "ACCEPTED") {
         if (!acceptedClosure(closure, feedbackId)) {
@@ -18491,6 +18497,7 @@ var syncAlignmentReview = async (input = {}, operations = {}) => {
 
 // scripts/bin/project-lifecycle-source.mjs
 var version = "0.4.0";
+var MAX_ALIGNMENT_DOCUMENT_BYTES = 262144;
 var command = process.argv[2] ?? "help";
 var cliFailure = (code, path, message) => fail([createError(code, path, message)]);
 var publicDiagnosticMessages = Object.freeze({
@@ -18704,8 +18711,8 @@ if (command === "help") {
     emit(cliFailure("CLI_USAGE", "/arguments", "Usage: validate-alignment-feedback <en-path> <zh-path> <project-map>."), 2);
   } else {
     const [en, zh, mapSource] = await Promise.all([
-      readInput(enPath, "/documents/en", 131072),
-      readInput(zhPath, "/documents/zh-CN", 131072),
+      readInput(enPath, "/documents/en", MAX_ALIGNMENT_DOCUMENT_BYTES),
+      readInput(zhPath, "/documents/zh-CN", MAX_ALIGNMENT_DOCUMENT_BYTES),
       readInput(mapPath, "/project_map", 1048576)
     ]);
     if (!en.ok || !zh.ok || !mapSource.ok) {

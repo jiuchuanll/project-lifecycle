@@ -25,6 +25,8 @@ const acceptedClosure = (closure, feedbackId) => closure?.outcome?.status === 'A
   && closure.feedback_coverage.some((entry) => entry?.feedback_id === feedbackId && entry.status === 'COVERED');
 
 const rejectedClosure = (closure) => ['ABANDONED', 'CANCELLED', 'REJECTED'].includes(closure?.outcome?.status);
+const coversFeedback = (closure, feedbackId) => Array.isArray(closure?.feedback_coverage)
+  && closure.feedback_coverage.some((entry) => entry?.feedback_id === feedbackId);
 
 export const deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}) => {
   if (!Array.isArray(feedbacks) || !Array.isArray(owners) || !Array.isArray(closures)) {
@@ -69,7 +71,12 @@ export const deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = 
     const acceptedOwners = new Set();
     for (const candidate of linkedOwners) {
       const closure = closureByOwner.get(candidate.artifact_id);
-      if (rejectedClosure(closure)) continue;
+      if (rejectedClosure(closure)) {
+        if (!coversFeedback(closure, feedbackId)) {
+          return failure(`/closures/${candidate.artifact_id}`, 'Terminal closure must explicitly cover linked Feedback.');
+        }
+        continue;
+      }
       requiredOwners.push(candidate.artifact_id);
       if (closure?.outcome?.status === 'ACCEPTED') {
         if (!acceptedClosure(closure, feedbackId)) {
