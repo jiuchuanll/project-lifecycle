@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { readFile, realpath } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
 import { atomicWriteValidated } from '../lib/atomic-write.mjs';
@@ -12,6 +12,8 @@ import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 import { collectEvidence } from '../knowledge/collect-evidence.mjs';
 import { validateFixtures } from '../validate-fixtures.mjs';
+import { validateAlignmentFeedbackDocuments } from '../delivery/alignment-marker.mjs';
+import { syncAlignmentReview } from '../delivery/alignment-review.mjs';
 
 const version = '0.3.1';
 const command = process.argv[2] ?? 'help';
@@ -53,9 +55,16 @@ const emit = (result, status = result.ok ? 0 : 1) => {
   process.exitCode = status;
 };
 
-const readInput = async (file, path = '/file') => {
+const readInput = async (file, path = '/file', maximumBytes = null) => {
   try {
-    return { ok: true, value: await readFile(file, 'utf8') };
+    if (maximumBytes !== null && (await stat(file)).size > maximumBytes) {
+      return cliFailure('CLI_INPUT_TOO_LARGE', path, 'Input file exceeds the bounded size limit.');
+    }
+    const source = await readFile(file, 'utf8');
+    if (maximumBytes !== null && Buffer.byteLength(source) > maximumBytes) {
+      return cliFailure('CLI_INPUT_TOO_LARGE', path, 'Input file exceeds the bounded size limit.');
+    }
+    return { ok: true, value: source };
   } catch {
     return cliFailure('CLI_READ_ERROR', path, 'Unable to read input file.');
   }
@@ -130,10 +139,26 @@ const isInside = (base, candidate) => {
   return fromBase === '' || (!fromBase.startsWith(`..${sep}`) && fromBase !== '..' && !isAbsolute(fromBase));
 };
 
+const validAlignmentState = (value) => value !== null
+  && typeof value === 'object'
+  && !Array.isArray(value)
+  && Object.keys(value).length === 3
+  && ['feedbacks', 'owners', 'closures'].every((field) => (
+    Array.isArray(value[field]) && value[field].length <= 1000
+  ));
+
 if (command === 'help') {
   emit(ok({
     version,
-    commands: ['collect-evidence', 'validate-json', 'validate-pair', 'parse-facts', 'validate-fixtures'],
+    commands: [
+      'collect-evidence',
+      'parse-facts',
+      'sync-alignment-review',
+      'validate-alignment-feedback',
+      'validate-fixtures',
+      'validate-json',
+      'validate-pair',
+    ],
   }));
 } else if (command === 'version') {
   emit(ok({ version }));
@@ -201,6 +226,56 @@ if (command === 'help') {
           ? 'Evidence scan limit exceeded.'
           : 'Evidence collection could not be completed.',
       ), 2);
+    }
+  }
+} else if (command === 'validate-alignment-feedback') {
+  const [enPath, zhPath, mapPath] = process.argv.slice(3);
+  if (!enPath || !zhPath || !mapPath || process.argv.length !== 6) {
+    emit(cliFailure('CLI_USAGE', '/arguments', 'Usage: validate-alignment-feedback <en-path> <zh-path> <project-map>.'), 2);
+  } else {
+    const [en, zh, mapSource] = await Promise.all([
+      readInput(enPath, '/documents/en', 131_072),
+      readInput(zhPath, '/documents/zh-CN', 131_072),
+      readInput(mapPath, '/project_map', 1_048_576),
+    ]);
+    if (!en.ok || !zh.ok || !mapSource.ok) {
+      emit(!en.ok ? en : !zh.ok ? zh : mapSource, 2);
+    } else {
+      const map = parseJsonInput(mapSource.value, '/project_map');
+      if (!map.ok) emit(map, 2);
+      else {
+        const result = validateAlignmentFeedbackDocuments({
+          documents: { en: en.value, 'zh-CN': zh.value },
+          projectMap: map.value,
+        });
+        emit(result.ok ? ok({
+          feedback_id: result.value.feedback_id,
+          primary_domain_id: result.value.primary_domain_id,
+          routing_disposition: result.value.routing_disposition,
+        }) : result);
+      }
+    }
+  }
+} else if (command === 'sync-alignment-review') {
+  const options = parseNamedOptions(process.argv.slice(3), ['--root', '--input']);
+  if (!options || !isAbsolute(options['--root']) || !isAbsolute(options['--input'])) {
+    emit(cliFailure('CLI_USAGE', '/arguments', 'Usage: sync-alignment-review --root <absolute-project-root> --input <absolute-json-envelope>.'), 2);
+  } else {
+    const source = await readInput(options['--input'], '/input', 1_048_576);
+    if (!source.ok) emit(source, 2);
+    else {
+      const state = parseJsonInput(source.value, '/input');
+      if (!state.ok) emit(state, 2);
+      else if (!validAlignmentState(state.value)) {
+        emit(cliFailure('CLI_INPUT_INVALID', '/input', 'Alignment state must contain only bounded feedbacks, owners, and closures arrays.'), 2);
+      } else {
+        const result = await syncAlignmentReview({ ...state.value, root: options['--root'] });
+        emit(result.ok ? ok({
+          row_count: result.value.row_count,
+          phases: result.value.phases,
+          locators: result.value.locators,
+        }) : result);
+      }
     }
   }
 } else if (command === 'validate-pair') {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import test from 'node:test';
 
-test('help lists only implemented phase-one commands', () => {
+test('help lists all implemented commands in deterministic order', () => {
   const output = execFileSync(process.execPath, ['scripts/bin/project-lifecycle-source.mjs', 'help'], {
     encoding: 'utf8',
   });
@@ -13,6 +13,15 @@ test('help lists only implemented phase-one commands', () => {
   assert.match(output, /validate-pair/);
   assert.match(output, /parse-facts/);
   assert.match(output, /validate-fixtures/);
+  assert.deepEqual(result.value.commands, [
+    'collect-evidence',
+    'parse-facts',
+    'sync-alignment-review',
+    'validate-alignment-feedback',
+    'validate-fixtures',
+    'validate-json',
+    'validate-pair',
+  ]);
   assert.doesNotMatch(output, /bootstrap-project/);
 });
 

@@ -35,6 +35,80 @@ test('runs the bundled validator from a clean managed-plugin copy without node_m
     join(fixtures, 'valid.json'),
   );
   await writeFile(join(fixtures, 'invalid.json'), '{}\n');
+  const alignmentFrontmatter = {
+    schema_version: 1,
+    artifact_id: 'feedback-retire-legacy',
+    artifact_kind: 'feedback',
+    primary_route: 'KNOWLEDGE_UPDATE',
+    project_id_at_creation: 'sample-project',
+    current_project_id: 'sample-project',
+    domain_ids: ['approval-flow'],
+    knowledge_baseline: 'baseline-7',
+    relationships: { feedback_ids: [], prd_ids: [], legacy_artifact_refs: [] },
+    retention_tier: 'active',
+    reclassified_from_refs: [],
+    obligations: [],
+  };
+  const alignmentBody = (language) => `# ${language === 'en' ? 'Retire legacy approval' : '废弃旧审批'}
+
+<!-- project-lifecycle:section original_problem -->
+## Problem
+Legacy.
+<!-- /project-lifecycle:section -->
+<!-- project-lifecycle:section scenario -->
+## Scenario
+Bootstrap.
+<!-- /project-lifecycle:section -->
+<!-- project-lifecycle:section expectation -->
+## Expectation
+Retire.
+<!-- /project-lifecycle:section -->
+<!-- project-lifecycle:section marking -->
+## Marking
+<!-- project-lifecycle:alignment
+schema_version: 1
+classification: BUSINESS_IMPLEMENTATION_DIVERGENCE
+primary_domain_id: approval-flow
+-->
+<!-- /project-lifecycle:section -->
+<!-- project-lifecycle:section coverage -->
+## Coverage
+Open.
+<!-- /project-lifecycle:section -->
+`;
+  for (const language of ['en', 'zh-CN']) {
+    await writeFile(
+      join(fixtures, language === 'en' ? 'alignment-en.md' : 'alignment.md'),
+      `---\n${JSON.stringify(alignmentFrontmatter)}\n---\n${alignmentBody(language)}`,
+    );
+  }
+  await writeFile(join(fixtures, 'project-map.json'), JSON.stringify({
+    schema_version: 2,
+    project_id: 'sample-project',
+    identity_lineage: [], repositories: [], constraints: [],
+    domains: [{
+      id: 'approval-flow', kind: 'domain',
+      label: { en: 'Approval flow', 'zh-CN': '审批流程' },
+      purpose: { en: 'Owns approval.', 'zh-CN': '负责审批。' },
+      domain_state: 'confirmed', scope: { includes: ['approval'], excludes: [] },
+      parent_id: null, relationships: [], evidence_refs: ['repo:README.md'], known_gaps: [],
+    }],
+  }));
+  const project = join(install, 'project');
+  await mkdir(join(project, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
+  const alignmentState = join(fixtures, 'alignment-state.json');
+  await writeFile(alignmentState, JSON.stringify({
+    feedbacks: [{
+      frontmatter: alignmentFrontmatter,
+      marker: {
+        schema_version: 1,
+        classification: 'BUSINESS_IMPLEMENTATION_DIVERGENCE',
+        primary_domain_id: 'approval-flow',
+      },
+      titles: { en: 'Retire legacy approval', 'zh-CN': '废弃旧审批' },
+    }],
+    owners: [], closures: [],
+  }));
   assert.equal(await readFile(join(install, 'node_modules'), 'utf8').catch(() => null), null);
 
   const help = run(process.execPath, ['dist/project-lifecycle.mjs', 'help'], install);
@@ -52,6 +126,22 @@ test('runs the bundled validator from a clean managed-plugin copy without node_m
   ], install);
   assert.equal(invalid.status, 1);
   assert.equal(envelope(invalid).errors[0].code, 'SCHEMA_INVALID');
+
+  const alignment = run(join(install, 'bin/project-lifecycle'), [
+    'validate-alignment-feedback',
+    'fixtures/alignment-en.md',
+    'fixtures/alignment.md',
+    'fixtures/project-map.json',
+  ], install);
+  assert.equal(alignment.status, 0);
+  assert.equal(envelope(alignment).value.feedback_id, 'feedback-retire-legacy');
+
+  const sync = run(join(install, 'bin/project-lifecycle'), [
+    'sync-alignment-review', '--root', project, '--input', alignmentState,
+  ], install);
+  assert.equal(sync.status, 0);
+  assert.equal(envelope(sync).value.row_count, 1);
+  assert.match(await readFile(join(project, 'docs', 'project-lifecycle', 'delivery', 'alignment-review-en.md'), 'utf8'), /feedback-retire-legacy/u);
 });
 
 test('keeps the legacy CLI path dependency-free in a managed-plugin cache', async (context) => {

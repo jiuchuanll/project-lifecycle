@@ -9,10 +9,22 @@ import { validateJson } from '../lib/validate-json.mjs';
 
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const MARKER = /<!-- project-lifecycle:alignment\n([\s\S]*?)\n-->/gu;
+const FEEDBACK_SECTIONS = ['original_problem', 'scenario', 'expectation', 'marking', 'coverage'];
 const sectionPattern = (id) => new RegExp(
   `<!-- project-lifecycle:section ${id} -->\\n([\\s\\S]*?)\\n<!-- /project-lifecycle:section -->`,
   'gu',
 );
+
+const splitDeliveryDocument = (source) => {
+  if (typeof source !== 'string') return null;
+  const normalized = source.replaceAll('\r\n', '\n');
+  if (!normalized.startsWith('---\n')) return null;
+  const closing = normalized.indexOf('\n---\n', 4);
+  if (closing === -1) return null;
+  const parsed = parseRestrictedYaml(normalized.slice(4, closing), '/frontmatter');
+  if (!parsed.ok || !validateJson('delivery-frontmatter', parsed.value).ok) return null;
+  return { frontmatter: parsed.value, body: normalized.slice(closing + 5) };
+};
 
 export const extractAlignmentMarker = (marking, path = '/marking') => {
   if (typeof marking !== 'string') {
@@ -35,17 +47,26 @@ const extractBody = (body, language) => {
   if (typeof body !== 'string') {
     return failure('ALIGNMENT_MARKER_INVALID', `/body/${language}`, 'Feedback body must be text.');
   }
-  const matches = [...body.matchAll(sectionPattern('marking'))];
-  if (matches.length !== 1) {
-    return failure('ALIGNMENT_MARKER_INVALID', `/body/${language}/marking`, 'Feedback requires one marking section.');
+  const sections = {};
+  for (const id of FEEDBACK_SECTIONS) {
+    const matches = [...body.matchAll(sectionPattern(id))];
+    if (matches.length !== 1 || matches[0][1].trim().length === 0) {
+      return failure('ALIGNMENT_MARKER_INVALID', `/body/${language}/${id}`, 'Feedback requires one complete bounded section set.');
+    }
+    sections[id] = matches[0][1];
   }
-  const marker = extractAlignmentMarker(matches[0][1], `/body/${language}/marking`);
+  const marker = extractAlignmentMarker(sections.marking, `/body/${language}/marking`);
   if (!marker.ok) return marker;
   const title = /^#[ \t]+(.+)$/mu.exec(maskFencedMarkdown(body))?.[1]?.trim();
   if (!title || title.length > 200 || /[\p{Cc}\p{Cf}]/u.test(title)) {
     return failure('ALIGNMENT_MARKER_INVALID', `/body/${language}/title`, 'Feedback requires one safe bounded H1 title.');
   }
-  return ok({ marker: marker.value, title });
+  return ok({
+    marker: marker.value,
+    title,
+    heading_levels: [...maskFencedMarkdown(body).matchAll(/^(#{1,6})[ \t]+\S.*$/gmu)]
+      .map((match) => match[1].length),
+  });
 };
 
 export const validateAlignmentFeedbackPair = ({ frontmatter, bodies } = {}) => {
@@ -60,12 +81,48 @@ export const validateAlignmentFeedbackPair = ({ frontmatter, bodies } = {}) => {
   if (!isDeepStrictEqual(en.value.marker, zh.value.marker)) {
     return failure('ALIGNMENT_PAIR_MISMATCH', '/body', 'Localized Feedback must share one alignment marker.');
   }
+  if (!isDeepStrictEqual(en.value.heading_levels, zh.value.heading_levels)) {
+    return failure('ALIGNMENT_PAIR_MISMATCH', '/body', 'Localized Feedback requires matching heading structure.');
+  }
   if (en.value.marker && !frontmatter.domain_ids.includes(en.value.marker.primary_domain_id)) {
     return failure('ALIGNMENT_DOMAIN_INVALID', '/body', 'Alignment primary domain must belong to Feedback domain_ids.');
   }
   return ok({
     marker: en.value.marker,
     titles: { en: en.value.title, 'zh-CN': zh.value.title },
+  });
+};
+
+export const validateAlignmentFeedbackDocuments = ({ documents, projectMap } = {}) => {
+  const map = validateJson('project-map', projectMap);
+  if (!map.ok) return failure('ALIGNMENT_PROJECT_MAP_INVALID', '/project_map', 'Alignment validation requires a valid project map.');
+  const en = splitDeliveryDocument(documents?.en);
+  const zh = splitDeliveryDocument(documents?.['zh-CN']);
+  if (!en || !zh || !isDeepStrictEqual(en.frontmatter, zh.frontmatter)) {
+    return failure('ALIGNMENT_PAIR_MISMATCH', '/documents', 'Alignment Feedback documents require identical valid Frontmatter.');
+  }
+  const pair = validateAlignmentFeedbackPair({
+    frontmatter: en.frontmatter,
+    bodies: { en: en.body, 'zh-CN': zh.body },
+  });
+  if (!pair.ok) return pair;
+  if (!pair.value.marker) {
+    return failure('ALIGNMENT_MARKER_REQUIRED', '/documents', 'Alignment validation requires one active marker.');
+  }
+  const domain = projectMap.domains.find(({ id }) => id === pair.value.marker.primary_domain_id);
+  if (!domain || !['confirmed', 'materialized'].includes(domain.domain_state)
+    || en.frontmatter.current_project_id !== projectMap.project_id) {
+    return failure('ALIGNMENT_DOMAIN_INVALID', '/documents', 'Alignment marker must reference one current routable project domain.');
+  }
+  return ok({
+    feedback_id: en.frontmatter.artifact_id,
+    primary_domain_id: pair.value.marker.primary_domain_id,
+    routing_disposition: pair.value.marker.routing_disposition ?? null,
+    record: {
+      frontmatter: en.frontmatter,
+      marker: pair.value.marker,
+      titles: pair.value.titles,
+    },
   });
 };
 
