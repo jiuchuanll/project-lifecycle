@@ -37,6 +37,7 @@ const normalizeCoverage = ({ feedback_id, status, covering_prd_ids, evidence_ref
   evidence_refs: [...evidence_refs],
   remaining_criteria: [...remaining_criteria],
 });
+const validCoveringOwnerId = (value, ownerId) => value === ownerId || /^prd-[a-z0-9-]+$/u.test(value);
 
 export const validateClosureSummary = (summary) => {
   const topLevel = [
@@ -92,7 +93,7 @@ export const validateClosureSummary = (summary) => {
       || !['COVERED', 'NOT_COVERED', 'PARTIAL'].includes(coverage.status)
       || !Array.isArray(coverage.covering_prd_ids)
       || new Set(coverage.covering_prd_ids).size !== coverage.covering_prd_ids.length
-      || !coverage.covering_prd_ids.every((id) => /^prd-[a-z0-9-]+$/u.test(id))
+      || !coverage.covering_prd_ids.every((id) => validCoveringOwnerId(id, summary.owner_artifact_id))
       || !safeRefs(coverage.evidence_refs)
       || !Array.isArray(coverage.remaining_criteria)
       || !coverage.remaining_criteria.every((value) => (
@@ -118,6 +119,7 @@ export const validateClosureSummary = (summary) => {
       || summary.acceptance.units.some((unit) => unit.status !== 'ACCEPTED' || unit.evidence_refs.length === 0)
       || summary.feedback_coverage.some((coverage) => coverage.status !== 'COVERED'
         || coverage.covering_prd_ids.length === 0
+        || !coverage.covering_prd_ids.includes(summary.owner_artifact_id)
         || coverage.evidence_refs.length === 0
         || coverage.remaining_criteria.length > 0)))) {
     return failure('CLOSURE_SUMMARY_INVALID', '/', 'Closure summary acceptance claims are incomplete.');
@@ -132,14 +134,15 @@ const validateFeedbackCoverage = (owner, coverage, accepted) => {
     if (!record(entry) || !/^feedback-[a-z0-9-]+$/u.test(entry.feedback_id ?? '')
       || !['COVERED', 'NOT_COVERED', 'PARTIAL'].includes(entry.status)
       || !Array.isArray(entry.covering_prd_ids) || new Set(entry.covering_prd_ids).size !== entry.covering_prd_ids.length
-      || !entry.covering_prd_ids.every((id) => /^prd-[a-z0-9-]+$/u.test(id))
+      || !entry.covering_prd_ids.every((id) => validCoveringOwnerId(id, owner.artifact_id))
       || !safeRefs(entry.evidence_refs)
       || !Array.isArray(entry.remaining_criteria)
       || !entry.remaining_criteria.every((value) => typeof value === 'string' && value.length > 0 && value.length <= 1000)) {
       return failure('FEEDBACK_COVERAGE_INVALID', `/feedback_coverage/${index}`, 'Feedback coverage is malformed.');
     }
     if (byId.has(entry.feedback_id)) return failure('FEEDBACK_COVERAGE_INVALID', `/feedback_coverage/${index}/feedback_id`, 'Feedback coverage IDs must be unique.');
-    if (entry.status === 'COVERED' && (entry.covering_prd_ids.length === 0 || entry.evidence_refs.length === 0 || entry.remaining_criteria.length > 0)) {
+    if (entry.status === 'COVERED' && (!entry.covering_prd_ids.includes(owner.artifact_id)
+      || entry.evidence_refs.length === 0 || entry.remaining_criteria.length > 0)) {
       return failure('FEEDBACK_COVERAGE_INVALID', `/feedback_coverage/${index}`, 'Covered Feedback requires owners and evidence with no remaining criteria.');
     }
     if (entry.status !== 'COVERED' && entry.remaining_criteria.length === 0) {

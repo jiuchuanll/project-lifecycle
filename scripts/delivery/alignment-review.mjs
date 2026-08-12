@@ -70,7 +70,15 @@ export const deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = 
     const requiredOwners = [];
     const acceptedOwners = new Set();
     for (const candidate of linkedOwners) {
+      const feedbackProject = record.frontmatter.current_project_id ?? record.frontmatter.project_id_at_creation;
+      const ownerProject = candidate.current_project_id ?? candidate.project_id_at_creation;
+      if (ownerProject !== feedbackProject) {
+        return failure(`/owners/${candidate.artifact_id}`, 'Linked alignment owner must belong to the Feedback project.');
+      }
       const closure = closureByOwner.get(candidate.artifact_id);
+      if (closure && closure.baseline.starting !== candidate.knowledge_baseline) {
+        return failure(`/closures/${candidate.artifact_id}`, 'Owner closure must match its starting knowledge baseline.');
+      }
       if (rejectedClosure(closure)) {
         if (!coversFeedback(closure, feedbackId)) {
           return failure(`/closures/${candidate.artifact_id}`, 'Terminal closure must explicitly cover linked Feedback.');
@@ -87,12 +95,12 @@ export const deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = 
     }
     const ownerRef = sortedUnique(requiredOwners);
     const allAccepted = ownerRef.length > 0 && ownerRef.every((ownerId) => acceptedOwners.has(ownerId));
-    const alignmentPhase = ownerRef.length > 0 && !allAccepted
-      ? 'DELIVERY_OPEN'
-      : allAccepted
-        ? 'KNOWLEDGE_WRITEBACK'
-        : record.marker.routing_disposition === 'DEFERRED'
-          ? 'DEFERRED'
+    const alignmentPhase = record.marker.routing_disposition === 'DEFERRED'
+      ? 'DEFERRED'
+      : ownerRef.length > 0 && !allAccepted
+        ? 'DELIVERY_OPEN'
+        : allAccepted
+          ? 'KNOWLEDGE_WRITEBACK'
           : 'REVIEW_REQUIRED';
     rows.push({
       feedback_id: feedbackId,

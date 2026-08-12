@@ -18107,6 +18107,7 @@ var failure = (code, path, message) => fail([createError(code, path, message)]);
 var record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 var safeRefs = (values, { nonEmpty = false } = {}) => Array.isArray(values) && (!nonEmpty || values.length > 0) && new Set(values).size === values.length && values.every(isSafeReference);
 var exactKeys = (value, required, optional = []) => record(value) && required.every((key) => Object.hasOwn(value, key)) && Object.keys(value).every((key) => required.includes(key) || optional.includes(key));
+var validCoveringOwnerId = (value, ownerId) => value === ownerId || /^prd-[a-z0-9-]+$/u.test(value);
 var validateClosureSummary = (summary) => {
   const topLevel = [
     "artifact_id",
@@ -18137,7 +18138,7 @@ var validateClosureSummary = (summary) => {
       "covering_prd_ids",
       "evidence_refs",
       "remaining_criteria"
-    ]) || !/^feedback-[a-z0-9-]+$/u.test(coverage.feedback_id ?? "") || !["COVERED", "NOT_COVERED", "PARTIAL"].includes(coverage.status) || !Array.isArray(coverage.covering_prd_ids) || new Set(coverage.covering_prd_ids).size !== coverage.covering_prd_ids.length || !coverage.covering_prd_ids.every((id) => /^prd-[a-z0-9-]+$/u.test(id)) || !safeRefs(coverage.evidence_refs) || !Array.isArray(coverage.remaining_criteria) || !coverage.remaining_criteria.every((value) => typeof value === "string" && value.length > 0 && value.length <= 1e3)) {
+    ]) || !/^feedback-[a-z0-9-]+$/u.test(coverage.feedback_id ?? "") || !["COVERED", "NOT_COVERED", "PARTIAL"].includes(coverage.status) || !Array.isArray(coverage.covering_prd_ids) || new Set(coverage.covering_prd_ids).size !== coverage.covering_prd_ids.length || !coverage.covering_prd_ids.every((id) => validCoveringOwnerId(id, summary.owner_artifact_id)) || !safeRefs(coverage.evidence_refs) || !Array.isArray(coverage.remaining_criteria) || !coverage.remaining_criteria.every((value) => typeof value === "string" && value.length > 0 && value.length <= 1e3)) {
       return failure("CLOSURE_SUMMARY_INVALID", "/feedback_coverage", "Closure Feedback coverage is malformed.");
     }
   }
@@ -18147,7 +18148,7 @@ var validateClosureSummary = (summary) => {
     }
   }
   const accepted = summary.outcome.status === "ACCEPTED";
-  if (summary.acceptance.claimed !== accepted || accepted && (summary.verification.status !== "PASSED" || summary.acceptance.units.length === 0 || summary.acceptance.units.some((unit) => unit.status !== "ACCEPTED" || unit.evidence_refs.length === 0) || summary.feedback_coverage.some((coverage) => coverage.status !== "COVERED" || coverage.covering_prd_ids.length === 0 || coverage.evidence_refs.length === 0 || coverage.remaining_criteria.length > 0))) {
+  if (summary.acceptance.claimed !== accepted || accepted && (summary.verification.status !== "PASSED" || summary.acceptance.units.length === 0 || summary.acceptance.units.some((unit) => unit.status !== "ACCEPTED" || unit.evidence_refs.length === 0) || summary.feedback_coverage.some((coverage) => coverage.status !== "COVERED" || coverage.covering_prd_ids.length === 0 || !coverage.covering_prd_ids.includes(summary.owner_artifact_id) || coverage.evidence_refs.length === 0 || coverage.remaining_criteria.length > 0))) {
     return failure("CLOSURE_SUMMARY_INVALID", "/", "Closure summary acceptance claims are incomplete.");
   }
   return ok(summary);
@@ -18203,6 +18204,10 @@ var extractBody = (body, language) => {
   }
   const marker = extractAlignmentMarker(sections.marking, `/body/${language}/marking`);
   if (!marker.ok) return marker;
+  const activeMarkers = [...visible.matchAll(MARKER)];
+  if (activeMarkers.length !== (marker.value === null ? 0 : 1)) {
+    return failure2("ALIGNMENT_MARKER_INVALID", `/body/${language}/marking`, "The sole active alignment marker must remain inside Marking.");
+  }
   const documentTitles = [...visible.matchAll(/^#[ \t]+(.+)$/gmu)];
   const title = documentTitles[0]?.[1]?.trim() ?? null;
   if (marker.value && (documentTitles.length !== 1 || documentTitles[0]?.index !== 0 || !title || title.length > 200 || /[\p{Cc}\p{Cf}]/u.test(title))) {
@@ -18317,7 +18322,15 @@ var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}
     const requiredOwners = [];
     const acceptedOwners = /* @__PURE__ */ new Set();
     for (const candidate of linkedOwners) {
+      const feedbackProject = record2.frontmatter.current_project_id ?? record2.frontmatter.project_id_at_creation;
+      const ownerProject = candidate.current_project_id ?? candidate.project_id_at_creation;
+      if (ownerProject !== feedbackProject) {
+        return failure3(`/owners/${candidate.artifact_id}`, "Linked alignment owner must belong to the Feedback project.");
+      }
       const closure = closureByOwner.get(candidate.artifact_id);
+      if (closure && closure.baseline.starting !== candidate.knowledge_baseline) {
+        return failure3(`/closures/${candidate.artifact_id}`, "Owner closure must match its starting knowledge baseline.");
+      }
       if (rejectedClosure(closure)) {
         if (!coversFeedback(closure, feedbackId)) {
           return failure3(`/closures/${candidate.artifact_id}`, "Terminal closure must explicitly cover linked Feedback.");
@@ -18334,7 +18347,7 @@ var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}
     }
     const ownerRef = sortedUnique(requiredOwners);
     const allAccepted = ownerRef.length > 0 && ownerRef.every((ownerId) => acceptedOwners.has(ownerId));
-    const alignmentPhase = ownerRef.length > 0 && !allAccepted ? "DELIVERY_OPEN" : allAccepted ? "KNOWLEDGE_WRITEBACK" : record2.marker.routing_disposition === "DEFERRED" ? "DEFERRED" : "REVIEW_REQUIRED";
+    const alignmentPhase = record2.marker.routing_disposition === "DEFERRED" ? "DEFERRED" : ownerRef.length > 0 && !allAccepted ? "DELIVERY_OPEN" : allAccepted ? "KNOWLEDGE_WRITEBACK" : "REVIEW_REQUIRED";
     rows.push({
       feedback_id: feedbackId,
       title: { en: record2.titles.en, "zh-CN": record2.titles["zh-CN"] },

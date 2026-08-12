@@ -137,6 +137,37 @@ test('does not advance multiple owners by comparing closure counts alone', () =>
   assert.equal(result.value.rows[0].alignment_phase, 'DELIVERY_OPEN');
 });
 
+test('rejects linked owners from another project and closures from another baseline', () => {
+  const foreign = deriveAlignmentReview({
+    feedbacks: [feedback('feedback-foreign-owner')],
+    owners: [owner('prd-foreign', ['feedback-foreign-owner'], {
+      project_id_at_creation: 'foreign-project',
+      current_project_id: 'foreign-project',
+    })],
+    closures: [],
+  });
+  assert.equal(foreign.errors[0].code, 'ALIGNMENT_REVIEW_INPUT_INVALID');
+
+  const wrongBaselineClosure = closure('prd-wrong-baseline', ['feedback-wrong-baseline']);
+  wrongBaselineClosure.baseline = { starting: 'baseline-other', current: 'baseline-other' };
+  const wrongBaseline = deriveAlignmentReview({
+    feedbacks: [feedback('feedback-wrong-baseline')],
+    owners: [owner('prd-wrong-baseline', ['feedback-wrong-baseline'])],
+    closures: [wrongBaselineClosure],
+  });
+  assert.equal(wrongBaseline.errors[0].code, 'ALIGNMENT_REVIEW_INPUT_INVALID');
+});
+
+test('preserves explicit deferral after a delivery owner has been linked', () => {
+  const result = deriveAlignmentReview({
+    feedbacks: [feedback('feedback-deferred-delivery', { marker: marker('DEFERRED') })],
+    owners: [owner('prd-deferred', ['feedback-deferred-delivery'])],
+    closures: [],
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.rows[0], row('feedback-deferred-delivery', 'DEFERRED', ['prd-deferred']));
+});
+
 test('rejects an accepted-looking object that is not a validated closure summary', () => {
   const result = deriveAlignmentReview({
     feedbacks: [feedback('feedback-fake-closure')],

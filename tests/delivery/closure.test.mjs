@@ -165,13 +165,17 @@ test('closes accepted PRD work with a change and an accepted no-change repair', 
 
   const repairOwner = owner({ artifact_id: 'wiki-layout-repair', artifact_kind: 'non-prd-delivery', primary_route: 'NON_PRD_DELIVERY' });
   const repairDiff = noChange({ diff_id: 'diff-wiki-layout-repair', owner_delivery_id: 'wiki-layout-repair' });
-  const repair = closeDelivery(closure({
+  const repairInput = closure({
     owner: repairOwner,
     impact: impact({ owner_artifact_id: 'wiki-layout-repair', owner_kind: 'non-prd-delivery' }),
     knowledge_handoff: candidate(repairDiff),
-  }));
+  });
+  assert.equal(closeDelivery(repairInput).errors[0].code, 'FEEDBACK_COVERAGE_INVALID');
+  repairInput.feedback_coverage[0].covering_prd_ids = ['wiki-layout-repair'];
+  const repair = closeDelivery(repairInput);
   assert.equal(repair.ok, true);
   assert.equal(repair.value.summary.knowledge_handoff.outcome, 'NO_CHANGE');
+  assert.deepEqual(repair.value.summary.feedback_coverage[0].covering_prd_ids, ['wiki-layout-repair']);
 });
 
 test('normalizes successful closure summaries to their closed consumer contract', () => {

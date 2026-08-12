@@ -61,6 +61,10 @@ const extractBody = (body, language) => {
   }
   const marker = extractAlignmentMarker(sections.marking, `/body/${language}/marking`);
   if (!marker.ok) return marker;
+  const activeMarkers = [...visible.matchAll(MARKER)];
+  if (activeMarkers.length !== (marker.value === null ? 0 : 1)) {
+    return failure('ALIGNMENT_MARKER_INVALID', `/body/${language}/marking`, 'The sole active alignment marker must remain inside Marking.');
+  }
   const documentTitles = [...visible.matchAll(/^#[ \t]+(.+)$/gmu)];
   const title = documentTitles[0]?.[1]?.trim() ?? null;
   if (marker.value && (documentTitles.length !== 1 || documentTitles[0]?.index !== 0
@@ -199,8 +203,12 @@ export const validateAlignmentExit = ({
     closureByOwner.set(closure.owner_artifact_id, closure);
   }
   const linkedOwners = owners.filter((owner) => owner?.relationships?.feedback_ids?.includes(feedbackId));
-  for (const { artifact_id: ownerId } of linkedOwners) {
+  for (const owner of linkedOwners) {
+    const ownerId = owner.artifact_id;
     const closure = closureByOwner.get(ownerId);
+    if (closure && closure.baseline.starting !== owner.knowledge_baseline) {
+      return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_closures', 'Owner closure must match its starting knowledge baseline.');
+    }
     if (terminalClosure(closure) && !closureCoversFeedback(closure, feedbackId)) {
       return failure('ALIGNMENT_RESOLUTION_INVALID', '/alignment_closures', 'Terminal owner closure must explicitly cover its linked Feedback.');
     }

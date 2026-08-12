@@ -130,6 +130,18 @@ test('keeps ordinary Feedback and fenced marker examples inactive', () => {
   assert.equal(extractAlignmentMarker(`## Marking\n\n\`\`\`text\n${marker()}\n\`\`\``, '/marking').value, null);
 });
 
+test('rejects an active alignment marker outside the mutable Marking section', () => {
+  const extraMarker = marker();
+  const result = validateAlignmentFeedbackPair({
+    frontmatter: frontmatter(),
+    bodies: {
+      en: body().replace('Legacy approval remains implemented.', `${extraMarker}\nLegacy approval remains implemented.`),
+      'zh-CN': body({ language: 'zh-CN' }).replace('旧审批仍有实现。', `${extraMarker}\n旧审批仍有实现。`),
+    },
+  });
+  assert.equal(result.errors[0].code, 'ALIGNMENT_MARKER_INVALID');
+});
+
 test('does not treat a complete Feedback example inside one outer fence as an active document', () => {
   const fenced = `~~~markdown\n${body()}~~~\n`;
   const result = validateAlignmentFeedbackPair({
@@ -213,6 +225,7 @@ test('does not require a document-level H1 when Feedback has no active alignment
 test('requires the complete accepted owner set and knowledge resolution before marker exit', () => {
   const owners = ['prd-backend', 'prd-frontend'].map((artifactId) => ({
     artifact_id: artifactId,
+    knowledge_baseline: 'baseline-7',
     relationships: { feedback_ids: ['feedback-retire-legacy'] },
   }));
   const closures = owners.map(({ artifact_id: ownerId }) => ({
@@ -265,6 +278,11 @@ test('requires the complete accepted owner set and knowledge resolution before m
   assert.equal(validateExit({
     feedbackId: 'feedback-retire-legacy', resolution, owners, closures,
   }).ok, true);
+  const wrongBaseline = structuredClone(closures);
+  wrongBaseline[0].baseline = { starting: 'baseline-other', current: 'baseline-other' };
+  assert.equal(validateExit({
+    feedbackId: 'feedback-retire-legacy', resolution, owners, closures: wrongBaseline,
+  }).errors[0].code, 'ALIGNMENT_RESOLUTION_INVALID');
   assert.equal(validateExit({
     feedbackId: 'feedback-retire-legacy',
     resolution,
@@ -388,7 +406,7 @@ test('does not exclude a rejected owner whose closure is not bound to the linked
   const result = validateExit({
     feedbackId,
     resolution,
-    owners: [{ artifact_id: 'prd-unbound', relationships: { feedback_ids: [feedbackId] } }],
+    owners: [{ artifact_id: 'prd-unbound', knowledge_baseline: 'baseline-7', relationships: { feedback_ids: [feedbackId] } }],
     closures: [rejectedClosure('prd-unbound')],
   });
   assert.equal(result.errors[0].code, 'ALIGNMENT_RESOLUTION_INVALID');
@@ -425,6 +443,7 @@ test('ignores rejected historical owners after an accepted successor covers the 
   });
   const owners = ['prd-old', 'prd-new'].map((artifactId) => ({
     artifact_id: artifactId,
+    knowledge_baseline: 'baseline-7',
     relationships: { feedback_ids: ['feedback-retire-legacy'] },
   }));
   const resolution = {
