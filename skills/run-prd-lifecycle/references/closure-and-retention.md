@@ -12,6 +12,12 @@ Produce one schema-valid Knowledge Diff candidate from accepted delivery evidenc
 
 The candidate is not current truth. Only `maintain-project-knowledge` may validate conflicts, obtain the required semantic approval, and apply accepted knowledge writeback.
 
+## Alignment Exit
+
+An active alignment marker and projection row exit only after every required linked owner has accepted closure with explicit Feedback coverage, every corresponding Knowledge Diff or accepted no-change result is resolved, the Feedback disposition is explicit, and canonical knowledge represents the final business and implementation state. A consciously accepted no-remediation result additionally requires an explicit human approval reference and an accepted knowledge no-change or residual-divergence reference.
+
+PRD creation, code merge, or owner closure alone is insufficient. Remove the marker only through the validated resolution transition, then regenerate both projection languages together. Durable history remains in Feedback and closure assets; do not append it to the active projection.
+
 ## Retention
 
 Keep active material while delivery or a bounded repair remains open. At closure, retain a compact summary containing identity, outcome, acceptance, evidence, coverage, residual risk, and knowledge-handoff reference. Move detailed delivery evidence to archive only when policy requires retention; superseded or redundant intermediate artifacts leave default retrieval.

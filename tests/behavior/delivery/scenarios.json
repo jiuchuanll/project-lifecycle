@@ -72,6 +72,24 @@
     "expected_archive_reads": 0
   },
   {
+    "scenario_id": "knowledge-alignment-feedback-capture",
+    "input_summary": "User retires an implemented capability while initial knowledge construction continues.",
+    "allowed_context_ids": ["domain:approval-flow"],
+    "expected_primary_route": "KNOWLEDGE_UPDATE",
+    "expected_stop": null,
+    "allowed_durable_asset_kinds": ["feedback"],
+    "required_human_gate": "BUSINESS_DISPOSITION_CONFIRMATION",
+    "expected_obligation_kinds": [],
+    "closure_expectation": "OUTSIDE_DELIVERY",
+    "forbidden_outcomes": ["CODE_CHANGED", "IMPLEMENTATION_REMOVAL_CLAIMED", "PRD_CREATED", "WORKTREE_CREATED"],
+    "route_candidate": { "primary_route": "KNOWLEDGE_UPDATE", "evidence_refs": ["decision:retire-legacy-approval"], "knowledge_effect_refs": ["fact:legacy-approval"] },
+    "proposed_artifact_kind": "feedback",
+    "prd_creation_origin": null,
+    "human_gate_satisfied": true,
+    "expected_cleanup": "NOT_APPLICABLE",
+    "expected_archive_reads": 0
+  },
+  {
     "scenario_id": "outside-plugin",
     "input_summary": "A transient request is outside both lifecycle owners.",
     "allowed_context_ids": [],

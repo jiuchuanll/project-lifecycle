@@ -309,3 +309,18 @@ test('keeps the native decision contract at the root without duplicating obligat
     assert.doesNotMatch(body, new RegExp(`\\b${value}\\b`));
   }
 });
+
+test('keeps knowledge control during confirmed alignment Feedback capture', async () => {
+  const bootstrap = await readFile(
+    new URL('../../skills/maintain-project-knowledge/references/bootstrap-and-calibration.md', import.meta.url),
+    'utf8',
+  );
+  const materialization = await readFile(
+    new URL('../../skills/maintain-project-knowledge/references/materialization.md', import.meta.url),
+    'utf8',
+  );
+  assert.match(bootstrap, /Feedback captured.*PRD materialized.*delivery started/is);
+  assert.match(bootstrap, /return control to knowledge (?:construction|maintenance)/i);
+  assert.match(materialization, /accepted business decision.*verified implementation state/is);
+  assert.match(materialization, /must not claim.*implementation.*removed/is);
+});

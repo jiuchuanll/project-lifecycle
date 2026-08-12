@@ -152,3 +152,13 @@ test('exposes the closed native decision contract before reference routing', asy
   });
   assert.ok(body.indexOf('<!-- lifecycle-decision-contract') < body.indexOf('## Reference Routing'));
 });
+
+test('defines the sparse alignment projection and knowledge-writeback exit gate', async () => {
+  const assets = await readFile(new URL('delivery-assets.md', referenceRoot), 'utf8');
+  const closure = await readFile(new URL('closure-and-retention.md', referenceRoot), 'utf8');
+  for (const field of ['feedback_id', 'title', 'primary_domain_id', 'alignment_phase', 'owner_ref']) {
+    assert.match(assets, new RegExp(`\\b${field}\\b`));
+  }
+  assert.match(assets, /REVIEW_REQUIRED.*DELIVERY_OPEN.*KNOWLEDGE_WRITEBACK.*DEFERRED/is);
+  assert.match(closure, /every required linked owner.*Knowledge Diff/is);
+});
