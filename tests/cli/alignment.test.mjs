@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -118,6 +118,21 @@ test('rejects an incomplete Feedback document instead of validating only its mar
   assert.equal(envelope(result).errors[0].code, 'ALIGNMENT_MARKER_INVALID');
 });
 
+test('rejects one physical Feedback file supplied as both bilingual inputs', async (context) => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-same-file-cli-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const en = join(root, 'feedback-en.md');
+  const zhAlias = join(root, 'feedback.md');
+  const projectMap = join(root, 'project-map.json');
+  await writeFile(en, document('en'));
+  await symlink(en, zhAlias);
+  await writeFile(projectMap, JSON.stringify(map));
+
+  const result = await runCli(['validate-alignment-feedback', en, zhAlias, projectMap]);
+  assert.equal(result.status, 1);
+  assert.equal(envelope(result).errors[0].code, 'PAIR_MACHINE_MISMATCH');
+});
+
 test('syncs one bounded active projection from an ephemeral absolute input', async (context) => {
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-sync-cli-'));
   context.after(() => rm(root, { recursive: true, force: true }));
@@ -157,6 +172,24 @@ test('rejects an oversized sync envelope without echoing private input', async (
   assert.equal(result.status, 2);
   assert.equal(envelope(result).errors[0].code, 'CLI_INPUT_TOO_LARGE');
   assert.doesNotMatch(result.stdout, /private_marker/u);
+});
+
+test('rejects a non-regular bounded input instead of reading an unbounded stream', async (context) => {
+  const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-fifo-cli-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
+  const state = join(root, 'alignment-state.fifo');
+  await new Promise((resolve, reject) => {
+    const child = spawn('mkfifo', [state]);
+    child.on('error', reject);
+    child.on('close', (status) => status === 0 ? resolve() : reject(new Error(`mkfifo exited ${status}`)));
+  });
+  const writer = writeFile(state, JSON.stringify({ feedbacks: [], owners: [], closures: [] }))
+    .catch(() => undefined);
+  const result = await runCli(['sync-alignment-review', '--root', root, '--input', state]);
+  await writer;
+  assert.equal(result.status, 2);
+  assert.equal(envelope(result).errors[0].code, 'CLI_READ_ERROR');
 });
 
 test('rejects a structurally incomplete sync envelope instead of treating it as an empty review', async (context) => {

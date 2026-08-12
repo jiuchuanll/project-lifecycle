@@ -56,12 +56,17 @@ const sectionPattern = (id) => new RegExp(
 );
 
 const extractFeedbackSections = (body) => {
-  const visible = maskFencedMarkdown(body.replaceAll('\r\n', '\n'));
+  const normalized = body.replaceAll('\r\n', '\n');
+  const visible = maskFencedMarkdown(normalized);
   const sections = {};
   for (const id of [...FEEDBACK_SOURCE_SECTIONS, ...FEEDBACK_MUTABLE_SECTIONS]) {
     const matches = [...visible.matchAll(new RegExp(sectionPattern(id).source, 'gu'))];
     if (matches.length !== 1 || matches[0][1].trim().length === 0) return null;
-    sections[id] = matches[0][1].replaceAll('\r\n', '\n').trim();
+    const opening = `<!-- project-lifecycle:section ${id} -->\n`;
+    const closing = '\n<!-- /project-lifecycle:section -->';
+    const start = matches[0].index + opening.length;
+    const end = matches[0].index + matches[0][0].length - closing.length;
+    sections[id] = normalized.slice(start, end).trim();
   }
   return sections;
 };

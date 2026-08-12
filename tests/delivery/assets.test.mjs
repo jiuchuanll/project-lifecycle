@@ -468,6 +468,37 @@ test('reuses titleless legacy Feedback by allowing one bounded alignment title m
   assert.equal(result.value.status, 'updated');
 });
 
+test('rejects fenced source rewrites while adding the first alignment title and marker', async () => {
+  const root = await rootFor();
+  const feedbackId = 'feedback-title-fenced-history';
+  const frontmatter = baseFrontmatter({
+    artifact_id: feedbackId,
+    artifact_kind: 'feedback',
+    primary_route: 'PRD_DELIVERY',
+  });
+  const titleless = feedbackBody();
+  titleless.en = titleless.en
+    .replace(/^# .*\n\n/u, '')
+    .replace('The layout is too dense.', '```text\nOLD\n```');
+  titleless['zh-CN'] = titleless['zh-CN']
+    .replace(/^# .*\n\n/u, '')
+    .replace('布局过于拥挤。', '```text\n旧值\n```');
+  assert.equal((await materializeAsset(request(root, { frontmatter, body: titleless }))).ok, true);
+
+  const alignment = `<!-- project-lifecycle:alignment
+schema_version: 1
+classification: BUSINESS_IMPLEMENTATION_DIVERGENCE
+primary_domain_id: wiki-workspace
+-->`;
+  const rewritten = {
+    en: `# Wiki feedback\n\n${titleless.en.replace('OLD', 'NEW').replace('Active.', alignment)}`,
+    'zh-CN': `# Wiki 反馈\n\n${titleless['zh-CN'].replace('旧值', '新值').replace('有效。', alignment)}`,
+  };
+  const result = await materializeAsset(request(root, { frontmatter, body: rewritten }));
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'HISTORY_BODY_CHANGED');
+});
+
 test('discovers linked delivery owners from authoritative assets before no-remediation exit', async () => {
   const root = await rootFor();
   const feedbackId = 'feedback-owner-discovery';

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { readFile, realpath, stat } from 'node:fs/promises';
+import { open, readFile, realpath, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
 import { atomicWriteValidated } from '../lib/atomic-write.mjs';
@@ -57,16 +57,44 @@ const emit = (result, status = result.ok ? 0 : 1) => {
 
 const readInput = async (file, path = '/file', maximumBytes = null) => {
   try {
-    if (maximumBytes !== null && (await stat(file)).size > maximumBytes) {
-      return cliFailure('CLI_INPUT_TOO_LARGE', path, 'Input file exceeds the bounded size limit.');
+    if (maximumBytes === null) return { ok: true, value: await readFile(file, 'utf8') };
+    const handle = await open(file, 'r');
+    try {
+      const state = await handle.stat();
+      if (!state.isFile()) return cliFailure('CLI_READ_ERROR', path, 'Bounded input must be a regular file.');
+      if (state.size > maximumBytes) {
+        return cliFailure('CLI_INPUT_TOO_LARGE', path, 'Input file exceeds the bounded size limit.');
+      }
+      const buffer = Buffer.allocUnsafe(maximumBytes + 1);
+      let total = 0;
+      while (total < buffer.length) {
+        const { bytesRead } = await handle.read(buffer, total, buffer.length - total, total);
+        if (bytesRead === 0) break;
+        total += bytesRead;
+      }
+      if (total > maximumBytes) {
+        return cliFailure('CLI_INPUT_TOO_LARGE', path, 'Input file exceeds the bounded size limit.');
+      }
+      return { ok: true, value: buffer.subarray(0, total).toString('utf8') };
+    } finally {
+      await handle.close();
     }
-    const source = await readFile(file, 'utf8');
-    if (maximumBytes !== null && Buffer.byteLength(source) > maximumBytes) {
-      return cliFailure('CLI_INPUT_TOO_LARGE', path, 'Input file exceeds the bounded size limit.');
-    }
-    return { ok: true, value: source };
   } catch {
     return cliFailure('CLI_READ_ERROR', path, 'Unable to read input file.');
+  }
+};
+
+const samePhysicalFile = async (left, right) => {
+  try {
+    const [leftReal, rightReal] = await Promise.all([realpath(left), realpath(right)]);
+    if (leftReal === rightReal) return { ok: true, value: true };
+    const [leftState, rightState] = await Promise.all([stat(leftReal), stat(rightReal)]);
+    return {
+      ok: true,
+      value: leftState.dev === rightState.dev && leftState.ino === rightState.ino,
+    };
+  } catch {
+    return cliFailure('CLI_READ_ERROR', '/documents', 'Unable to identify bilingual input files.');
   }
 };
 
@@ -241,8 +269,12 @@ if (command === 'help') {
     if (!en.ok || !zh.ok || !mapSource.ok) {
       emit(!en.ok ? en : !zh.ok ? zh : mapSource, 2);
     } else {
+      const sameInput = await samePhysicalFile(enPath, zhPath);
       const map = parseJsonInput(mapSource.value, '/project_map');
-      if (!map.ok) emit(map, 2);
+      if (!sameInput.ok) emit(sameInput, 2);
+      else if (sameInput.value) {
+        emit(cliFailure('PAIR_MACHINE_MISMATCH', '/documents', 'Bilingual inputs must be distinct physical files.'));
+      } else if (!map.ok) emit(map, 2);
       else {
         const result = validateAlignmentFeedbackDocuments({
           documents: { en: en.value, 'zh-CN': zh.value },
