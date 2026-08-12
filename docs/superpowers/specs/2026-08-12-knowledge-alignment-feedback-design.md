@@ -1,6 +1,6 @@
 # Knowledge Alignment Feedback Design
 
-Status: Review requested
+Status: Approved
 
 Date: 2026-08-12
 
@@ -89,10 +89,10 @@ Each active row contains exactly five fields:
 | Field | Meaning |
 | --- | --- |
 | `feedback_id` | Stable link to the authoritative Feedback pair. |
-| `title` | One bounded line identifying the divergence. |
+| `title` | One bounded localized line identifying the divergence in each language. |
 | `primary_domain_id` | Canonical domain used for grouping. |
 | `alignment_phase` | One of the four active projection phases. |
-| `owner_ref` | Linked PRD or non-PRD owner, or empty before routing. |
+| `owner_ref` | Sorted unique PRD/non-PRD owner references, or an empty list before routing. |
 
 The only active projection phases are:
 
@@ -103,7 +103,7 @@ The only active projection phases are:
 
 There is no `COMPLETED` row. A completed item leaves the active projection. Durable history remains in Feedback and closure assets.
 
-Projection values are deterministic. `feedback_id`, the bounded H1 title, and `primary_domain_id` come from the validated Feedback pair and its controlled marker. `owner_ref` is reverse-resolved from an accepted PRD or non-PRD owner whose relationships cover the Feedback. `alignment_phase` is computed from that owner, its accepted closure, the Feedback disposition, and the Knowledge Diff resolution. It is not an independently editable progress field.
+Projection values are deterministic. `feedback_id`, the bounded localized H1 titles, and `primary_domain_id` come from the validated Feedback pair and its controlled marker. The two projections have identical machine fields and row order while `title` is rendered from the corresponding language asset. `owner_ref` is reverse-resolved from accepted PRD or non-PRD owners whose relationships cover the Feedback; retaining a list preserves the existing many-to-many Feedback/owner contract without adding a sixth field. `alignment_phase` is computed from the complete owner set, its accepted closures, the Feedback disposition, and the Knowledge Diff resolution. It is not an independently editable progress field.
 
 The projection must never contain code paths, evidence bodies, the original user narrative, risks, PRD scope, acceptance criteria, test results, Knowledge Diff bodies, status history, Agent reasoning, or free-form notes. Those belong to their authoritative assets.
 
@@ -117,7 +117,7 @@ During bootstrap or maintenance, a newly captured alignment Feedback appears as 
 - defer;
 - accept no remediation and close with a reason.
 
-Confirmed routing changes the derived row to `DELIVERY_OPEN` and supplies `owner_ref`. Creating a delivery owner does not complete the row. Accepted delivery moves it to `KNOWLEDGE_WRITEBACK` until the candidate Knowledge Diff is resolved by `maintain-project-knowledge`.
+Confirmed routing changes the derived row to `DELIVERY_OPEN` and supplies `owner_ref`. Creating delivery owners does not complete the row. If any required linked owner remains open, the row stays `DELIVERY_OPEN`; only after every required linked owner has an accepted closure does it move to `KNOWLEDGE_WRITEBACK`, where it remains until all corresponding candidate Knowledge Diffs are resolved by `maintain-project-knowledge`.
 
 An item exits the active projection only when:
 

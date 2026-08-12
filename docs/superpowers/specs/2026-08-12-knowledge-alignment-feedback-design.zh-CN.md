@@ -1,6 +1,6 @@
 # 知识对齐 Feedback 设计
 
-状态：待审阅
+状态：已批准
 
 日期：2026-08-12
 
@@ -89,10 +89,10 @@ Feedback captured != PRD materialized != delivery started
 | 字段 | 含义 |
 | --- | --- |
 | `feedback_id` | 指向权威 Feedback 对的稳定链接。 |
-| `title` | 一行内说明对齐差异。 |
+| `title` | 在各语言中用一行本地化标题说明对齐差异。 |
 | `primary_domain_id` | 用于分组的规范领域。 |
 | `alignment_phase` | 四个活动投影阶段之一。 |
-| `owner_ref` | 已链接的 PRD 或非 PRD Owner；路由前为空。 |
+| `owner_ref` | 排序去重的 PRD/非 PRD Owner 引用；路由前为空列表。 |
 
 活动投影阶段只有四种：
 
@@ -103,7 +103,7 @@ Feedback captured != PRD materialized != delivery started
 
 不存在 `COMPLETED` 行。完成项退出活动投影，持久历史保留在 Feedback 和关闭资产中。
 
-投影值必须能够确定性生成。`feedback_id`、有界的 H1 标题和 `primary_domain_id` 来自已验证的 Feedback 对及其受控标记。`owner_ref` 通过反向查找关系中覆盖该 Feedback 的已接受 PRD 或非 PRD Owner 获得。`alignment_phase` 根据该 Owner、其已接受关闭结果、Feedback 处置和 Knowledge Diff 解决状态计算，不是可独立编辑的进度字段。
+投影值必须能够确定性生成。`feedback_id`、有界的本地化 H1 标题和 `primary_domain_id` 来自已验证的 Feedback 对及其受控标记。两份投影的机器字段与行顺序一致，`title` 则来自对应语言资产。`owner_ref` 通过反向查找关系中覆盖该 Feedback 的已接受 PRD 或非 PRD Owner 获得；使用列表可以在不增加第六个字段的情况下保留现有 Feedback/Owner 多对多契约。`alignment_phase` 根据完整 Owner 集合、其已接受关闭结果、Feedback 处置和 Knowledge Diff 解决状态计算，不是可独立编辑的进度字段。
 
 投影绝不能保存代码路径、证据正文、用户原始叙述、风险、PRD 范围、验收标准、测试结果、Knowledge Diff 正文、状态历史、Agent 推理或自由文本备注。这些内容必须留在各自的权威资产中。
 
@@ -117,7 +117,7 @@ Feedback captured != PRD materialized != delivery started
 - 暂缓；
 - 接受无需整改并记录关闭原因。
 
-确认路由后，派生行变成 `DELIVERY_OPEN` 并填写 `owner_ref`。创建交付 Owner 不代表该行已经完成。交付被接受后进入 `KNOWLEDGE_WRITEBACK`，直到候选 Knowledge Diff 被 `maintain-project-knowledge` 解决。
+确认路由后，派生行变成 `DELIVERY_OPEN` 并填写 `owner_ref`。创建交付 Owner 不代表该行已经完成。只要任一必要的关联 Owner 仍开放，该行就保持 `DELIVERY_OPEN`；只有所有必要关联 Owner 都已接受关闭后，才进入 `KNOWLEDGE_WRITEBACK`，并持续到所有对应候选 Knowledge Diff 都被 `maintain-project-knowledge` 解决。
 
 只有同时满足以下条件，条目才能退出活动投影：
 
