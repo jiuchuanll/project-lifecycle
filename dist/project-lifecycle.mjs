@@ -18491,18 +18491,22 @@ var discoverAlignmentInventory = async (lifecycleRoot) => {
       throw new Error(`Delivery pair ${id} is incomplete or divergent.`);
     }
     const frontmatter = pair.en.frontmatter;
-    if (frontmatter.artifact_kind === "feedback" && frontmatter.retention_tier === "active") {
-      const alignment = validateAlignmentFeedbackPair({
-        frontmatter,
-        bodies: { en: pair.en.body, "zh-CN": pair["zh-CN"].body }
-      });
-      if (!alignment.ok) throw new Error("Active Feedback inventory is invalid.");
-      if (alignment.value.marker !== null) {
-        feedbacks.push({
-          frontmatter,
-          marker: alignment.value.marker,
-          titles: alignment.value.titles
-        });
+    if (frontmatter.artifact_kind === "feedback") {
+      const bodies = { en: pair.en.body, "zh-CN": pair["zh-CN"].body };
+      const containsAlignmentSyntax = Object.values(bodies).some((body) => body.includes("<!-- project-lifecycle:alignment\n"));
+      if (frontmatter.retention_tier === "active" || containsAlignmentSyntax) {
+        const alignment = validateAlignmentFeedbackPair({ frontmatter, bodies });
+        if (!alignment.ok) throw new Error("Feedback inventory is invalid.");
+        if (alignment.value.marker !== null && frontmatter.retention_tier !== "active") {
+          throw new Error("Retained Feedback cannot keep an active alignment marker.");
+        }
+        if (alignment.value.marker !== null) {
+          feedbacks.push({
+            frontmatter,
+            marker: alignment.value.marker,
+            titles: alignment.value.titles
+          });
+        }
       }
     } else if (["prd", "non-prd-delivery"].includes(frontmatter.artifact_kind)) {
       owners.push(frontmatter);

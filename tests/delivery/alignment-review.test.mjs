@@ -336,6 +336,21 @@ test('rejects retained Feedback from the active alignment projection', () => {
   }
 });
 
+test('fails closed when authoritative retained Feedback still has an active marker', async () => {
+  for (const retentionTier of ['archive', 'closed-summary']) {
+    const root = await mkdtemp(join(tmpdir(), `project-lifecycle-alignment-retained-${retentionTier}-`));
+    const retained = feedback(`feedback-retained-${retentionTier}`);
+    delete retained.frontmatter.current_project_id;
+    retained.frontmatter.retention_tier = retentionTier;
+    await writeInventory(root, { feedbacks: [retained] });
+
+    const result = await syncAlignmentReview({ root, feedbacks: [], owners: [], closures: [] });
+
+    assert.equal(result.ok, false, retentionTier);
+    assert.equal(result.errors[0].code, 'ALIGNMENT_REVIEW_INVENTORY_INCOMPLETE', retentionTier);
+  }
+});
+
 test('publishes and removes the bilingual generated projection as one pair', async () => {
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-review-'));
   await mkdir(join(root, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });

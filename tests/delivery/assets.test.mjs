@@ -261,6 +261,26 @@ test('rejects invalid alignment Feedback before writing either language', async 
   }
 });
 
+test('rejects an active alignment marker on retained Feedback', async () => {
+  for (const retentionTier of ['archive', 'closed-summary']) {
+    const root = await rootFor();
+    const frontmatter = baseFrontmatter({
+      artifact_id: `feedback-retained-${retentionTier}`,
+      artifact_kind: 'feedback',
+      primary_route: 'KNOWLEDGE_UPDATE',
+      retention_tier: retentionTier,
+    });
+    delete frontmatter.current_project_id;
+    const result = await materializeAsset(request(root, {
+      frontmatter,
+      body: alignmentFeedbackBody(),
+    }));
+    assert.equal(result.ok, false, retentionTier);
+    assert.equal(result.errors[0].code, 'ALIGNMENT_RETENTION_INVALID', retentionTier);
+    assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
+  }
+});
+
 test('keeps an active marker until complete delivery and knowledge resolution are supplied', async () => {
   const root = await rootFor();
   const feedbackId = 'feedback-retire-wiki-density';

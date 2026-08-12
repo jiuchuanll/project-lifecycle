@@ -239,6 +239,13 @@ export const validateMaterializationRequest = (input = {}) => {
       bodies: input.body,
     });
     if (!alignment.ok) return alignment;
+    if (alignment.value.marker !== null && input.frontmatter.retention_tier !== 'active') {
+      return failure(
+        'ALIGNMENT_RETENTION_INVALID',
+        '/frontmatter/retention_tier',
+        'Feedback with an active alignment marker must remain active until validated marker removal.',
+      );
+    }
   }
   if (input.frontmatter.artifact_kind === 'closure-summary') {
     const managedHashes = ['en', 'zh-CN'].map((language) => extractClosureSummaryHash(input.body[language]));
