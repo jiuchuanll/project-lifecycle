@@ -1,7 +1,8 @@
 ---
-schema_version: 1
+schema_version: 2
 artifact_id: closure-wiki-v1
 artifact_kind: closure-summary
+owner_artifact_id: prd-wiki-layout-v1
 primary_route: PRD_DELIVERY
 project_id_at_creation: sample-project
 domain_ids:

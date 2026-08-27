@@ -18143,6 +18143,40 @@ var credentialBearingUrl = /[a-z][a-z0-9+.-]*:\/\/[^/\s]*@/iu;
 var isSafeReference = (value) => typeof value === "string" && value.length > 0 && value.length <= 500 && !/[\p{Cc}\p{Cf}\p{Z}`<>\\]/u.test(value) && !value.includes("--") && !credentialBearingUrl.test(value);
 var isSafeLocator = (value) => typeof value === "string" && isSafeReference(value) && !isAbsolute5(value) && !/^[A-Za-z]:[\\/]/u.test(value) && !value.includes("://") && !/[#()]/u.test(value) && !value.split("/").includes("..") && posix2.normalize(value) === value;
 
+// scripts/delivery/delivery-layout.mjs
+var DELIVERY_LAYOUT = Object.freeze({ schema_version: 1, layout_version: 2 });
+var CHILD_DIRECTORIES = Object.freeze({
+  architecture: "architecture",
+  guidance: "guidance",
+  batch: "batches",
+  "test-report": "test-reports",
+  "closure-summary": "closure"
+});
+var languagePair = (directory, artifactId) => ({
+  en: `${directory}/${artifactId}-en.md`,
+  "zh-CN": `${directory}/${artifactId}.md`
+});
+var ownerRoot = (ownerKind, ownerId) => {
+  if (ownerKind === "prd") return `delivery/prds/${ownerId}`;
+  if (ownerKind === "non-prd-delivery") return `delivery/non-prd/${ownerId}`;
+  throw Object.assign(new Error("Invalid physical owner kind."), { code: "DELIVERY_OWNER_MISMATCH" });
+};
+var activeDirectory = (frontmatter, ownerKind) => {
+  if (frontmatter.artifact_kind === "feedback") return "delivery/feedback";
+  const root = ownerRoot(ownerKind, frontmatter.owner_artifact_id);
+  const child = CHILD_DIRECTORIES[frontmatter.artifact_kind];
+  return child ? `${root}/${child}` : root;
+};
+var activeDeliveryPair = (frontmatter, { ownerKind = null } = {}) => languagePair(
+  activeDirectory(frontmatter, ownerKind),
+  frontmatter.artifact_id
+);
+var archivedDeliveryPair = (frontmatter, { ownerKind = null } = {}) => {
+  const active = activeDirectory(frontmatter, ownerKind);
+  return languagePair(active.replace(/^delivery\//u, "archive/delivery/"), frontmatter.artifact_id);
+};
+var alignmentReviewPair = () => languagePair("delivery/views", "alignment-review");
+
 // scripts/delivery/close-delivery.mjs
 var ID = /^[a-z][a-z0-9-]*$/u;
 var OUTCOMES = /* @__PURE__ */ new Set(["ABANDONED", "ACCEPTED", "CANCELLED", "REJECTED"]);
@@ -18344,42 +18378,6 @@ var extractClosureSummaryHash = (body) => {
 import { lstat as lstat4, open as open3, readFile as readFile4, readdir as readdir2, realpath as realpath5 } from "node:fs/promises";
 import { isAbsolute as isAbsolute6, join as join4, relative as relative4, resolve as resolve4, sep as sep4 } from "node:path";
 import { isDeepStrictEqual as isDeepStrictEqual2 } from "node:util";
-
-// scripts/delivery/delivery-layout.mjs
-var DELIVERY_LAYOUT = Object.freeze({ schema_version: 1, layout_version: 2 });
-var CHILD_DIRECTORIES = Object.freeze({
-  architecture: "architecture",
-  guidance: "guidance",
-  batch: "batches",
-  "test-report": "test-reports",
-  "closure-summary": "closure"
-});
-var languagePair = (directory, artifactId) => ({
-  en: `${directory}/${artifactId}-en.md`,
-  "zh-CN": `${directory}/${artifactId}.md`
-});
-var ownerRoot = (ownerKind, ownerId) => {
-  if (ownerKind === "prd") return `delivery/prds/${ownerId}`;
-  if (ownerKind === "non-prd-delivery") return `delivery/non-prd/${ownerId}`;
-  throw Object.assign(new Error("Invalid physical owner kind."), { code: "DELIVERY_OWNER_MISMATCH" });
-};
-var activeDirectory = (frontmatter, ownerKind) => {
-  if (frontmatter.artifact_kind === "feedback") return "delivery/feedback";
-  const root = ownerRoot(ownerKind, frontmatter.owner_artifact_id);
-  const child = CHILD_DIRECTORIES[frontmatter.artifact_kind];
-  return child ? `${root}/${child}` : root;
-};
-var activeDeliveryPair = (frontmatter, { ownerKind = null } = {}) => languagePair(
-  activeDirectory(frontmatter, ownerKind),
-  frontmatter.artifact_id
-);
-var archivedDeliveryPair = (frontmatter, { ownerKind = null } = {}) => {
-  const active = activeDirectory(frontmatter, ownerKind);
-  return languagePair(active.replace(/^delivery\//u, "archive/delivery/"), frontmatter.artifact_id);
-};
-var alignmentReviewPair = () => languagePair("delivery/views", "alignment-review");
-
-// scripts/delivery/delivery-inventory.mjs
 var MAX_ENTRIES = 2e3;
 var MAX_DEPTH = 4;
 var MAX_FRONTMATTER_BYTES = 65536;

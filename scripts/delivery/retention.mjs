@@ -1,16 +1,18 @@
-import { basename, posix } from 'node:path';
-
 import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
 import { isSafeLocator, isSafeReference } from '../lib/reference-safety.mjs';
 import { fail, ok } from '../lib/result.mjs';
+import { activeDeliveryPair, archivedDeliveryPair } from './delivery-layout.mjs';
 
 const HASH = /^sha256:[0-9a-f]{64}$/u;
 const ID = /^[a-z][a-z0-9-]*$/u;
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const exactKeys = (value, allowed) => record(value) && Object.keys(value).every((key) => allowed.has(key));
-const artifactKeys = new Set(['artifact_id', 'artifact_kind', 'body_hashes', 'evidence_refs', 'locators']);
+const artifactKeys = new Set([
+  'artifact_id', 'artifact_kind', 'owner_artifact_id', 'owner_artifact_kind',
+  'body_hashes', 'evidence_refs', 'locators',
+]);
 
 export const createRetentionPlan = ({ summary, artifacts, delete_evidence_refs: deletionRefs } = {}) => {
   if (!record(summary) || !ID.test(summary.artifact_id ?? '') || !isSafeReference(summary.closure_ref)) {
@@ -28,6 +30,8 @@ export const createRetentionPlan = ({ summary, artifacts, delete_evidence_refs: 
   for (const [index, artifact] of artifacts.entries()) {
     if (!exactKeys(artifact, artifactKeys) || !ID.test(artifact.artifact_id ?? '')
       || typeof artifact.artifact_kind !== 'string' || artifact.artifact_kind.length === 0
+      || !ID.test(artifact.owner_artifact_id ?? '')
+      || !['prd', 'non-prd-delivery'].includes(artifact.owner_artifact_kind)
       || !record(artifact.locators) || !record(artifact.body_hashes)
       || Object.keys(artifact.locators).sort().join(',') !== 'en,zh-CN'
       || !isSafeLocator(artifact.locators.en) || !isSafeLocator(artifact.locators['zh-CN'])
@@ -37,16 +41,23 @@ export const createRetentionPlan = ({ summary, artifacts, delete_evidence_refs: 
       return failure('RETENTION_ARTIFACT_INVALID', `/artifacts/${index}`, 'Detailed artifacts require safe paired locators, body hashes, and evidence references.');
     }
     if (ids.has(artifact.artifact_id)) return failure('RETENTION_ARTIFACT_DUPLICATE', `/artifacts/${index}/artifact_id`, 'Detailed artifact IDs must be unique.');
+    const ownership = {
+      artifact_id: artifact.artifact_id,
+      artifact_kind: artifact.artifact_kind,
+      owner_artifact_id: artifact.owner_artifact_id,
+    };
+    const expectedActive = activeDeliveryPair(ownership, { ownerKind: artifact.owner_artifact_kind });
+    if (expectedActive.en !== artifact.locators.en
+      || expectedActive['zh-CN'] !== artifact.locators['zh-CN']) {
+      return failure('RETENTION_OWNER_MISMATCH', `/artifacts/${index}/locators`, 'Detailed artifact locators must match their declared physical owner.');
+    }
     ids.add(artifact.artifact_id);
     artifact.evidence_refs.forEach((ref) => evidence.add(ref));
     transitions.push({
       artifact_id: artifact.artifact_id,
       artifact_kind: artifact.artifact_kind,
       from: structuredClone(artifact.locators),
-      to: {
-        en: posix.join('archive/delivery', basename(artifact.locators.en)),
-        'zh-CN': posix.join('archive/delivery', basename(artifact.locators['zh-CN'])),
-      },
+      to: archivedDeliveryPair(ownership, { ownerKind: artifact.owner_artifact_kind }),
       body_hashes: structuredClone(artifact.body_hashes),
       retention_tier: 'archive',
     });

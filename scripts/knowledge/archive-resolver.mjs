@@ -10,6 +10,7 @@ import {
   archiveContentHash,
   archiveFrontmatter,
   archiveLifecycleRoot,
+  archiveLocatorMatchesFrontmatter,
   resolveArchiveLocator,
   validateArchiveCatalog,
 } from './archive-catalog.mjs';
@@ -199,6 +200,7 @@ export async function resolveArchiveArtifacts(input = {}, operations = {}) {
       const frontmatter = archiveFrontmatter(bytes);
       if (!frontmatter || frontmatter.artifact_id !== entry.artifact_id
         || frontmatter.retention_tier !== 'archive'
+        || !archiveLocatorMatchesFrontmatter(frontmatter, entry.locator)
         || frontmatter.project_id_at_creation !== entry.project_id_at_creation
         || JSON.stringify(frontmatter.domain_ids) !== JSON.stringify(entry.domain_ids)) {
         return failure('ARCHIVE_CATALOG_MISMATCH', `/artifact_ids/${index}`, 'Archive content metadata no longer matches the approved catalog entry.');

@@ -12,10 +12,12 @@ import { resolveArchiveArtifacts } from '../../scripts/knowledge/archive-resolve
 
 const fixtureProject = new URL('../fixtures/knowledge/archive/project/', import.meta.url);
 const locators = [
-  'delivery/closure-wiki-v1-en.md',
-  'delivery/prd-search-v1-en.md',
-  'delivery/prd-wiki-layout-v1-en.md',
+  'archive/delivery/prds/prd-wiki-layout-v1/architecture/architecture-wiki-v1-en.md',
+  'archive/delivery/prds/prd-search-v1/prd-search-v1-en.md',
+  'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-v1-en.md',
+  'delivery/prds/prd-wiki-layout-v1/closure/closure-wiki-v1-en.md',
 ];
+const artifactById = (catalog, id) => catalog.artifacts.find(({ artifact_id: artifactId }) => artifactId === id);
 
 const withProject = async (run) => {
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-archive-'));
@@ -63,22 +65,24 @@ test('builds a deterministic metadata-only catalog from validated map and retain
 
     assert.equal(result.ok, true);
     assert.deepEqual(result.value.artifacts.map(({ artifact_id: id }) => id), [
+      'architecture-wiki-v1',
       'closure-wiki-v1',
       'prd-search-v1',
       'prd-wiki-layout-v1',
     ]);
-    assert.deepEqual(result.value.artifacts[2], {
+    const wikiPrd = artifactById(result.value, 'prd-wiki-layout-v1');
+    assert.deepEqual(wikiPrd, {
       artifact_id: 'prd-wiki-layout-v1',
       retention_tier: 'archive',
-      content_hash: result.value.artifacts[2].content_hash,
+      content_hash: wikiPrd.content_hash,
       project_id_at_creation: 'sample-project',
       current_project_id: 'sample-project',
       domain_ids: ['wiki-workspace'],
-      locator: 'delivery/prd-wiki-layout-v1-en.md',
+      locator: 'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-v1-en.md',
     });
-    assert.match(result.value.artifacts[2].content_hash, /^sha256:[0-9a-f]{64}$/);
+    assert.match(wikiPrd.content_hash, /^sha256:[0-9a-f]{64}$/);
     assert.doesNotMatch(JSON.stringify(result.value), /BODY-SECRET|former accepted/u);
-    assert.equal(reads.filter(({ section }) => section === 'artifact-hash').length, 3);
+    assert.equal(reads.filter(({ section }) => section === 'artifact-hash').length, 4);
     assert.equal(validateArchiveCatalog(result.value).ok, true);
   });
 });
@@ -118,14 +122,14 @@ test('returns only an exact receipt-approved archive artifact and logs the exact
     assert.equal(result.ok, true);
     assert.equal(result.value.artifacts.length, 1);
     assert.equal(result.value.artifacts[0].artifact_id, 'prd-wiki-layout-v1');
-    assert.equal(result.value.artifacts[0].locator, 'delivery/prd-wiki-layout-v1-en.md');
+    assert.equal(result.value.artifacts[0].locator, 'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-v1-en.md');
     assert.match(result.value.artifacts[0].content, /ARCHIVE-WIKI-BODY-SECRET/u);
     assert.equal(result.value.artifacts[0].reused, false);
     assert.deepEqual(result.value.read_log, reads);
     assert.deepEqual(reads, [{
       artifact_id: 'prd-wiki-layout-v1',
-      locator: 'delivery/prd-wiki-layout-v1-en.md',
-      content_hash: catalog.artifacts[2].content_hash,
+      locator: 'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-v1-en.md',
+      content_hash: artifactById(catalog, 'prd-wiki-layout-v1').content_hash,
       outcome: 'returned',
     }]);
     assert.deepEqual(result.value.reuse_record, {
@@ -135,10 +139,27 @@ test('returns only an exact receipt-approved archive artifact and logs the exact
       scope: { domain_ids: ['wiki-workspace'] },
       returned_artifacts: [{
         artifact_id: 'prd-wiki-layout-v1',
-        content_hash: catalog.artifacts[2].content_hash,
+        content_hash: artifactById(catalog, 'prd-wiki-layout-v1').content_hash,
       }],
     });
     assert.equal(result.value.durable_evidence_recommendation, null);
+  });
+});
+
+test('returns one archived owner child only after its exact receipt authorizes the artifact ID', async () => {
+  await withProject(async (root) => {
+    const catalog = (await catalogFor(root)).value;
+    const result = await resolveArchiveArtifacts(archiveRequest(root, catalog, {
+      receipt: receipt({ artifact_ids: ['architecture-wiki-v1'] }),
+    }));
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.value.artifacts.map(({ artifact_id: id }) => id), ['architecture-wiki-v1']);
+    assert.match(result.value.artifacts[0].content, /ARCHIVE-WIKI-ARCHITECTURE-SECRET/u);
+    assert.equal(
+      result.value.artifacts[0].locator,
+      'archive/delivery/prds/prd-wiki-layout-v1/architecture/architecture-wiki-v1-en.md',
+    );
   });
 });
 
@@ -188,15 +209,15 @@ test('rejects unsafe catalog locators and symlink artifacts without reading thei
   await withProject(async (root) => {
     const lifecycle = join(root, 'docs/project-lifecycle');
     await symlink(
-      join(lifecycle, 'delivery/prd-wiki-layout-v1-en.md'),
-      join(lifecycle, 'delivery/prd-wiki-link-en.md'),
+      join(lifecycle, 'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-v1-en.md'),
+      join(lifecycle, 'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-link-en.md'),
     );
     const result = await buildArchiveCatalog({
       root,
-      delivery_locators: ['delivery/prd-wiki-link-en.md'],
+      delivery_locators: ['archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-link-en.md'],
     });
     assert.equal(result.ok, false);
-    assert.equal(await lstat(join(lifecycle, 'delivery/prd-wiki-link-en.md')).then((entry) => entry.isSymbolicLink()), true);
+    assert.equal(await lstat(join(lifecycle, 'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-link-en.md')).then((entry) => entry.isSymbolicLink()), true);
   });
 });
 
@@ -204,25 +225,25 @@ test('rejects duplicate artifact IDs and foreign project identity without source
   await withProject(async (root) => {
     const lifecycle = join(root, 'docs/project-lifecycle');
     await cp(
-      join(lifecycle, 'delivery/prd-wiki-layout-v1-en.md'),
-      join(lifecycle, 'delivery/prd-wiki-layout-copy-en.md'),
+      join(lifecycle, 'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-v1-en.md'),
+      join(lifecycle, 'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-copy-en.md'),
     );
     const duplicate = await buildArchiveCatalog({
       root,
       delivery_locators: [
-        'delivery/prd-wiki-layout-copy-en.md',
-        'delivery/prd-wiki-layout-v1-en.md',
+        'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-copy-en.md',
+        'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-v1-en.md',
       ],
     });
     assert.equal(duplicate.ok, false);
     assert.equal(JSON.stringify(duplicate).includes('BODY-SECRET'), false);
 
-    const foreignPath = join(lifecycle, 'delivery/prd-wiki-layout-v1-en.md');
+    const foreignPath = join(lifecycle, 'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-v1-en.md');
     const source = await readFile(foreignPath, 'utf8');
     await writeFile(foreignPath, source.replace('project_id_at_creation: sample-project', 'project_id_at_creation: foreign-project'));
     const foreign = await buildArchiveCatalog({
       root,
-      delivery_locators: ['delivery/prd-wiki-layout-v1-en.md'],
+      delivery_locators: ['archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-v1-en.md'],
     });
     assert.equal(foreign.ok, false);
     assert.equal(JSON.stringify(foreign).includes('ARCHIVE-WIKI-BODY-SECRET'), false);
@@ -232,7 +253,7 @@ test('rejects duplicate artifact IDs and foreign project identity without source
 test('rejects stale catalog hashes with a stable redacted error', async () => {
   await withProject(async (root) => {
     const catalog = (await catalogFor(root)).value;
-    const path = join(root, 'docs/project-lifecycle/delivery/prd-wiki-layout-v1-en.md');
+    const path = join(root, 'docs/project-lifecycle/archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-v1-en.md');
     await writeFile(path, `${await readFile(path, 'utf8')}\nchanged SECRET-ONLY-IN-SOURCE\n`);
     const reads = [];
     const result = await resolveArchiveArtifacts(
@@ -330,8 +351,8 @@ test('reuses an unchanged task-local hash record without rereading the body', as
     assert.deepEqual(repeated.value.read_log, []);
     assert.deepEqual(repeated.value.artifacts, [{
       artifact_id: 'prd-wiki-layout-v1',
-      locator: 'delivery/prd-wiki-layout-v1-en.md',
-      content_hash: catalog.artifacts[2].content_hash,
+      locator: 'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-v1-en.md',
+      content_hash: artifactById(catalog, 'prd-wiki-layout-v1').content_hash,
       content: null,
       reused: true,
     }]);
@@ -343,7 +364,7 @@ test('requires a new confirmed receipt when a rebuilt catalog reports changed co
   await withProject(async (root) => {
     const initialCatalog = (await catalogFor(root)).value;
     const first = await resolveArchiveArtifacts(archiveRequest(root, initialCatalog));
-    const path = join(root, 'docs/project-lifecycle/delivery/prd-wiki-layout-v1-en.md');
+    const path = join(root, 'docs/project-lifecycle/archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-v1-en.md');
     await writeFile(path, `${await readFile(path, 'utf8')}\nAccepted density changed.\n`);
     const changedCatalog = (await catalogFor(root)).value;
     const returned = first.value.reuse_record.returned_artifacts;
@@ -382,8 +403,8 @@ test('recommends durable evidence only after the caller declares material decisi
       disposition: 'candidate-evidence-only',
       artifact_refs: [{
         artifact_id: 'prd-wiki-layout-v1',
-        content_hash: catalog.artifacts[2].content_hash,
-        locator: 'delivery/prd-wiki-layout-v1-en.md',
+        content_hash: artifactById(catalog, 'prd-wiki-layout-v1').content_hash,
+        locator: 'archive/delivery/prds/prd-wiki-layout-v1/prd-wiki-layout-v1-en.md',
       }],
       auto_promote_current: false,
     });
