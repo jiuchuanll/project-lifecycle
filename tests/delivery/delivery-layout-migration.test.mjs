@@ -128,6 +128,34 @@ test('does not echo credential-bearing external URLs or crash on unmapped child 
   assert.equal(JSON.stringify(preview.value).includes('session=value'), false);
 });
 
+test('stops legacy delivery enumeration at the file limit without consuming the rest of a directory', async (context) => {
+  const root = await createLegacy(context);
+  let yielded = 0;
+  const preview = await inspectLegacyDeliveryLayout({
+    root,
+    legacyOperations: {
+      opendir: async () => ({
+        async *[Symbol.asyncIterator]() {
+          while (true) {
+            yielded += 1;
+            yield {
+              name: `legacy-${yielded}.md`,
+              isDirectory: () => false,
+              isFile: () => true,
+              isSymbolicLink: () => false,
+            };
+          }
+        },
+      }),
+    },
+  });
+
+  assert.equal(preview.ok, true, JSON.stringify(preview));
+  assert.equal(preview.value.route, 'NEEDS_USER');
+  assert.ok(preview.value.needs_user.some(({ code }) => code === 'INVENTORY_LIMIT'));
+  assert.equal(yielded, 2_001);
+});
+
 test('returns NEEDS_USER for ambiguous ownership, incomplete pairs, mixed layout, and contradictory mappings', async (context) => {
   for (const options of [{ ambiguous: true }, { missingPair: true }, { mixed: true }]) {
     const root = await createLegacy(context, options);

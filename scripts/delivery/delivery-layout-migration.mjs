@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
+import { lstat, opendir, readFile, realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { stringify as stringifyYaml } from 'yaml';
@@ -73,14 +73,20 @@ const rootsFor = async (rootValue) => {
   return { projectRoot, lifecycleRoot };
 };
 
-const readLegacyRoot = async (lifecycleRoot, rootLocator, issues) => {
+const readLegacyRoot = async (lifecycleRoot, rootLocator, issues, operations, inventoryState) => {
+  if (inventoryState.exceeded) return [];
   const path = join(lifecycleRoot, rootLocator);
   try {
     const state = await lstat(path);
     const physical = await realpath(path);
     if (!state.isDirectory() || state.isSymbolicLink() || !inside(lifecycleRoot, physical)) throw new Error();
     const files = [];
-    for (const entry of await readdir(physical, { withFileTypes: true })) {
+    for await (const entry of await operations.opendir(physical)) {
+      inventoryState.entries += 1;
+      if (inventoryState.entries > MAX_FILES) {
+        inventoryState.exceeded = true;
+        break;
+      }
       const locator = `${rootLocator}/${entry.name}`;
       if (entry.isDirectory() || entry.isSymbolicLink() || !entry.isFile()) {
         issues.push({ code: 'MIXED_LAYOUT', artifact_id: null, locator });
@@ -109,7 +115,7 @@ const linksFrom = (body, source) => [...body.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\
     return { source, scheme, authority, href_hash: hash(href) };
   });
 
-export const inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [] } = {}) => {
+export const inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], legacyOperations = {} } = {}) => {
   if (!Array.isArray(mappings) || mappings.length > 200) {
     return failure('DELIVERY_MIGRATION_INPUT_INVALID', '/owner_mappings', 'Owner mappings must be one bounded array.');
   }
@@ -126,14 +132,19 @@ export const inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappin
   const needsUser = [];
   let files;
   try {
+    const operations = { opendir, ...legacyOperations };
+    const inventoryState = { entries: 0, exceeded: false };
     files = [
-      ...await readLegacyRoot(lifecycleRoot, 'delivery', needsUser),
-      ...await readLegacyRoot(lifecycleRoot, 'archive/delivery', needsUser),
+      ...await readLegacyRoot(lifecycleRoot, 'delivery', needsUser, operations, inventoryState),
+      ...await readLegacyRoot(lifecycleRoot, 'archive/delivery', needsUser, operations, inventoryState),
     ];
+    if (inventoryState.exceeded) {
+      needsUser.push({ code: 'INVENTORY_LIMIT', artifact_id: null, locator: 'delivery' });
+      files = [];
+    }
   } catch {
     return failure('DELIVERY_MIGRATION_INVENTORY_INVALID', '/delivery', 'Legacy delivery inventory is unsafe.');
   }
-  if (files.length > MAX_FILES) needsUser.push({ code: 'INVENTORY_LIMIT', artifact_id: null, locator: 'delivery' });
 
   const grouped = new Map();
   const views = {};

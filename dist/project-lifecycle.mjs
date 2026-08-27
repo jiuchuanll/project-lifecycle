@@ -15071,7 +15071,7 @@ var require_dist2 = __commonJS({
 
 // scripts/bin/project-lifecycle-source.mjs
 import { createHash as createHash6 } from "node:crypto";
-import { open as open4, readFile as readFile10, realpath as realpath11, stat as stat2 } from "node:fs/promises";
+import { open as open5, readFile as readFile10, realpath as realpath11, stat as stat2 } from "node:fs/promises";
 import { basename as basename3, dirname as dirname7, isAbsolute as isAbsolute12, relative as relative10, resolve as resolve8, sep as sep10 } from "node:path";
 
 // scripts/lib/atomic-write.mjs
@@ -19792,7 +19792,7 @@ var generateDeliveryIndexes = async ({ inventory } = {}) => {
 // scripts/delivery/delivery-layout-migration.mjs
 var import_yaml2 = __toESM(require_dist(), 1);
 import { createHash as createHash4 } from "node:crypto";
-import { lstat as lstat8, readFile as readFile8, readdir as readdir4, realpath as realpath9 } from "node:fs/promises";
+import { lstat as lstat8, opendir as opendir4, readFile as readFile8, realpath as realpath9 } from "node:fs/promises";
 import { dirname as dirname5, isAbsolute as isAbsolute10, join as join8, posix as posix4, relative as relative8, resolve as resolve7, sep as sep8 } from "node:path";
 import { isDeepStrictEqual as isDeepStrictEqual5 } from "node:util";
 
@@ -22383,7 +22383,7 @@ var attention = {
 };
 function resolveAllAttention(events, context) {
   let index2 = -1;
-  let open5;
+  let open6;
   let group;
   let text4;
   let openingSequence;
@@ -22393,16 +22393,16 @@ function resolveAllAttention(events, context) {
   let offset;
   while (++index2 < events.length) {
     if (events[index2][0] === "enter" && events[index2][1].type === "attentionSequence" && events[index2][1]._close) {
-      open5 = index2;
-      while (open5--) {
-        if (events[open5][0] === "exit" && events[open5][1].type === "attentionSequence" && events[open5][1]._open && // If the markers are the same:
-        context.sliceSerialize(events[open5][1]).charCodeAt(0) === context.sliceSerialize(events[index2][1]).charCodeAt(0)) {
-          if ((events[open5][1]._close || events[index2][1]._open) && (events[index2][1].end.offset - events[index2][1].start.offset) % 3 && !((events[open5][1].end.offset - events[open5][1].start.offset + events[index2][1].end.offset - events[index2][1].start.offset) % 3)) {
+      open6 = index2;
+      while (open6--) {
+        if (events[open6][0] === "exit" && events[open6][1].type === "attentionSequence" && events[open6][1]._open && // If the markers are the same:
+        context.sliceSerialize(events[open6][1]).charCodeAt(0) === context.sliceSerialize(events[index2][1]).charCodeAt(0)) {
+          if ((events[open6][1]._close || events[index2][1]._open) && (events[index2][1].end.offset - events[index2][1].start.offset) % 3 && !((events[open6][1].end.offset - events[open6][1].start.offset + events[index2][1].end.offset - events[index2][1].start.offset) % 3)) {
             continue;
           }
-          use = events[open5][1].end.offset - events[open5][1].start.offset > 1 && events[index2][1].end.offset - events[index2][1].start.offset > 1 ? 2 : 1;
+          use = events[open6][1].end.offset - events[open6][1].start.offset > 1 && events[index2][1].end.offset - events[index2][1].start.offset > 1 ? 2 : 1;
           const start = {
-            ...events[open5][1].end
+            ...events[open6][1].end
           };
           const end = {
             ...events[index2][1].start
@@ -22413,7 +22413,7 @@ function resolveAllAttention(events, context) {
             type: use > 1 ? "strongSequence" : "emphasisSequence",
             start,
             end: {
-              ...events[open5][1].end
+              ...events[open6][1].end
             }
           };
           closingSequence = {
@@ -22426,7 +22426,7 @@ function resolveAllAttention(events, context) {
           text4 = {
             type: use > 1 ? "strongText" : "emphasisText",
             start: {
-              ...events[open5][1].end
+              ...events[open6][1].end
             },
             end: {
               ...events[index2][1].start
@@ -22441,18 +22441,18 @@ function resolveAllAttention(events, context) {
               ...closingSequence.end
             }
           };
-          events[open5][1].end = {
+          events[open6][1].end = {
             ...openingSequence.start
           };
           events[index2][1].start = {
             ...closingSequence.end
           };
           nextEvents = [];
-          if (events[open5][1].end.offset - events[open5][1].start.offset) {
-            nextEvents = push(nextEvents, [["enter", events[open5][1], context], ["exit", events[open5][1], context]]);
+          if (events[open6][1].end.offset - events[open6][1].start.offset) {
+            nextEvents = push(nextEvents, [["enter", events[open6][1], context], ["exit", events[open6][1], context]]);
           }
           nextEvents = push(nextEvents, [["enter", group, context], ["enter", openingSequence, context], ["exit", openingSequence, context], ["enter", text4, context]]);
-          nextEvents = push(nextEvents, resolveAll(context.parser.constructs.insideSpan.null, events.slice(open5 + 1, index2), context));
+          nextEvents = push(nextEvents, resolveAll(context.parser.constructs.insideSpan.null, events.slice(open6 + 1, index2), context));
           nextEvents = push(nextEvents, [["exit", text4, context], ["enter", closingSequence, context], ["exit", closingSequence, context], ["exit", group, context]]);
           if (events[index2][1].end.offset - events[index2][1].start.offset) {
             offset = 2;
@@ -22460,8 +22460,8 @@ function resolveAllAttention(events, context) {
           } else {
             offset = 0;
           }
-          splice(events, open5 - 1, index2 - open5 + 3, nextEvents);
-          index2 = open5 + nextEvents.length - offset - 2;
+          splice(events, open6 - 1, index2 - open6 + 3, nextEvents);
+          index2 = open6 + nextEvents.length - offset - 2;
           break;
         }
       }
@@ -22493,10 +22493,10 @@ function tokenizeAttention(effects, ok2) {
     }
     const token = effects.exit("attentionSequence");
     const after = classifyCharacter(code);
-    const open5 = !after || after === 2 && before || attentionMarkers2.includes(code);
+    const open6 = !after || after === 2 && before || attentionMarkers2.includes(code);
     const close = !before || before === 2 && after || attentionMarkers2.includes(previous2);
-    token._open = Boolean(marker === 42 ? open5 : open5 && (before || !close));
-    token._close = Boolean(marker === 42 ? close : close && (after || !open5));
+    token._open = Boolean(marker === 42 ? open6 : open6 && (before || !close));
+    token._close = Boolean(marker === 42 ? close : close && (after || !open6));
     return ok2(code);
   }
 }
@@ -22520,9 +22520,9 @@ function tokenizeAutolink(effects, ok2, nok) {
     effects.consume(code);
     effects.exit("autolinkMarker");
     effects.enter("autolinkProtocol");
-    return open5;
+    return open6;
   }
-  function open5(code) {
+  function open6(code) {
     if (asciiAlpha(code)) {
       effects.consume(code);
       return schemeOrEmailAtext;
@@ -22722,9 +22722,9 @@ function tokenizeCharacterReference(effects, ok2, nok) {
     effects.enter("characterReferenceMarker");
     effects.consume(code);
     effects.exit("characterReferenceMarker");
-    return open5;
+    return open6;
   }
-  function open5(code) {
+  function open6(code) {
     if (code === 35) {
       effects.enter("characterReferenceMarkerNumeric");
       effects.consume(code);
@@ -24093,9 +24093,9 @@ function tokenizeHtmlFlow(effects, ok2, nok) {
     effects.enter("htmlFlow");
     effects.enter("htmlFlowData");
     effects.consume(code);
-    return open5;
+    return open6;
   }
-  function open5(code) {
+  function open6(code) {
     if (code === 33) {
       effects.consume(code);
       return declarationOpen;
@@ -24443,9 +24443,9 @@ function tokenizeHtmlText(effects, ok2, nok) {
     effects.enter("htmlText");
     effects.enter("htmlTextData");
     effects.consume(code);
-    return open5;
+    return open6;
   }
-  function open5(code) {
+  function open6(code) {
     if (code === 33) {
       effects.consume(code);
       return declarationOpen;
@@ -24771,12 +24771,12 @@ function resolveToLabelEnd(events, context) {
   let index2 = events.length;
   let offset = 0;
   let token;
-  let open5;
+  let open6;
   let close;
   let media;
   while (index2--) {
     token = events[index2][1];
-    if (open5) {
+    if (open6) {
       if (token.type === "link" || token.type === "labelLink" && token._inactive) {
         break;
       }
@@ -24785,7 +24785,7 @@ function resolveToLabelEnd(events, context) {
       }
     } else if (close) {
       if (events[index2][0] === "enter" && (token.type === "labelImage" || token.type === "labelLink") && !token._balanced) {
-        open5 = index2;
+        open6 = index2;
         if (token.type !== "labelLink") {
           offset = 2;
           break;
@@ -24796,9 +24796,9 @@ function resolveToLabelEnd(events, context) {
     }
   }
   const group = {
-    type: events[open5][1].type === "labelLink" ? "link" : "image",
+    type: events[open6][1].type === "labelLink" ? "link" : "image",
     start: {
-      ...events[open5][1].start
+      ...events[open6][1].start
     },
     end: {
       ...events[events.length - 1][1].end
@@ -24807,7 +24807,7 @@ function resolveToLabelEnd(events, context) {
   const label = {
     type: "label",
     start: {
-      ...events[open5][1].start
+      ...events[open6][1].start
     },
     end: {
       ...events[close][1].end
@@ -24816,20 +24816,20 @@ function resolveToLabelEnd(events, context) {
   const text4 = {
     type: "labelText",
     start: {
-      ...events[open5 + offset + 2][1].end
+      ...events[open6 + offset + 2][1].end
     },
     end: {
       ...events[close - 2][1].start
     }
   };
   media = [["enter", group, context], ["enter", label, context]];
-  media = push(media, events.slice(open5 + 1, open5 + offset + 3));
+  media = push(media, events.slice(open6 + 1, open6 + offset + 3));
   media = push(media, [["enter", text4, context]]);
-  media = push(media, resolveAll(context.parser.constructs.insideSpan.null, events.slice(open5 + offset + 4, close - 3), context));
+  media = push(media, resolveAll(context.parser.constructs.insideSpan.null, events.slice(open6 + offset + 4, close - 3), context));
   media = push(media, [["exit", text4, context], events[close - 2], events[close - 1], ["exit", label, context]]);
   media = push(media, events.slice(close + 1));
   media = push(media, [["exit", group, context]]);
-  splice(events, open5, events.length, media);
+  splice(events, open6, events.length, media);
   return events;
 }
 function tokenizeLabelEnd(effects, ok2, nok) {
@@ -24974,9 +24974,9 @@ function tokenizeLabelStartImage(effects, ok2, nok) {
     effects.enter("labelImageMarker");
     effects.consume(code);
     effects.exit("labelImageMarker");
-    return open5;
+    return open6;
   }
-  function open5(code) {
+  function open6(code) {
     if (code === 91) {
       effects.enter("labelMarker");
       effects.consume(code);
@@ -26280,8 +26280,8 @@ function compiler(options) {
     return length;
   }
   function opener(create, and) {
-    return open5;
-    function open5(token) {
+    return open6;
+    function open6(token) {
       enter.call(this, create(token), token);
       if (and) and.call(this, token);
     }
@@ -26313,18 +26313,18 @@ function compiler(options) {
   }
   function exit2(token, onExitError) {
     const node2 = this.stack.pop();
-    const open5 = this.tokenStack.pop();
-    if (!open5) {
+    const open6 = this.tokenStack.pop();
+    if (!open6) {
       throw new Error("Cannot close `" + token.type + "` (" + stringifyPosition({
         start: token.start,
         end: token.end
       }) + "): it’s not open");
-    } else if (open5[0].type !== token.type) {
+    } else if (open6[0].type !== token.type) {
       if (onExitError) {
-        onExitError.call(this, token, open5[0]);
+        onExitError.call(this, token, open6[0]);
       } else {
-        const handler = open5[1] || defaultOnError;
-        handler.call(this, token, open5[0]);
+        const handler = open6[1] || defaultOnError;
+        handler.call(this, token, open6[0]);
       }
     }
     node2.position.end = point2(token.end);
@@ -26829,6 +26829,8 @@ import {
   lstat as lstat7,
   mkdir as mkdir2,
   mkdtemp,
+  open as open4,
+  opendir as opendir3,
   readFile as readFile7,
   readdir as readdir3,
   readlink,
@@ -26888,43 +26890,63 @@ var lifecyclePaths = async (repositoryRoot, { allowMissing = false } = {}) => {
   }
   return { projectRoot: physicalRoot, docsRoot, lifecycleRoot, exists: true };
 };
-var snapshotTree = async (lifecycleRoot) => {
+var snapshotTree = async (lifecycleRoot, operationOverrides = {}) => {
   const rootState = await lstat7(lifecycleRoot);
   const rootReal = await realpath8(lifecycleRoot);
   if (!rootState.isDirectory() || rootState.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
+  const operations = { lstat: lstat7, open: open4, opendir: opendir3, readlink, realpath: realpath8, ...operationOverrides };
   const entries = [];
+  let discoveredEntries = 0;
   let totalBytes = 0;
+  const readBoundedFile2 = async (path) => {
+    const handle = await operations.open(path, "r");
+    try {
+      const buffer = Buffer.alloc(MAX_SNAPSHOT_FILE_BYTES + 1);
+      let bytesRead = 0;
+      while (bytesRead < buffer.length) {
+        const result = await handle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);
+        if (result.bytesRead === 0) break;
+        bytesRead += result.bytesRead;
+      }
+      if (bytesRead > MAX_SNAPSHOT_FILE_BYTES || totalBytes + bytesRead > MAX_SNAPSHOT_TOTAL_BYTES) {
+        throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+      }
+      totalBytes += bytesRead;
+      return buffer.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+  };
   const visit = async (directory, prefix = "", depth = 0) => {
     if (depth > MAX_SNAPSHOT_DEPTH) throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
-    const children = await readdir3(directory, { withFileTypes: true });
-    if (entries.length + children.length > MAX_SNAPSHOT_ENTRIES) {
-      throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+    const children = [];
+    for await (const child of await operations.opendir(directory)) {
+      discoveredEntries += 1;
+      if (discoveredEntries > MAX_SNAPSHOT_ENTRIES) throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+      children.push(child);
     }
     children.sort((left, right) => compareCodePoints(left.name, right.name));
     for (const child of children) {
       const absolute = join7(directory, child.name);
       const locator = prefix ? `${prefix}/${child.name}` : child.name;
-      const state = await lstat7(absolute);
+      const state = await operations.lstat(absolute);
       if (state.isDirectory() && !state.isSymbolicLink()) {
-        const physical = await realpath8(absolute);
+        const physical = await operations.realpath(absolute);
         if (!inside6(rootReal, physical)) throw pathError2("PATH_SYMLINK_ESCAPE");
         entries.push({ locator: `${locator}/`, type: "directory" });
         await visit(physical, locator, depth + 1);
       } else if (state.isFile()) {
-        if (state.size > MAX_SNAPSHOT_FILE_BYTES || totalBytes + state.size > MAX_SNAPSHOT_TOTAL_BYTES) {
-          throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
-        }
-        totalBytes += state.size;
-        entries.push({ locator, type: "file", hash: hash(await readFile7(absolute)) });
+        if (state.size > MAX_SNAPSHOT_FILE_BYTES) throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+        entries.push({ locator, type: "file", hash: hash(await readBoundedFile2(absolute)) });
       } else if (state.isSymbolicLink()) {
         let physical;
         try {
-          physical = await realpath8(absolute);
+          physical = await operations.realpath(absolute);
         } catch {
           throw pathError2("PATH_SYMLINK_ESCAPE");
         }
         if (!inside6(rootReal, physical)) throw pathError2("PATH_SYMLINK_ESCAPE");
-        entries.push({ locator, type: "symlink", target: await readlink(absolute) });
+        entries.push({ locator, type: "symlink", target: await operations.readlink(absolute) });
       } else {
         throw pathError2("LAYOUT_ROOT_INVALID");
       }
@@ -26934,10 +26956,10 @@ var snapshotTree = async (lifecycleRoot) => {
   const fingerprint = hash(JSON.stringify(entries));
   return { fingerprint, entries };
 };
-var inspectLifecycleTree = async ({ repositoryRoot } = {}) => {
+var inspectLifecycleTree = async ({ repositoryRoot, snapshotOperations } = {}) => {
   try {
     const { lifecycleRoot } = await lifecyclePaths(repositoryRoot);
-    return ok(await snapshotTree(lifecycleRoot));
+    return ok(await snapshotTree(lifecycleRoot, snapshotOperations));
   } catch (error) {
     return failure8(
       error?.code ?? "LAYOUT_ROOT_INVALID",
@@ -27384,14 +27406,20 @@ var rootsFor = async (rootValue) => {
   if (!projectState.isDirectory() || projectState.isSymbolicLink() || !docsState.isDirectory() || docsState.isSymbolicLink() || !lifecycleState.isDirectory() || lifecycleState.isSymbolicLink() || !inside7(projectRoot, lifecycleRoot)) throw new Error("Bounded lifecycle root required.");
   return { projectRoot, lifecycleRoot };
 };
-var readLegacyRoot = async (lifecycleRoot, rootLocator, issues) => {
+var readLegacyRoot = async (lifecycleRoot, rootLocator, issues, operations, inventoryState) => {
+  if (inventoryState.exceeded) return [];
   const path = join8(lifecycleRoot, rootLocator);
   try {
     const state = await lstat8(path);
     const physical = await realpath9(path);
     if (!state.isDirectory() || state.isSymbolicLink() || !inside7(lifecycleRoot, physical)) throw new Error();
     const files = [];
-    for (const entry2 of await readdir4(physical, { withFileTypes: true })) {
+    for await (const entry2 of await operations.opendir(physical)) {
+      inventoryState.entries += 1;
+      if (inventoryState.entries > MAX_FILES) {
+        inventoryState.exceeded = true;
+        break;
+      }
       const locator = `${rootLocator}/${entry2.name}`;
       if (entry2.isDirectory() || entry2.isSymbolicLink() || !entry2.isFile()) {
         issues.push({ code: "MIXED_LAYOUT", artifact_id: null, locator });
@@ -27414,7 +27442,7 @@ var linksFrom = (body, source) => [...body.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+
   }
   return { source, scheme, authority, href_hash: hash2(href) };
 });
-var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [] } = {}) => {
+var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], legacyOperations = {} } = {}) => {
   if (!Array.isArray(mappings) || mappings.length > 200) {
     return failure9("DELIVERY_MIGRATION_INPUT_INVALID", "/owner_mappings", "Owner mappings must be one bounded array.");
   }
@@ -27431,14 +27459,19 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [] }
   const needsUser = [];
   let files;
   try {
+    const operations = { opendir: opendir4, ...legacyOperations };
+    const inventoryState = { entries: 0, exceeded: false };
     files = [
-      ...await readLegacyRoot(lifecycleRoot, "delivery", needsUser),
-      ...await readLegacyRoot(lifecycleRoot, "archive/delivery", needsUser)
+      ...await readLegacyRoot(lifecycleRoot, "delivery", needsUser, operations, inventoryState),
+      ...await readLegacyRoot(lifecycleRoot, "archive/delivery", needsUser, operations, inventoryState)
     ];
+    if (inventoryState.exceeded) {
+      needsUser.push({ code: "INVENTORY_LIMIT", artifact_id: null, locator: "delivery" });
+      files = [];
+    }
   } catch {
     return failure9("DELIVERY_MIGRATION_INVENTORY_INVALID", "/delivery", "Legacy delivery inventory is unsafe.");
   }
-  if (files.length > MAX_FILES) needsUser.push({ code: "INVENTORY_LIMIT", artifact_id: null, locator: "delivery" });
   const grouped = /* @__PURE__ */ new Map();
   const views = {};
   for (const file of files.slice(0, MAX_FILES + 1).sort((a, b) => compareCodePoints(a.locator, b.locator))) {
@@ -28367,7 +28400,7 @@ var readInput = async (file, path = "/file", maximumBytes = null) => {
     if (maximumBytes === null) return { ok: true, value: await readFile10(file, "utf8") };
     const pathState = await stat2(file);
     if (!pathState.isFile()) return cliFailure("CLI_READ_ERROR", path, "Bounded input must be a regular file.");
-    const handle = await open4(file, "r");
+    const handle = await open5(file, "r");
     try {
       const state = await handle.stat();
       if (!state.isFile()) return cliFailure("CLI_READ_ERROR", path, "Bounded input must be a regular file.");
