@@ -263,6 +263,7 @@ test('materializes exactly one bilingual pair, map update, and regenerated paire
     'INDEX-en.md',
     'INDEX.md',
     'delivery/',
+    'delivery/layout.json',
     'knowledge/',
     'knowledge/INDEX-en.md',
     'knowledge/INDEX.md',

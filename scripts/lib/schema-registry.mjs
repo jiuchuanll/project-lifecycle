@@ -8,6 +8,7 @@ import archiveAccessReceiptSchema from '../schemas/archive-access-receipt.schema
 import capabilityFrontmatterSchema from '../schemas/capability-frontmatter.schema.json' with { type: 'json' };
 import contextReceiptSchema from '../schemas/context-receipt.schema.json' with { type: 'json' };
 import deliveryFrontmatterSchema from '../schemas/delivery-frontmatter.schema.json' with { type: 'json' };
+import deliveryLayoutSchema from '../schemas/delivery-layout.schema.json' with { type: 'json' };
 import knowledgeDiffSchema from '../schemas/knowledge-diff.schema.json' with { type: 'json' };
 import obligationInstanceSchema from '../schemas/obligation-instance.schema.json' with { type: 'json' };
 import pendingChangesSchema from '../schemas/pending-changes.schema.json' with { type: 'json' };
@@ -33,6 +34,7 @@ const schemaValidators = new Map(
     archiveAccessReceiptSchema,
     obligationInstanceSchema,
     deliveryFrontmatterSchema,
+    deliveryLayoutSchema,
   ]
     .map((schema) => [schema.$id, ajv.compile(schema)]),
 );

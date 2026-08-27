@@ -15734,6 +15734,19 @@ var delivery_frontmatter_schema_default = {
   }
 };
 
+// scripts/schemas/delivery-layout.schema.json
+var delivery_layout_schema_default = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "delivery-layout",
+  type: "object",
+  additionalProperties: false,
+  required: ["schema_version", "layout_version"],
+  properties: {
+    schema_version: { const: 1 },
+    layout_version: { const: 2 }
+  }
+};
+
 // scripts/schemas/knowledge-diff.schema.json
 var knowledge_diff_schema_default = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -16561,7 +16574,8 @@ var schemaValidators = new Map(
     knowledge_diff_schema_default,
     archive_access_receipt_schema_default,
     obligation_instance_schema_default,
-    delivery_frontmatter_schema_default
+    delivery_frontmatter_schema_default,
+    delivery_layout_schema_default
   ].map((schema) => [schema.$id, ajv.compile(schema)])
 );
 var getSchemaValidator = (kind) => schemaValidators.get(kind);

@@ -23,6 +23,10 @@ const pendingChangesAsset = new URL(
   '../../skills/maintain-project-knowledge/assets/pending-changes.json',
   import.meta.url,
 );
+const deliveryLayoutAsset = new URL(
+  '../../skills/maintain-project-knowledge/assets/delivery-layout.json',
+  import.meta.url,
+);
 
 const bootstrapFailure = (code, path, message) => fail([createError(code, path, message)]);
 
@@ -99,6 +103,7 @@ const inspectCompleteBootstrap = async ({
   lifecycleRoot,
   expectedMap,
   expectedPending,
+  expectedDeliveryLayout,
   expectedFiles,
   expectedDirectories,
 }) => {
@@ -113,7 +118,12 @@ const inspectCompleteBootstrap = async ({
       }
     }
 
-    const requiredFiles = ['project-map.json', 'pending-changes.json', ...expectedFiles.map(({ locator }) => locator)];
+    const requiredFiles = [
+      'project-map.json',
+      'pending-changes.json',
+      'delivery/layout.json',
+      ...expectedFiles.map(({ locator }) => locator),
+    ];
     const fileStats = await Promise.all(requiredFiles.map(async (name) => ({
       name,
       stat: await fileState(join(lifecycleRoot, name)),
@@ -122,16 +132,20 @@ const inspectCompleteBootstrap = async ({
       if (!stat?.isFile() || stat.isSymbolicLink()) return { ok: false, path: `/${name}` };
     }
 
-    const [mapSource, pendingSource] = await Promise.all([
+    const [mapSource, pendingSource, deliveryLayoutSource] = await Promise.all([
       readFile(join(lifecycleRoot, 'project-map.json'), 'utf8'),
       readFile(join(lifecycleRoot, 'pending-changes.json'), 'utf8'),
+      readFile(join(lifecycleRoot, 'delivery/layout.json'), 'utf8'),
     ]);
     const existingMap = JSON.parse(mapSource);
     const existingPending = JSON.parse(pendingSource);
+    const existingDeliveryLayout = JSON.parse(deliveryLayoutSource);
     if (!validateJson('project-map', existingMap).ok
       || !validateJson('pending-changes', existingPending).ok
+      || !validateJson('delivery-layout', existingDeliveryLayout).ok
       || !isDeepStrictEqual(existingMap, expectedMap)
-      || !isDeepStrictEqual(existingPending, expectedPending)) {
+      || !isDeepStrictEqual(existingPending, expectedPending)
+      || !isDeepStrictEqual(existingDeliveryLayout, expectedDeliveryLayout)) {
       return { ok: false, path: '/' };
     }
     for (const file of expectedFiles) {
@@ -197,9 +211,11 @@ export async function bootstrap({
 
   let map;
   let pending;
+  let deliveryLayout;
   try {
     const mapBase = await readAsset(projectMapAsset, 'project-map');
     pending = await readAsset(pendingChangesAsset, 'pending-changes');
+    deliveryLayout = await readAsset(deliveryLayoutAsset, 'delivery-layout');
     map = {
       ...mapBase,
       project_id: projectId,
@@ -225,7 +241,13 @@ export async function bootstrap({
       .filter(({ repository_id: repositoryId }) => repositoryId === null)
       .map(({ locator }) => locator),
   ])].sort(compareCodePoints);
-  const expectedPostcondition = { expectedMap: map, expectedPending: pending, expectedFiles, expectedDirectories };
+  const expectedPostcondition = {
+    expectedMap: map,
+    expectedPending: pending,
+    expectedDeliveryLayout: deliveryLayout,
+    expectedFiles,
+    expectedDirectories,
+  };
   const candidateFiles = [
     {
       repository_id: null,
@@ -248,6 +270,18 @@ export async function bootstrap({
           return validateJson('pending-changes', JSON.parse(source));
         } catch {
           return bootstrapFailure('SCHEMA_INVALID', '/', 'Invalid pending-changes.');
+        }
+      },
+    },
+    {
+      repository_id: null,
+      locator: 'delivery/layout.json',
+      content: jsonContent(deliveryLayout),
+      validate: async (source) => {
+        try {
+          return validateJson('delivery-layout', JSON.parse(source));
+        } catch {
+          return bootstrapFailure('SCHEMA_INVALID', '/', 'Invalid delivery layout marker.');
         }
       },
     },
