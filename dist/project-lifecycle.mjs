@@ -3993,10 +3993,10 @@ var require_resolve_block_map = __commonJS({
       let offset = bm.offset;
       let commentEnd = null;
       for (const collItem of bm.items) {
-        const { start, key, sep: sep6, value } = collItem;
+        const { start, key, sep: sep7, value } = collItem;
         const keyProps = resolveProps.resolveProps(start, {
           indicator: "explicit-key-ind",
-          next: key ?? sep6?.[0],
+          next: key ?? sep7?.[0],
           offset,
           onError,
           parentIndent: bm.indent,
@@ -4010,7 +4010,7 @@ var require_resolve_block_map = __commonJS({
             else if ("indent" in key && key.indent !== bm.indent)
               onError(offset, "BAD_INDENT", startColMsg);
           }
-          if (!keyProps.anchor && !keyProps.tag && !sep6) {
+          if (!keyProps.anchor && !keyProps.tag && !sep7) {
             commentEnd = keyProps.end;
             if (keyProps.comment) {
               if (map.comment)
@@ -4034,7 +4034,7 @@ var require_resolve_block_map = __commonJS({
         ctx.atKey = false;
         if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
           onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
-        const valueProps = resolveProps.resolveProps(sep6 ?? [], {
+        const valueProps = resolveProps.resolveProps(sep7 ?? [], {
           indicator: "map-value-ind",
           next: value,
           offset: keyNode.range[2],
@@ -4050,7 +4050,7 @@ var require_resolve_block_map = __commonJS({
             if (ctx.options.strict && keyProps.start < valueProps.found.offset - 1024)
               onError(keyNode.range, "KEY_OVER_1024_CHARS", "The : indicator must be at most 1024 chars after the start of an implicit block mapping key");
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep6, null, valueProps, onError);
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep7, null, valueProps, onError);
           if (ctx.schema.compat)
             utilFlowIndentCheck.flowIndentCheck(bm.indent, value, onError);
           offset = valueNode.range[2];
@@ -4141,7 +4141,7 @@ var require_resolve_end = __commonJS({
       let comment = "";
       if (end) {
         let hasSpace = false;
-        let sep6 = "";
+        let sep7 = "";
         for (const token of end) {
           const { source, type } = token;
           switch (type) {
@@ -4155,13 +4155,13 @@ var require_resolve_end = __commonJS({
               if (!comment)
                 comment = cb;
               else
-                comment += sep6 + cb;
-              sep6 = "";
+                comment += sep7 + cb;
+              sep7 = "";
               break;
             }
             case "newline":
               if (comment)
-                sep6 += source;
+                sep7 += source;
               hasSpace = true;
               break;
             default:
@@ -4204,18 +4204,18 @@ var require_resolve_flow_collection = __commonJS({
       let offset = fc.offset + fc.start.source.length;
       for (let i = 0; i < fc.items.length; ++i) {
         const collItem = fc.items[i];
-        const { start, key, sep: sep6, value } = collItem;
+        const { start, key, sep: sep7, value } = collItem;
         const props = resolveProps.resolveProps(start, {
           flow: fcName,
           indicator: "explicit-key-ind",
-          next: key ?? sep6?.[0],
+          next: key ?? sep7?.[0],
           offset,
           onError,
           parentIndent: fc.indent,
           startOnNewline: false
         });
         if (!props.found) {
-          if (!props.anchor && !props.tag && !sep6 && !value) {
+          if (!props.anchor && !props.tag && !sep7 && !value) {
             if (i === 0 && props.comma)
               onError(props.comma, "UNEXPECTED_TOKEN", `Unexpected , in ${fcName}`);
             else if (i < fc.items.length - 1)
@@ -4269,8 +4269,8 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap2 && !sep6 && !props.found) {
-          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep6, null, props, onError);
+        if (!isMap2 && !sep7 && !props.found) {
+          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep7, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
           if (isBlock(value))
@@ -4282,7 +4282,7 @@ var require_resolve_flow_collection = __commonJS({
           if (isBlock(key))
             onError(keyNode.range, "BLOCK_IN_FLOW", blockMsg);
           ctx.atKey = false;
-          const valueProps = resolveProps.resolveProps(sep6 ?? [], {
+          const valueProps = resolveProps.resolveProps(sep7 ?? [], {
             flow: fcName,
             indicator: "map-value-ind",
             next: value,
@@ -4293,8 +4293,8 @@ var require_resolve_flow_collection = __commonJS({
           });
           if (valueProps.found) {
             if (!isMap2 && !props.found && ctx.options.strict) {
-              if (sep6)
-                for (const st of sep6) {
+              if (sep7)
+                for (const st of sep7) {
                   if (st === valueProps.found)
                     break;
                   if (st.type === "newline") {
@@ -4311,7 +4311,7 @@ var require_resolve_flow_collection = __commonJS({
             else
               onError(valueProps.start, "MISSING_CHAR", `Missing , or : between ${fcName} items`);
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep6, null, valueProps, onError) : null;
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep7, null, valueProps, onError) : null;
           if (valueNode) {
             if (isBlock(value))
               onError(valueNode.range, "BLOCK_IN_FLOW", blockMsg);
@@ -4491,7 +4491,7 @@ var require_resolve_block_scalar = __commonJS({
           chompStart = i + 1;
       }
       let value = "";
-      let sep6 = "";
+      let sep7 = "";
       let prevMoreIndented = false;
       for (let i = 0; i < contentStart; ++i)
         value += lines[i][0].slice(trimIndent) + "\n";
@@ -4508,24 +4508,24 @@ var require_resolve_block_scalar = __commonJS({
           indent = "";
         }
         if (type === Scalar.Scalar.BLOCK_LITERAL) {
-          value += sep6 + indent.slice(trimIndent) + content;
-          sep6 = "\n";
+          value += sep7 + indent.slice(trimIndent) + content;
+          sep7 = "\n";
         } else if (indent.length > trimIndent || content[0] === "	") {
-          if (sep6 === " ")
-            sep6 = "\n";
-          else if (!prevMoreIndented && sep6 === "\n")
-            sep6 = "\n\n";
-          value += sep6 + indent.slice(trimIndent) + content;
-          sep6 = "\n";
+          if (sep7 === " ")
+            sep7 = "\n";
+          else if (!prevMoreIndented && sep7 === "\n")
+            sep7 = "\n\n";
+          value += sep7 + indent.slice(trimIndent) + content;
+          sep7 = "\n";
           prevMoreIndented = true;
         } else if (content === "") {
-          if (sep6 === "\n")
+          if (sep7 === "\n")
             value += "\n";
           else
-            sep6 = "\n";
+            sep7 = "\n";
         } else {
-          value += sep6 + content;
-          sep6 = " ";
+          value += sep7 + content;
+          sep7 = " ";
           prevMoreIndented = false;
         }
       }
@@ -4707,25 +4707,25 @@ var require_resolve_flow_scalar = __commonJS({
       if (!match)
         return source;
       let res = match[1];
-      let sep6 = " ";
+      let sep7 = " ";
       let pos = first.lastIndex;
       line.lastIndex = pos;
       while (match = line.exec(source)) {
         if (match[1] === "") {
-          if (sep6 === "\n")
-            res += sep6;
+          if (sep7 === "\n")
+            res += sep7;
           else
-            sep6 = "\n";
+            sep7 = "\n";
         } else {
-          res += sep6 + match[1];
-          sep6 = " ";
+          res += sep7 + match[1];
+          sep7 = " ";
         }
         pos = line.lastIndex;
       }
       const last = /[ \t]*(.*)/sy;
       last.lastIndex = pos;
       match = last.exec(source);
-      return res + sep6 + (match?.[1] ?? "");
+      return res + sep7 + (match?.[1] ?? "");
     }
     function doubleQuotedValue(source, onError) {
       let res = "";
@@ -5535,14 +5535,14 @@ var require_cst_stringify = __commonJS({
         }
       }
     }
-    function stringifyItem({ start, key, sep: sep6, value }) {
+    function stringifyItem({ start, key, sep: sep7, value }) {
       let res = "";
       for (const st of start)
         res += st.source;
       if (key)
         res += stringifyToken(key);
-      if (sep6)
-        for (const st of sep6)
+      if (sep7)
+        for (const st of sep7)
           res += st.source;
       if (value)
         res += stringifyToken(value);
@@ -6709,18 +6709,18 @@ var require_parser = __commonJS({
         if (this.type === "map-value-ind") {
           const prev = getPrevProps(this.peek(2));
           const start = getFirstKeyStartProps(prev);
-          let sep6;
+          let sep7;
           if (scalar.end) {
-            sep6 = scalar.end;
-            sep6.push(this.sourceToken);
+            sep7 = scalar.end;
+            sep7.push(this.sourceToken);
             delete scalar.end;
           } else
-            sep6 = [this.sourceToken];
+            sep7 = [this.sourceToken];
           const map = {
             type: "block-map",
             offset: scalar.offset,
             indent: scalar.indent,
-            items: [{ start, key: scalar, sep: sep6 }]
+            items: [{ start, key: scalar, sep: sep7 }]
           };
           this.onKeyLine = true;
           this.stack[this.stack.length - 1] = map;
@@ -6873,15 +6873,15 @@ var require_parser = __commonJS({
                 } else if (isFlowToken(it.key) && !includesToken(it.sep, "newline")) {
                   const start2 = getFirstKeyStartProps(it.start);
                   const key = it.key;
-                  const sep6 = it.sep;
-                  sep6.push(this.sourceToken);
+                  const sep7 = it.sep;
+                  sep7.push(this.sourceToken);
                   delete it.key;
                   delete it.sep;
                   this.stack.push({
                     type: "block-map",
                     offset: this.offset,
                     indent: this.indent,
-                    items: [{ start: start2, key, sep: sep6 }]
+                    items: [{ start: start2, key, sep: sep7 }]
                   });
                 } else if (start.length > 0) {
                   it.sep = it.sep.concat(start, this.sourceToken);
@@ -7075,13 +7075,13 @@ var require_parser = __commonJS({
             const prev = getPrevProps(parent);
             const start = getFirstKeyStartProps(prev);
             fixFlowSeqItems(fc);
-            const sep6 = fc.end.splice(1, fc.end.length);
-            sep6.push(this.sourceToken);
+            const sep7 = fc.end.splice(1, fc.end.length);
+            sep7.push(this.sourceToken);
             const map = {
               type: "block-map",
               offset: fc.offset,
               indent: fc.indent,
-              items: [{ start, key: fc, sep: sep6 }]
+              items: [{ start, key: fc, sep: sep7 }]
             };
             this.onKeyLine = true;
             this.stack[this.stack.length - 1] = map;
@@ -10310,7 +10310,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve5.call(this, root, ref);
+      let _sch = resolve6.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a = root.localRefs) === null || _a === void 0 ? void 0 : _a[ref];
         const { schemaId } = this.opts;
@@ -10337,7 +10337,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve5(root, ref) {
+    function resolve6(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -10968,7 +10968,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve5(baseURI, relativeURI, options) {
+    function resolve6(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const { parsed: baseParsed, malformedAuthorityOrPort: baseMalformed } = parseWithStatus(baseURI, schemelessOptions);
       const { parsed: relativeParsed, malformedAuthorityOrPort: relativeMalformed } = parseWithStatus(relativeURI, schemelessOptions);
@@ -10979,49 +10979,49 @@ var require_fast_uri = __commonJS({
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative6, options, skipNormalization) {
+    function resolveComponent(base, relative7, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse(serialize(base, options), options);
-        relative6 = parse(serialize(relative6, options), options);
+        relative7 = parse(serialize(relative7, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative6.scheme) {
-        target.scheme = relative6.scheme;
-        target.userinfo = relative6.userinfo;
-        target.host = relative6.host;
-        target.port = relative6.port;
-        target.path = removeDotSegments(relative6.path || "");
-        target.query = relative6.query;
+      if (!options.tolerant && relative7.scheme) {
+        target.scheme = relative7.scheme;
+        target.userinfo = relative7.userinfo;
+        target.host = relative7.host;
+        target.port = relative7.port;
+        target.path = removeDotSegments(relative7.path || "");
+        target.query = relative7.query;
       } else {
-        if (relative6.userinfo !== void 0 || relative6.host !== void 0 || relative6.port !== void 0) {
-          target.userinfo = relative6.userinfo;
-          target.host = relative6.host;
-          target.port = relative6.port;
-          target.path = removeDotSegments(relative6.path || "");
-          target.query = relative6.query;
+        if (relative7.userinfo !== void 0 || relative7.host !== void 0 || relative7.port !== void 0) {
+          target.userinfo = relative7.userinfo;
+          target.host = relative7.host;
+          target.port = relative7.port;
+          target.path = removeDotSegments(relative7.path || "");
+          target.query = relative7.query;
         } else {
-          if (!relative6.path) {
+          if (!relative7.path) {
             target.path = base.path;
-            if (relative6.query !== void 0) {
-              target.query = relative6.query;
+            if (relative7.query !== void 0) {
+              target.query = relative7.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative6.path[0] === "/") {
-              target.path = removeDotSegments(relative6.path);
+            if (relative7.path[0] === "/") {
+              target.path = removeDotSegments(relative7.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative6.path;
+                target.path = "/" + relative7.path;
               } else if (!base.path) {
-                target.path = relative6.path;
+                target.path = relative7.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative6.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative7.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative6.query;
+            target.query = relative7.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -11029,7 +11029,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative6.fragment;
+      target.fragment = relative7.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -11252,7 +11252,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve5,
+      resolve: resolve6,
       resolveComponent,
       equal,
       serialize,
@@ -15067,8 +15067,8 @@ var require_dist2 = __commonJS({
 
 // scripts/bin/project-lifecycle-source.mjs
 import { createHash as createHash3 } from "node:crypto";
-import { open as open3, readFile as readFile5, realpath as realpath6, stat } from "node:fs/promises";
-import { basename as basename3, dirname as dirname4, isAbsolute as isAbsolute6, relative as relative5, resolve as resolve4, sep as sep5 } from "node:path";
+import { open as open4, readFile as readFile6, realpath as realpath7, stat } from "node:fs/promises";
+import { basename as basename3, dirname as dirname4, isAbsolute as isAbsolute8, relative as relative6, resolve as resolve5, sep as sep6 } from "node:path";
 
 // scripts/lib/atomic-write.mjs
 import { open, readFile, rename, unlink } from "node:fs/promises";
@@ -18138,8 +18138,10 @@ var validateFixtures = async (rootValue) => {
 import { isDeepStrictEqual } from "node:util";
 
 // scripts/lib/reference-safety.mjs
+import { isAbsolute as isAbsolute5, posix as posix2 } from "node:path";
 var credentialBearingUrl = /[a-z][a-z0-9+.-]*:\/\/[^/\s]*@/iu;
 var isSafeReference = (value) => typeof value === "string" && value.length > 0 && value.length <= 500 && !/[\p{Cc}\p{Cf}\p{Z}`<>\\]/u.test(value) && !value.includes("--") && !credentialBearingUrl.test(value);
+var isSafeLocator = (value) => typeof value === "string" && isSafeReference(value) && !isAbsolute5(value) && !/^[A-Za-z]:[\\/]/u.test(value) && !value.includes("://") && !/[#()]/u.test(value) && !value.split("/").includes("..") && posix2.normalize(value) === value;
 
 // scripts/delivery/close-delivery.mjs
 var ID = /^[a-z][a-z0-9-]*$/u;
@@ -18316,9 +18318,9 @@ var validateAlignmentFeedbackDocuments = ({ documents, projectMap } = {}) => {
 };
 
 // scripts/delivery/alignment-review.mjs
-import { lstat as lstat4, readFile as readFile4, readdir as readdir2, realpath as realpath5, unlink as unlink2 } from "node:fs/promises";
-import { isAbsolute as isAbsolute5, join as join4, relative as relative4, sep as sep4 } from "node:path";
-import { isDeepStrictEqual as isDeepStrictEqual2 } from "node:util";
+import { lstat as lstat5, mkdir, readFile as readFile5, realpath as realpath6, unlink as unlink2 } from "node:fs/promises";
+import { isAbsolute as isAbsolute7, join as join5, relative as relative5, sep as sep5 } from "node:path";
+import { isDeepStrictEqual as isDeepStrictEqual3 } from "node:util";
 
 // scripts/lib/closure-summary.mjs
 import { createHash as createHash2 } from "node:crypto";
@@ -18338,11 +18340,297 @@ var extractClosureSummaryHash = (body) => {
   return title ? CLOSURE_SUMMARY_MARKER.exec(normalized.slice(title[0].length))?.[1] ?? null : null;
 };
 
+// scripts/delivery/delivery-inventory.mjs
+import { lstat as lstat4, open as open3, readFile as readFile4, readdir as readdir2, realpath as realpath5 } from "node:fs/promises";
+import { isAbsolute as isAbsolute6, join as join4, relative as relative4, resolve as resolve4, sep as sep4 } from "node:path";
+import { isDeepStrictEqual as isDeepStrictEqual2 } from "node:util";
+
+// scripts/delivery/delivery-layout.mjs
+var DELIVERY_LAYOUT = Object.freeze({ schema_version: 1, layout_version: 2 });
+var CHILD_DIRECTORIES = Object.freeze({
+  architecture: "architecture",
+  guidance: "guidance",
+  batch: "batches",
+  "test-report": "test-reports",
+  "closure-summary": "closure"
+});
+var languagePair = (directory, artifactId) => ({
+  en: `${directory}/${artifactId}-en.md`,
+  "zh-CN": `${directory}/${artifactId}.md`
+});
+var ownerRoot = (ownerKind, ownerId) => {
+  if (ownerKind === "prd") return `delivery/prds/${ownerId}`;
+  if (ownerKind === "non-prd-delivery") return `delivery/non-prd/${ownerId}`;
+  throw Object.assign(new Error("Invalid physical owner kind."), { code: "DELIVERY_OWNER_MISMATCH" });
+};
+var activeDirectory = (frontmatter, ownerKind) => {
+  if (frontmatter.artifact_kind === "feedback") return "delivery/feedback";
+  const root = ownerRoot(ownerKind, frontmatter.owner_artifact_id);
+  const child = CHILD_DIRECTORIES[frontmatter.artifact_kind];
+  return child ? `${root}/${child}` : root;
+};
+var activeDeliveryPair = (frontmatter, { ownerKind = null } = {}) => languagePair(
+  activeDirectory(frontmatter, ownerKind),
+  frontmatter.artifact_id
+);
+var archivedDeliveryPair = (frontmatter, { ownerKind = null } = {}) => {
+  const active = activeDirectory(frontmatter, ownerKind);
+  return languagePair(active.replace(/^delivery\//u, "archive/delivery/"), frontmatter.artifact_id);
+};
+var alignmentReviewPair = () => languagePair("delivery/views", "alignment-review");
+
+// scripts/delivery/delivery-inventory.mjs
+var MAX_ENTRIES = 2e3;
+var MAX_DEPTH = 4;
+var MAX_FRONTMATTER_BYTES = 65536;
+var GENERATED_NOTICE = "<!-- Generated by Project Lifecycle from validated active alignment state; do not edit. -->\n";
+var INDEX_NOTICE = "<!-- Generated by Project Lifecycle from validated delivery Frontmatter; do not edit. -->\n";
+var PHASE_KINDS = Object.freeze({
+  architecture: "architecture",
+  batches: "batch",
+  closure: "closure-summary",
+  guidance: "guidance",
+  "test-reports": "test-report"
+});
+var failure3 = (code, path, message) => fail([createError(code, path, message)]);
+var inside2 = (root, candidate) => {
+  const fromRoot = relative4(root, candidate);
+  return fromRoot === "" || fromRoot !== ".." && !fromRoot.startsWith(`..${sep4}`) && !isAbsolute6(fromRoot);
+};
+var languageOf = (name) => name.endsWith("-en.md") ? "en" : "zh-CN";
+var artifactIdOf = (name) => name.replace(/-en\.md$/u, "").replace(/\.md$/u, "");
+var canonicalDirectory = (locator) => /^(?:delivery|archive\/delivery)\/(?:feedback|prds|non-prd)(?:\/[a-z][a-z0-9-]*(?:\/(?:architecture|batches|closure|guidance|test-reports))?)?$/u.test(locator) || locator === "delivery/views";
+var canonicalIndex = (locator) => /^delivery\/(?:INDEX(?:-en)?\.md|(?:prds|non-prd)\/[a-z][a-z0-9-]*\/INDEX(?:-en)?\.md)$/u.test(locator);
+var readPrefix = async (path) => {
+  const handle = await open3(path, "r");
+  try {
+    const buffer = Buffer.alloc(MAX_FRONTMATTER_BYTES);
+    for (let offset = 0; offset < buffer.length; offset += 1) {
+      const { bytesRead } = await handle.read(buffer, offset, 1, offset);
+      if (bytesRead === 0) break;
+      const source = buffer.subarray(0, offset + 1).toString("utf8").replaceAll("\r\n", "\n");
+      const closing = source.indexOf("\n---\n", 4);
+      if (source.startsWith("---\n") && closing !== -1) return source.slice(0, closing + 5);
+    }
+    throw new Error("Frontmatter is missing or unbounded.");
+  } finally {
+    await handle.close();
+  }
+};
+var parseFrontmatter2 = (source) => {
+  const normalized = source.replaceAll("\r\n", "\n");
+  const closing = normalized.indexOf("\n---\n", 4);
+  if (!normalized.startsWith("---\n") || closing === -1) return null;
+  const parsed = parseRestrictedYaml(normalized.slice(4, closing), "/frontmatter");
+  if (!parsed.ok || !validateJson("delivery-frontmatter", parsed.value).ok || parsed.value.schema_version !== 2) return null;
+  return parsed.value;
+};
+var classify = (locator) => {
+  const archived = locator.startsWith("archive/delivery/");
+  const prefix = archived ? "archive/delivery/" : "delivery/";
+  const rest = locator.slice(prefix.length);
+  const feedback = /^feedback\/([a-z][a-z0-9-]*\.md)$/u.exec(rest);
+  if (feedback) return { archived, artifactId: artifactIdOf(feedback[1]), ownerKind: null, ownerId: null, expectedKind: "feedback" };
+  const owner = /^(prds|non-prd)\/([a-z][a-z0-9-]*)\/(?:([a-z-]+)\/)?([a-z][a-z0-9-]*\.md)$/u.exec(rest);
+  if (!owner) return null;
+  const ownerKind = owner[1] === "prds" ? "prd" : "non-prd-delivery";
+  const phase = owner[3] ?? null;
+  return {
+    archived,
+    artifactId: artifactIdOf(owner[4]),
+    ownerKind,
+    ownerId: owner[2],
+    expectedKind: phase === null ? ownerKind : PHASE_KINDS[phase] ?? null
+  };
+};
+var itemFromPair = (pair) => ({
+  artifact_id: pair.en.frontmatter.artifact_id,
+  artifact_kind: pair.en.frontmatter.artifact_kind,
+  ...pair.en.frontmatter.owner_artifact_id ? { owner_artifact_id: pair.en.frontmatter.owner_artifact_id } : {},
+  retention_tier: pair.en.frontmatter.retention_tier,
+  frontmatter: pair.en.frontmatter,
+  locators: { en: pair.en.locator, "zh-CN": pair["zh-CN"].locator }
+});
+var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} } = {}) => {
+  if (typeof rootValue !== "string" || !isAbsolute6(rootValue) || overlays === null || typeof overlays !== "object" || Array.isArray(overlays)) {
+    return failure3("DELIVERY_INVENTORY_INVALID", "/", "A bounded lifecycle root and overlay map are required.");
+  }
+  let lifecycleRoot;
+  try {
+    const state = await lstat4(resolve4(rootValue));
+    lifecycleRoot = await realpath5(resolve4(rootValue));
+    if (!state.isDirectory() || state.isSymbolicLink()) throw new Error("Regular lifecycle root required.");
+  } catch {
+    return failure3("DELIVERY_INVENTORY_INVALID", "/lifecycleRoot", "A regular lifecycle root is required.");
+  }
+  const sources = /* @__PURE__ */ new Map();
+  let entryCount = 0;
+  const scan = async (rootLocator) => {
+    const lexical = join4(lifecycleRoot, rootLocator);
+    let root;
+    try {
+      const state = await lstat4(lexical);
+      root = await realpath5(lexical);
+      if (!state.isDirectory() || state.isSymbolicLink() || !inside2(lifecycleRoot, root)) throw new Error("Unsafe delivery root.");
+    } catch (error) {
+      if (error.code === "ENOENT") return;
+      throw error;
+    }
+    const visit = async (directory, relativeDirectory, depth) => {
+      if (depth > MAX_DEPTH) throw new Error("Delivery tree exceeds the managed depth.");
+      for (const entry of await readdir2(directory, { withFileTypes: true })) {
+        entryCount += 1;
+        if (entryCount > MAX_ENTRIES || entry.isSymbolicLink()) throw new Error("Delivery tree is unsafe or unbounded.");
+        const path = join4(directory, entry.name);
+        const locator = `${rootLocator}/${relativeDirectory ? `${relativeDirectory}/` : ""}${entry.name}`;
+        if (entry.isDirectory()) {
+          if (!canonicalDirectory(locator)) throw new Error("Delivery tree contains an unknown directory.");
+          await visit(path, relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name, depth + 1);
+        } else if (entry.isFile()) {
+          const physical = await realpath5(path);
+          if (!inside2(lifecycleRoot, physical)) throw new Error("Delivery file escapes lifecycle root.");
+          const state = await lstat4(physical);
+          sources.set(locator, { path: physical, size: state.size });
+        } else throw new Error("Unsupported delivery entry.");
+      }
+    };
+    await visit(root, "", 0);
+  };
+  try {
+    await scan("delivery");
+    await scan("archive/delivery");
+    for (const [locator, source] of Object.entries(overlays)) {
+      if (!isSafeLocator(locator) || typeof source !== "string" || !(locator.startsWith("delivery/") || locator.startsWith("archive/delivery/"))) {
+        throw new Error("Invalid delivery overlay.");
+      }
+      sources.set(locator, { overlay: source });
+    }
+  } catch {
+    return failure3("DELIVERY_INVENTORY_INVALID", "/delivery", "Delivery inventory could not be collected safely.");
+  }
+  const markerSource = sources.get("delivery/layout.json");
+  if (!markerSource) {
+    return failure3("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/delivery/layout.json", "Delivery layout v2 marker is required.");
+  }
+  try {
+    const source = markerSource.overlay ?? await readFile4(markerSource.path, "utf8");
+    if (!validateJson("delivery-layout", JSON.parse(source)).ok) throw new Error("Invalid layout marker.");
+  } catch {
+    return failure3("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/delivery/layout.json", "Delivery layout v2 marker is invalid.");
+  }
+  const ignored = /* @__PURE__ */ new Set([
+    "delivery/layout.json",
+    "delivery/INDEX-en.md",
+    "delivery/INDEX.md"
+  ]);
+  const viewLocators = ["delivery/views/alignment-review-en.md", "delivery/views/alignment-review.md"];
+  const presentViews = viewLocators.map((locator) => sources.has(locator));
+  if (presentViews[0] !== presentViews[1]) {
+    return failure3("DELIVERY_INVENTORY_PAIR_INVALID", "/delivery/views", "Generated delivery views require both languages.");
+  }
+  if (presentViews[0]) {
+    for (const locator of viewLocators) {
+      const source = sources.get(locator);
+      const text = source.overlay ?? (source.size <= 131072 ? await readFile4(source.path, "utf8").catch(() => null) : null);
+      if (typeof text !== "string" || Buffer.byteLength(text) > 131072 || !text.startsWith(GENERATED_NOTICE)) {
+        return failure3("DELIVERY_INVENTORY_INVALID", `/${locator}`, "Generated delivery view locator is occupied.");
+      }
+      ignored.add(locator);
+    }
+  }
+  for (const [locator, source] of sources) {
+    if (!/\/(?:INDEX-en\.md|INDEX\.md)$/u.test(locator)) continue;
+    if (!canonicalIndex(locator)) {
+      return failure3("DELIVERY_INVENTORY_INVALID", `/${locator}`, "Delivery index locator is not canonical.");
+    }
+    const content = source.overlay ?? (source.size <= 131072 ? await readFile4(source.path, "utf8").catch(() => null) : null);
+    if (typeof content !== "string" || !content.startsWith(INDEX_NOTICE)) {
+      return failure3("DELIVERY_INVENTORY_INVALID", `/${locator}`, "Delivery index locator is occupied.");
+    }
+    ignored.add(locator);
+  }
+  const grouped = /* @__PURE__ */ new Map();
+  for (const [locator, source] of [...sources.entries()].sort(([left], [right]) => compareCodePoints(left, right))) {
+    if (ignored.has(locator)) continue;
+    const descriptor = classify(locator);
+    if (!descriptor || descriptor.expectedKind === null) {
+      return failure3("DELIVERY_INVENTORY_INVALID", `/${locator}`, "Delivery contains an unknown managed file.");
+    }
+    const raw = source.overlay ?? await readPrefix(source.path).catch(() => null);
+    const metadata = typeof raw === "string" && Buffer.byteLength(raw) <= 262144 ? parseFrontmatter2(raw) : null;
+    if (!metadata || metadata.artifact_id !== descriptor.artifactId || metadata.artifact_kind !== descriptor.expectedKind || descriptor.ownerId !== null && metadata.owner_artifact_id !== descriptor.ownerId) {
+      return failure3("DELIVERY_INVENTORY_PATH_MISMATCH", `/${locator}`, "Delivery path and Frontmatter ownership must match.");
+    }
+    const expected = descriptor.archived ? archivedDeliveryPair(metadata, { ownerKind: descriptor.ownerKind }) : activeDeliveryPair(metadata, { ownerKind: descriptor.ownerKind });
+    if (!Object.values(expected).includes(locator)) {
+      return failure3("DELIVERY_INVENTORY_PATH_MISMATCH", `/${locator}`, "Delivery locator is not canonical for its owner.");
+    }
+    const key = `${descriptor.archived ? "archive" : "active"}:${metadata.artifact_id}`;
+    const pair = grouped.get(key) ?? {};
+    const language = languageOf(locator);
+    if (pair[language]) return failure3("DELIVERY_INVENTORY_DUPLICATE", `/${locator}`, "Delivery artifact language is duplicated.");
+    pair[language] = { language, locator, frontmatter: metadata };
+    grouped.set(key, pair);
+  }
+  const activeItems = [];
+  const archivedItems = [];
+  const activePairs = [];
+  const archivedPairs = [];
+  const artifactIds = /* @__PURE__ */ new Set();
+  for (const [key, pair] of grouped) {
+    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual2(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
+      return failure3("DELIVERY_INVENTORY_PAIR_INVALID", `/${key}`, "Delivery artifacts require one matching bilingual pair.");
+    }
+    const item = itemFromPair(pair);
+    if (artifactIds.has(item.artifact_id)) {
+      return failure3("DELIVERY_INVENTORY_DUPLICATE", `/${item.artifact_id}`, "Delivery artifact IDs must be globally unique.");
+    }
+    artifactIds.add(item.artifact_id);
+    if (key.startsWith("archive:")) {
+      archivedItems.push(item);
+      archivedPairs.push(pair.en, pair["zh-CN"]);
+    } else {
+      activeItems.push(item);
+      activePairs.push(pair.en, pair["zh-CN"]);
+    }
+  }
+  const sortItems = (values) => values.sort((left, right) => compareCodePoints(left.artifact_id, right.artifact_id));
+  sortItems(activeItems);
+  sortItems(archivedItems);
+  const owners = sortItems(activeItems.filter(({ artifact_kind: kind }) => ["prd", "non-prd-delivery"].includes(kind)));
+  const byOwner = {};
+  const archivedByOwner = {};
+  for (const owner of owners) byOwner[owner.artifact_id] = { owner, assets: [] };
+  for (const item of activeItems) {
+    if (item.owner_artifact_id && byOwner[item.owner_artifact_id]) byOwner[item.owner_artifact_id].assets.push(item);
+  }
+  for (const item of archivedItems) {
+    if (!item.owner_artifact_id) continue;
+    archivedByOwner[item.owner_artifact_id] ??= { owner_artifact_id: item.owner_artifact_id, assets: [] };
+    archivedByOwner[item.owner_artifact_id].assets.push(item);
+  }
+  for (const entry of Object.values(byOwner)) sortItems(entry.assets);
+  for (const entry of Object.values(archivedByOwner)) sortItems(entry.assets);
+  return ok({
+    layout_version: 2,
+    feedbacks: sortItems(activeItems.filter(({ artifact_kind: kind }) => kind === "feedback")),
+    owners,
+    closed_summaries: sortItems([...activeItems, ...archivedItems].filter(({ artifact_kind: kind }) => kind === "closure-summary")),
+    views: presentViews[0] ? [{
+      artifact_id: "alignment-review",
+      locators: { en: viewLocators[0], "zh-CN": viewLocators[1] }
+    }] : [],
+    by_owner: byOwner,
+    archived_by_owner: archivedByOwner,
+    pairs: activePairs.sort((left, right) => compareCodePoints(left.locator, right.locator)),
+    archived_pairs: archivedPairs.sort((left, right) => compareCodePoints(left.locator, right.locator))
+  });
+};
+
 // scripts/delivery/alignment-review.mjs
-var GENERATED_NOTICE = "<!-- Generated by Project Lifecycle from validated active alignment state; do not edit. -->";
-var MAX_INVENTORY_FILES = 2e3;
+var GENERATED_NOTICE2 = "<!-- Generated by Project Lifecycle from validated active alignment state; do not edit. -->";
 var MAX_DOCUMENT_BYTES = 262144;
-var failure3 = (path, message) => fail([
+var failure4 = (path, message) => fail([
   createError("ALIGNMENT_REVIEW_INPUT_INVALID", path, message)
 ]);
 var safeTitle = (value) => typeof value === "string" && value.trim() === value && value.length > 0 && value.length <= 200 && !/[\r\n\p{Cc}\p{Cf}]/u.test(value);
@@ -18352,12 +18640,12 @@ var rejectedClosure = (closure) => ["ABANDONED", "CANCELLED", "REJECTED"].includ
 var coversFeedback = (closure, feedbackId) => Array.isArray(closure?.feedback_coverage) && closure.feedback_coverage.some((entry) => entry?.feedback_id === feedbackId);
 var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}) => {
   if (!Array.isArray(feedbacks) || !Array.isArray(owners) || !Array.isArray(closures)) {
-    return failure3("/", "Alignment review inputs must be bounded arrays.");
+    return failure4("/", "Alignment review inputs must be bounded arrays.");
   }
   const closureByOwner = /* @__PURE__ */ new Map();
   for (const [index, closure] of closures.entries()) {
     if (!validateClosureSummary(closure).ok || closureByOwner.has(closure.owner_artifact_id)) {
-      return failure3(`/closures/${index}`, "Closure summaries require unique owner references.");
+      return failure4(`/closures/${index}`, "Closure summaries require unique owner references.");
     }
     closureByOwner.set(closure.owner_artifact_id, closure);
   }
@@ -18365,7 +18653,7 @@ var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}
   for (const [index, candidate] of owners.entries()) {
     const validation2 = validateJson("delivery-frontmatter", candidate);
     if (!validation2.ok || !["prd", "non-prd-delivery"].includes(candidate.artifact_kind)) {
-      return failure3(`/owners/${index}`, "Alignment owners must be valid PRD or non-PRD delivery assets.");
+      return failure4(`/owners/${index}`, "Alignment owners must be valid PRD or non-PRD delivery assets.");
     }
     ownerRecords.push(candidate);
   }
@@ -18374,14 +18662,14 @@ var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}
   for (const [index, entry] of feedbacks.entries()) {
     const validation2 = validateJson("delivery-frontmatter", entry?.frontmatter);
     if (!validation2.ok || entry.frontmatter.artifact_kind !== "feedback" || entry.frontmatter.retention_tier !== "active") {
-      return failure3(`/feedbacks/${index}`, "Alignment entries must reference valid Feedback Frontmatter.");
+      return failure4(`/feedbacks/${index}`, "Alignment entries must reference valid Feedback Frontmatter.");
     }
     const feedbackId = entry.frontmatter.artifact_id;
-    if (ids.has(feedbackId)) return failure3(`/feedbacks/${index}`, "Feedback IDs must be unique.");
+    if (ids.has(feedbackId)) return failure4(`/feedbacks/${index}`, "Feedback IDs must be unique.");
     ids.add(feedbackId);
     if (entry.marker === null) continue;
     if (!validateJson("alignment-marker", entry.marker).ok || !entry.frontmatter.domain_ids.includes(entry.marker.primary_domain_id) || !safeTitle(entry.titles?.en) || !safeTitle(entry.titles?.["zh-CN"])) {
-      return failure3(`/feedbacks/${index}`, "Active alignment Feedback must have one validated marker and localized titles.");
+      return failure4(`/feedbacks/${index}`, "Active alignment Feedback must have one validated marker and localized titles.");
     }
     const linkedOwners = ownerRecords.filter((candidate) => candidate.relationships.feedback_ids.includes(feedbackId));
     const requiredOwners = [];
@@ -18390,22 +18678,22 @@ var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}
       const feedbackProject = entry.frontmatter.current_project_id ?? entry.frontmatter.project_id_at_creation;
       const ownerProject = candidate.current_project_id ?? candidate.project_id_at_creation;
       if (ownerProject !== feedbackProject) {
-        return failure3(`/owners/${candidate.artifact_id}`, "Linked alignment owner must belong to the Feedback project.");
+        return failure4(`/owners/${candidate.artifact_id}`, "Linked alignment owner must belong to the Feedback project.");
       }
       const closure = closureByOwner.get(candidate.artifact_id);
       if (closure && closure.baseline.starting !== candidate.knowledge_baseline) {
-        return failure3(`/closures/${candidate.artifact_id}`, "Owner closure must match its starting knowledge baseline.");
+        return failure4(`/closures/${candidate.artifact_id}`, "Owner closure must match its starting knowledge baseline.");
       }
       if (rejectedClosure(closure)) {
         if (!coversFeedback(closure, feedbackId)) {
-          return failure3(`/closures/${candidate.artifact_id}`, "Terminal closure must explicitly cover linked Feedback.");
+          return failure4(`/closures/${candidate.artifact_id}`, "Terminal closure must explicitly cover linked Feedback.");
         }
         continue;
       }
       requiredOwners.push(candidate.artifact_id);
       if (closure?.outcome?.status === "ACCEPTED") {
         if (!acceptedClosure(closure, feedbackId)) {
-          return failure3(`/closures/${candidate.artifact_id}`, "Accepted closure must explicitly cover linked Feedback.");
+          return failure4(`/closures/${candidate.artifact_id}`, "Accepted closure must explicitly cover linked Feedback.");
         }
         acceptedOwners.add(candidate.artifact_id);
       }
@@ -18424,13 +18712,13 @@ var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}
   rows.sort((left, right) => compareCodePoints(left.feedback_id, right.feedback_id));
   const review = { schema_version: 1, rows };
   const validation = validateJson("alignment-review", review);
-  return validation.ok ? ok(review) : failure3("/", "Derived alignment review violates its closed schema.");
+  return validation.ok ? ok(review) : failure4("/", "Derived alignment review violates its closed schema.");
 };
 var escapeTable = (value) => value.replace(/[\\`*_\[\]{}()<>#+.!|~-]/gu, "\\$&");
 var render = (review, language) => {
   const heading = language === "en" ? "Active alignment review" : "活动对齐审阅";
   const lines = [
-    GENERATED_NOTICE,
+    GENERATED_NOTICE2,
     `# ${heading}`,
     "",
     "| feedback_id | title | primary_domain_id | alignment_phase | owner_ref |",
@@ -18447,31 +18735,31 @@ var renderAlignmentReviewPair = (review) => ({
   en: render(review, "en"),
   "zh-CN": render(review, "zh-CN")
 });
-var inside2 = (root, candidate) => {
-  const path = relative4(root, candidate);
-  return path === "" || path !== ".." && !path.startsWith(`..${sep4}`) && !isAbsolute5(path);
+var inside3 = (root, candidate) => {
+  const path = relative5(root, candidate);
+  return path === "" || path !== ".." && !path.startsWith(`..${sep5}`) && !isAbsolute7(path);
 };
 var regularDirectory = async (path, parent = null) => {
-  const state = await lstat4(path);
-  const physical = await realpath5(path);
-  if (!state.isDirectory() || state.isSymbolicLink() || parent && !inside2(parent, physical)) {
+  const state = await lstat5(path);
+  const physical = await realpath6(path);
+  if (!state.isDirectory() || state.isSymbolicLink() || parent && !inside3(parent, physical)) {
     throw new Error("Unsafe alignment review directory.");
   }
   return physical;
 };
 var resolveLifecycleRoot = async (root) => {
-  if (typeof root !== "string" || !isAbsolute5(root)) throw new Error("Absolute project root required.");
+  if (typeof root !== "string" || !isAbsolute7(root)) throw new Error("Absolute project root required.");
   const projectRoot = await regularDirectory(root);
-  const docsRoot = await regularDirectory(join4(root, "docs"), projectRoot);
-  const lifecycleRoot = await regularDirectory(join4(root, "docs", "project-lifecycle"), docsRoot);
-  await regularDirectory(join4(root, "docs", "project-lifecycle", "delivery"), lifecycleRoot);
+  const docsRoot = await regularDirectory(join5(root, "docs"), projectRoot);
+  const lifecycleRoot = await regularDirectory(join5(root, "docs", "project-lifecycle"), docsRoot);
+  await regularDirectory(join5(root, "docs", "project-lifecycle", "delivery"), lifecycleRoot);
   return lifecycleRoot;
 };
 var readExisting = async (path) => {
   try {
-    const state = await lstat4(path);
+    const state = await lstat5(path);
     if (!state.isFile() || state.isSymbolicLink()) throw new Error("Unsafe projection target.");
-    return readFile4(path, "utf8");
+    return readFile5(path, "utf8");
   } catch (error) {
     if (error.code === "ENOENT") return null;
     throw error;
@@ -18486,47 +18774,30 @@ var splitDeliveryDocument2 = (source) => {
   if (!parsed.ok || !validateJson("delivery-frontmatter", parsed.value).ok) return null;
   return { frontmatter: parsed.value, body: normalized.slice(closing + 5) };
 };
-var addPairLanguage = (pairs, document, name) => {
-  const id = document.frontmatter.artifact_id;
-  const language = name === `${id}-en.md` ? "en" : name === `${id}.md` ? "zh-CN" : null;
-  if (language === null) throw new Error("Delivery inventory contains a non-canonical locator.");
-  const pair = pairs.get(id) ?? {};
-  if (pair[language]) throw new Error("Delivery inventory contains a duplicate language.");
-  pair[language] = document;
-  pairs.set(id, pair);
-};
 var discoverAlignmentInventory = async (lifecycleRoot) => {
-  const roots = [await regularDirectory(join4(lifecycleRoot, "delivery"), lifecycleRoot)];
-  try {
-    roots.push(await regularDirectory(join4(lifecycleRoot, "archive", "delivery"), lifecycleRoot));
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
-  const entries = [];
-  for (const root of roots) {
-    for (const name of await readdir2(root)) {
-      if (name.endsWith(".md") && !["alignment-review-en.md", "alignment-review.md"].includes(name)) {
-        entries.push({ root, name });
-      }
-    }
-  }
-  if (entries.length > MAX_INVENTORY_FILES) throw new Error("Delivery inventory is unbounded.");
+  const collected = await collectDeliveryInventory({ lifecycleRoot });
+  if (!collected.ok) throw new Error("Delivery inventory is incomplete.");
   const pairs = /* @__PURE__ */ new Map();
-  for (const { root, name } of entries) {
-    const path = join4(root, name);
-    const state = await lstat4(path);
-    if (!state.isFile() || state.isSymbolicLink() || state.size > MAX_DOCUMENT_BYTES) {
+  for (const entry of [...collected.value.pairs, ...collected.value.archived_pairs]) {
+    const path = join5(lifecycleRoot, entry.locator);
+    const state = await lstat5(path);
+    const physical = await realpath6(path);
+    if (!state.isFile() || state.isSymbolicLink() || state.size > MAX_DOCUMENT_BYTES || !inside3(lifecycleRoot, physical)) {
       throw new Error("Delivery inventory contains an unsafe document.");
     }
-    const document = splitDeliveryDocument2(await readFile4(path, "utf8"));
-    if (!document) throw new Error("Delivery inventory contains an invalid document.");
-    addPairLanguage(pairs, document, name);
+    const document = splitDeliveryDocument2(await readFile5(physical, "utf8"));
+    if (!document || !isDeepStrictEqual3(document.frontmatter, entry.frontmatter)) {
+      throw new Error("Delivery inventory changed after validation.");
+    }
+    const pair = pairs.get(entry.frontmatter.artifact_id) ?? {};
+    pair[entry.language] = document;
+    pairs.set(entry.frontmatter.artifact_id, pair);
   }
   const feedbacks = [];
   const owners = [];
   const closureProofs = /* @__PURE__ */ new Set();
   for (const [id, pair] of pairs) {
-    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual2(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
+    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual3(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
       throw new Error(`Delivery pair ${id} is incomplete or divergent.`);
     }
     const frontmatter = pair.en.frontmatter;
@@ -18567,10 +18838,20 @@ var discoverAlignmentInventory = async (lifecycleRoot) => {
     }))
   };
 };
+var ensureProjectionDirectory = async (lifecycleRoot) => {
+  const path = join5(lifecycleRoot, "delivery", "views");
+  try {
+    return await regularDirectory(path, lifecycleRoot);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    await mkdir(path);
+    return regularDirectory(path, lifecycleRoot);
+  }
+};
 var sameRecords = (supplied, authoritative, identity) => {
   const suppliedById = new Map(supplied.map((value) => [identity(value), value]));
   const authoritativeById = new Map(authoritative.map((value) => [identity(value), value]));
-  return suppliedById.size === supplied.length && suppliedById.size === authoritativeById.size && [...authoritativeById].every(([id, value]) => isDeepStrictEqual2(suppliedById.get(id), value));
+  return suppliedById.size === supplied.length && suppliedById.size === authoritativeById.size && [...authoritativeById].every(([id, value]) => isDeepStrictEqual3(suppliedById.get(id), value));
 };
 var validateAuthoritativeInventory = async (lifecycleRoot, input) => {
   const inventory = await discoverAlignmentInventory(lifecycleRoot);
@@ -18586,12 +18867,12 @@ var writeContent = (write, lifecycleRoot, locator, content) => write({
   root: lifecycleRoot,
   target: locator,
   content,
-  validate: async (source) => source === content ? ok(source) : failure3("/", "Generated projection content changed during publication.")
+  validate: async (source) => source === content ? ok(source) : failure4("/", "Generated projection content changed during publication.")
 });
 var restore = async ({ write, remove, lifecycleRoot, locator, original }) => {
   if (original === null) {
     try {
-      await remove(join4(lifecycleRoot, locator));
+      await remove(join5(lifecycleRoot, locator));
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
@@ -18608,13 +18889,10 @@ var syncAlignmentReview = async (input = {}, operations = {}) => {
   } catch {
     return fail([createError("ALIGNMENT_REVIEW_PATH_INVALID", "/root", "Projection targets require the fixed regular lifecycle root.")]);
   }
-  const locators = {
-    en: "delivery/alignment-review-en.md",
-    "zh-CN": "delivery/alignment-review.md"
-  };
+  const locators = alignmentReviewPair();
   const paths = {
-    en: join4(lifecycleRoot, locators.en),
-    "zh-CN": join4(lifecycleRoot, locators["zh-CN"])
+    en: join5(lifecycleRoot, locators.en),
+    "zh-CN": join5(lifecycleRoot, locators["zh-CN"])
   };
   let existing;
   try {
@@ -18628,8 +18906,8 @@ var syncAlignmentReview = async (input = {}, operations = {}) => {
   if (existing.en === null !== (existing["zh-CN"] === null)) {
     return fail([createError("ALIGNMENT_REVIEW_PAIR_INCOMPLETE", "/delivery", "Generated projection files must exist as a pair.")]);
   }
-  if (existing.en !== null && (!existing.en.startsWith(`${GENERATED_NOTICE}
-`) || !existing["zh-CN"].startsWith(`${GENERATED_NOTICE}
+  if (existing.en !== null && (!existing.en.startsWith(`${GENERATED_NOTICE2}
+`) || !existing["zh-CN"].startsWith(`${GENERATED_NOTICE2}
 `))) {
     return fail([createError("ALIGNMENT_REVIEW_COLLISION", "/delivery", "Projection locators are occupied by a non-generated delivery asset.")]);
   }
@@ -18670,6 +18948,11 @@ var syncAlignmentReview = async (input = {}, operations = {}) => {
     return ok({ row_count: 0, phases: [], locators, status: "removed" });
   }
   const pair = renderAlignmentReviewPair(review.value);
+  try {
+    await ensureProjectionDirectory(lifecycleRoot);
+  } catch {
+    return fail([createError("ALIGNMENT_REVIEW_PATH_INVALID", "/delivery/views", "Projection directory must be a regular managed directory.")]);
+  }
   try {
     await writeContent(write, lifecycleRoot, locators.en, pair.en);
   } catch {
@@ -18727,10 +19010,10 @@ var emit = (result, status = result.ok ? 0 : 1) => {
 };
 var readInput = async (file, path = "/file", maximumBytes = null) => {
   try {
-    if (maximumBytes === null) return { ok: true, value: await readFile5(file, "utf8") };
+    if (maximumBytes === null) return { ok: true, value: await readFile6(file, "utf8") };
     const pathState = await stat(file);
     if (!pathState.isFile()) return cliFailure("CLI_READ_ERROR", path, "Bounded input must be a regular file.");
-    const handle = await open3(file, "r");
+    const handle = await open4(file, "r");
     try {
       const state = await handle.stat();
       if (!state.isFile()) return cliFailure("CLI_READ_ERROR", path, "Bounded input must be a regular file.");
@@ -18757,7 +19040,7 @@ var readInput = async (file, path = "/file", maximumBytes = null) => {
 };
 var samePhysicalFile = async (left, right) => {
   try {
-    const [leftReal, rightReal] = await Promise.all([realpath6(left), realpath6(right)]);
+    const [leftReal, rightReal] = await Promise.all([realpath7(left), realpath7(right)]);
     if (leftReal === rightReal) return { ok: true, value: true };
     const [leftState, rightState] = await Promise.all([stat(leftReal), stat(rightReal)]);
     return {
@@ -18787,10 +19070,10 @@ var resolvePointerMap = async (pointerFile, locator) => {
       "Unable to resolve governance locator."
     );
   }
-  const mapFile = resolve4(dirname4(resolve4(pointerFile)), locator);
+  const mapFile = resolve5(dirname4(resolve5(pointerFile)), locator);
   let source;
   try {
-    source = await readFile5(mapFile, "utf8");
+    source = await readFile6(mapFile, "utf8");
   } catch {
     return cliFailure(
       ERROR_CODES.REFERENCE_MISSING,
@@ -18823,8 +19106,8 @@ var parseNamedOptions = (args, names) => {
   return Object.keys(values).length === names.length ? values : null;
 };
 var isInside = (base, candidate) => {
-  const fromBase = relative5(base, candidate);
-  return fromBase === "" || !fromBase.startsWith(`..${sep5}`) && fromBase !== ".." && !isAbsolute6(fromBase);
+  const fromBase = relative6(base, candidate);
+  return fromBase === "" || !fromBase.startsWith(`..${sep6}`) && fromBase !== ".." && !isAbsolute8(fromBase);
 };
 var validAlignmentState = (value) => value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 3 && ["feedbacks", "owners", "closures"].every((field) => Array.isArray(value[field]) && value[field].length <= 1e3);
 if (command === "help") {
@@ -18850,12 +19133,12 @@ if (command === "help") {
       "/arguments",
       "Usage: collect-evidence --root <absolute-path> --output <absolute-path>."
     ), 2);
-  } else if (!isAbsolute6(options["--root"]) || !isAbsolute6(options["--output"])) {
+  } else if (!isAbsolute8(options["--root"]) || !isAbsolute8(options["--output"])) {
     emit(cliFailure("CLI_PATH_INVALID", "/arguments", "Root and output paths must be absolute."), 2);
   } else {
     try {
-      const lexicalLifecycleRoot = resolve4(options["--root"], "docs/project-lifecycle");
-      const lexicalOutput = resolve4(options["--output"]);
+      const lexicalLifecycleRoot = resolve5(options["--root"], "docs/project-lifecycle");
+      const lexicalOutput = resolve5(options["--output"]);
       if (isInside(lexicalLifecycleRoot, lexicalOutput)) {
         emit(cliFailure(
           "CLI_OUTPUT_FORBIDDEN",
@@ -18863,14 +19146,14 @@ if (command === "help") {
           "Evidence output must remain outside docs/project-lifecycle."
         ), 2);
       } else {
-        const root = await realpath6(options["--root"]);
-        const outputParent = await realpath6(dirname4(options["--output"]));
+        const root = await realpath7(options["--root"]);
+        const outputParent = await realpath7(dirname4(options["--output"]));
         const outputName = basename3(options["--output"]);
-        const output = resolve4(outputParent, outputName);
-        const lifecycleRoot = resolve4(root, "docs/project-lifecycle");
+        const output = resolve5(outputParent, outputName);
+        const lifecycleRoot = resolve5(root, "docs/project-lifecycle");
         const physicalLifecycleRoots = [lifecycleRoot];
         try {
-          physicalLifecycleRoots.push(await realpath6(lifecycleRoot));
+          physicalLifecycleRoots.push(await realpath7(lifecycleRoot));
         } catch (error) {
           if (error.code !== "ENOENT") throw error;
         }
@@ -18939,7 +19222,7 @@ if (command === "help") {
   }
 } else if (command === "sync-alignment-review") {
   const options = parseNamedOptions(process.argv.slice(3), ["--root", "--input"]);
-  if (!options || !isAbsolute6(options["--root"]) || !isAbsolute6(options["--input"])) {
+  if (!options || !isAbsolute8(options["--root"]) || !isAbsolute8(options["--input"])) {
     emit(cliFailure("CLI_USAGE", "/arguments", "Usage: sync-alignment-review --root <absolute-project-root> --input <absolute-json-envelope>."), 2);
   } else {
     const source = await readInput(options["--input"], "/input", 1048576);

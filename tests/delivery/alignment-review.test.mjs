@@ -13,6 +13,7 @@ import {
   renderAlignmentReviewPair,
   syncAlignmentReview,
 } from '../../scripts/delivery/alignment-review.mjs';
+import { activeDeliveryPair, archivedDeliveryPair } from '../../scripts/delivery/delivery-layout.mjs';
 
 const marker = (routing_disposition = undefined) => ({
   schema_version: 1,
@@ -23,7 +24,7 @@ const marker = (routing_disposition = undefined) => ({
 
 const feedback = (id, overrides = {}) => ({
   frontmatter: {
-    schema_version: 1,
+    schema_version: 2,
     artifact_id: id,
     artifact_kind: 'feedback',
     primary_route: 'KNOWLEDGE_UPDATE',
@@ -42,9 +43,10 @@ const feedback = (id, overrides = {}) => ({
 });
 
 const owner = (id, feedbackIds, overrides = {}) => ({
-  schema_version: 1,
+  schema_version: 2,
   artifact_id: id,
   artifact_kind: 'prd',
+  owner_artifact_id: id,
   primary_route: 'PRD_DELIVERY',
   project_id_at_creation: 'sample-project',
   current_project_id: 'sample-project',
@@ -125,7 +127,7 @@ Coverage pending.
 <!-- /project-lifecycle:section -->
 `;
 
-const writePair = async (delivery, record) => {
+const writePair = async (lifecycleRoot, record, { ownerKind = null, archived = false } = {}) => {
   const { frontmatter } = record;
   const closureMarker = record.closure_summary
     ? `<!-- project-lifecycle:closure-summary sha256=${closureSummaryHash(record.closure_summary)} -->\n`
@@ -140,8 +142,12 @@ const writePair = async (delivery, record) => {
         'zh-CN': `# ${frontmatter.artifact_id}\n${closureMarker}\n权威交付资产。\n`,
       };
   const header = `---\n${stringifyYaml(frontmatter, { lineWidth: 0 }).trimEnd()}\n---\n`;
-  await writeFile(join(delivery, `${frontmatter.artifact_id}-en.md`), `${header}${body.en}`);
-  await writeFile(join(delivery, `${frontmatter.artifact_id}.md`), `${header}${body['zh-CN']}`);
+  const locators = archived
+    ? archivedDeliveryPair(frontmatter, { ownerKind })
+    : activeDeliveryPair(frontmatter, { ownerKind });
+  await mkdir(join(lifecycleRoot, locators.en, '..'), { recursive: true });
+  await writeFile(join(lifecycleRoot, locators.en), `${header}${body.en}`);
+  await writeFile(join(lifecycleRoot, locators['zh-CN']), `${header}${body['zh-CN']}`);
 };
 
 const closureAsset = (summary, linkedOwner) => ({
@@ -149,6 +155,7 @@ const closureAsset = (summary, linkedOwner) => ({
   frontmatter: {
     ...owner(summary.artifact_id, [], {
       artifact_kind: 'closure-summary',
+      owner_artifact_id: linkedOwner.artifact_id,
       primary_route: linkedOwner.primary_route,
       relationships: {
         feedback_ids: [...linkedOwner.relationships.feedback_ids],
@@ -161,17 +168,24 @@ const closureAsset = (summary, linkedOwner) => ({
   },
 });
 
-const writeInventory = async (root, { feedbacks = [], owners = [], closures = [] }) => {
-  const delivery = join(root, 'docs', 'project-lifecycle', 'delivery');
-  await mkdir(delivery, { recursive: true });
-  for (const record of feedbacks) await writePair(delivery, record);
-  for (const frontmatter of owners) await writePair(delivery, { frontmatter });
+const writeInventory = async (root, {
+  feedbacks = [], owners = [], closures = [], archivedClosureIds = [],
+}) => {
+  const lifecycleRoot = join(root, 'docs', 'project-lifecycle');
+  await mkdir(join(lifecycleRoot, 'delivery'), { recursive: true });
+  await writeFile(join(lifecycleRoot, 'delivery/layout.json'), '{"schema_version":1,"layout_version":2}\n');
+  for (const record of feedbacks) await writePair(lifecycleRoot, record);
+  for (const frontmatter of owners) await writePair(lifecycleRoot, { frontmatter }, { ownerKind: frontmatter.artifact_kind });
   for (const summary of closures) {
     const linkedOwner = owners.find(({ artifact_id: id }) => id === summary.owner_artifact_id);
     assert.ok(linkedOwner, `missing owner for ${summary.artifact_id}`);
     const asset = closureAsset(summary, linkedOwner);
     delete asset.frontmatter.current_project_id;
-    await writePair(delivery, asset);
+    if (archivedClosureIds.includes(summary.artifact_id)) asset.frontmatter.retention_tier = 'archive';
+    await writePair(lifecycleRoot, asset, {
+      ownerKind: linkedOwner.artifact_kind,
+      archived: archivedClosureIds.includes(summary.artifact_id),
+    });
   }
 };
 
@@ -359,8 +373,8 @@ test('publishes and removes the bilingual generated projection as one pair', asy
   const published = await syncAlignmentReview(active);
   assert.equal(published.ok, true);
   assert.deepEqual(published.value.locators, {
-    en: 'delivery/alignment-review-en.md',
-    'zh-CN': 'delivery/alignment-review.md',
+    en: 'delivery/views/alignment-review-en.md',
+    'zh-CN': 'delivery/views/alignment-review.md',
   });
   assert.match(await readFile(join(root, 'docs', 'project-lifecycle', published.value.locators.en), 'utf8'), /feedback-active/u);
 
@@ -368,8 +382,8 @@ test('publishes and removes the bilingual generated projection as one pair', asy
   const removed = await syncAlignmentReview({ root, feedbacks: [], owners: [], closures: [] });
   assert.equal(removed.ok, true);
   assert.deepEqual(
-    (await readdir(join(root, 'docs', 'project-lifecycle', 'delivery'))).sort(),
-    ['feedback-active-en.md', 'feedback-active.md'],
+    (await readdir(join(root, 'docs', 'project-lifecycle', 'delivery', 'views'))).sort(),
+    [],
   );
 });
 
@@ -395,9 +409,23 @@ test('reports an unchanged generated pair when the first removal fails', async (
 test('rejects projection publication when authoritative Feedback, owner, or closure inventory is omitted', async () => {
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-inventory-'));
   const feedbacks = [feedback('feedback-authoritative')];
-  const owners = [owner('prd-authoritative', ['feedback-authoritative'])];
-  const closures = [closure('prd-authoritative', ['feedback-authoritative'])];
-  await writeInventory(root, { feedbacks, owners, closures });
+  const owners = [
+    owner('prd-authoritative', ['feedback-authoritative']),
+    owner('delivery-authoritative', ['feedback-authoritative'], {
+      artifact_kind: 'non-prd-delivery',
+      primary_route: 'NON_PRD_DELIVERY',
+    }),
+  ];
+  const closures = [
+    closure('prd-authoritative', ['feedback-authoritative']),
+    closure('delivery-authoritative', ['feedback-authoritative']),
+  ];
+  await writeInventory(root, {
+    feedbacks,
+    owners,
+    closures,
+    archivedClosureIds: ['closure-delivery-authoritative'],
+  });
 
   for (const omitted of [
     { feedbacks: [], owners, closures },
@@ -420,23 +448,34 @@ test('rejects projection publication when authoritative Feedback, owner, or clos
   assert.equal(forged.errors[0].code, 'ALIGNMENT_REVIEW_INVENTORY_INCOMPLETE');
 });
 
-test('refuses to overwrite or remove a non-generated asset at the projection locators', async () => {
+test('refuses flat projection collisions and manually authored files at the v2 projection locators', async () => {
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-collision-'));
   const delivery = join(root, 'docs', 'project-lifecycle', 'delivery');
-  await mkdir(delivery, { recursive: true });
+  await mkdir(join(delivery, 'views'), { recursive: true });
+  await writeFile(join(delivery, 'layout.json'), '{"schema_version":1,"layout_version":2}\n');
   const originals = {
     en: '---\nartifact_id: alignment-review\n---\nExisting English asset.\n',
     'zh-CN': '---\nartifact_id: alignment-review\n---\n现有中文资产。\n',
   };
-  await writeFile(join(delivery, 'alignment-review-en.md'), originals.en);
-  await writeFile(join(delivery, 'alignment-review.md'), originals['zh-CN']);
+  await writeFile(join(delivery, 'views/alignment-review-en.md'), originals.en);
+  await writeFile(join(delivery, 'views/alignment-review.md'), originals['zh-CN']);
 
   for (const feedbacks of [[feedback('feedback-active')], []]) {
     const result = await syncAlignmentReview({ root, feedbacks, owners: [], closures: [] });
     assert.equal(result.errors[0].code, 'ALIGNMENT_REVIEW_COLLISION');
-    assert.equal(await readFile(join(delivery, 'alignment-review-en.md'), 'utf8'), originals.en);
-    assert.equal(await readFile(join(delivery, 'alignment-review.md'), 'utf8'), originals['zh-CN']);
+    assert.equal(await readFile(join(delivery, 'views/alignment-review-en.md'), 'utf8'), originals.en);
+    assert.equal(await readFile(join(delivery, 'views/alignment-review.md'), 'utf8'), originals['zh-CN']);
   }
+
+  const flatRoot = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-flat-collision-'));
+  const flatDelivery = join(flatRoot, 'docs', 'project-lifecycle', 'delivery');
+  await mkdir(flatDelivery, { recursive: true });
+  await writeFile(join(flatDelivery, 'layout.json'), '{"schema_version":1,"layout_version":2}\n');
+  await writeFile(join(flatDelivery, 'alignment-review-en.md'), originals.en);
+  await writeFile(join(flatDelivery, 'alignment-review.md'), originals['zh-CN']);
+  const flat = await syncAlignmentReview({ root: flatRoot, feedbacks: [], owners: [], closures: [] });
+  assert.equal(flat.ok, false);
+  assert.equal(flat.errors[0].code, 'ALIGNMENT_REVIEW_INVENTORY_INCOMPLETE');
 });
 
 test('restores the prior English projection when the Chinese write fails', async () => {
@@ -445,7 +484,7 @@ test('restores the prior English projection when the Chinese write fails', async
   const initial = { root, feedbacks: [feedback('feedback-active')], owners: [], closures: [] };
   await writeInventory(root, initial);
   assert.equal((await syncAlignmentReview(initial)).ok, true);
-  const path = join(root, 'docs', 'project-lifecycle', 'delivery', 'alignment-review-en.md');
+  const path = join(root, 'docs', 'project-lifecycle', 'delivery', 'views', 'alignment-review-en.md');
   const original = await readFile(path, 'utf8');
   let writes = 0;
   const changed = feedback('feedback-active', { titles: { en: 'Changed', 'zh-CN': '已更改' } });

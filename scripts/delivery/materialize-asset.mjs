@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat, mkdir, readFile, readdir, realpath, rmdir, unlink } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, rmdir, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -18,6 +18,7 @@ import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 import { validateAlignmentExit, validateAlignmentFeedbackPair } from './alignment-marker.mjs';
 import { validateClosureSummary } from './close-delivery.mjs';
+import { collectDeliveryInventory } from './delivery-inventory.mjs';
 import {
   activeDeliveryPair,
   detectDeliveryLayout,
@@ -301,72 +302,31 @@ const cleanupManagedDirectories = async (directories) => {
 };
 
 const discoverAlignmentResolutionInventory = async (lifecycleRoot, feedbackId) => {
-  const roots = [await requireRegularDirectory(join(lifecycleRoot, 'delivery'), lifecycleRoot)];
-  try {
-    roots.push(await requireRegularDirectory(join(lifecycleRoot, 'archive', 'delivery'), lifecycleRoot));
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
-  const entries = [];
-  let scannedEntries = 0;
-  const visit = async (directory, depth = 0) => {
-    if (depth > 6) throw new Error('Delivery owner inventory is too deep.');
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      scannedEntries += 1;
-      if (scannedEntries > 2000) throw new Error('Delivery owner inventory is unbounded.');
-      if (entry.isSymbolicLink()) throw new Error('Delivery owner inventory contains a symbolic link.');
-      const path = join(directory, entry.name);
-      if (entry.isDirectory()) await visit(path, depth + 1);
-      else if (entry.isFile()
-        && entry.name.endsWith('.md')
-        && !['INDEX-en.md', 'INDEX.md', 'alignment-review-en.md', 'alignment-review.md'].includes(entry.name)) {
-        entries.push({ path, name: entry.name });
-      }
-    }
-  };
-  for (const root of roots) await visit(root);
-  const pairs = new Map();
-  for (const { path, name } of entries) {
-    const source = await existingFile(path, lifecycleRoot);
-    if (source === null || Buffer.byteLength(source) > MAX_DOCUMENT_BYTES) {
-      throw new Error('Delivery owner inventory contains an invalid file.');
-    }
-    const document = splitDocument(source);
-    if (!document || !validateJson('delivery-frontmatter', document.frontmatter).ok) {
-      throw new Error('Delivery owner inventory contains invalid Frontmatter.');
-    }
-    const linkedOwner = ['prd', 'non-prd-delivery'].includes(document.frontmatter.artifact_kind)
-      && document.frontmatter.relationships.feedback_ids.includes(feedbackId);
-    const closureSummary = document.frontmatter.artifact_kind === 'closure-summary'
-      && document.frontmatter.relationships.feedback_ids.includes(feedbackId);
-    if (!linkedOwner && !closureSummary) continue;
-    const id = document.frontmatter.artifact_id;
-    const language = name === `${id}-en.md`
-      ? 'en'
-      : name === `${id}.md`
-        ? 'zh-CN'
-        : null;
-    if (language === null) throw new Error('Linked delivery owner uses a non-canonical locator.');
-    const pair = pairs.get(id) ?? {};
-    if (pair[language]) throw new Error('Linked delivery owner language is duplicated.');
-    pair[language] = {
-      frontmatter: document.frontmatter,
-      closureHash: closureSummary ? extractClosureSummaryHash(document.body) : null,
-    };
-    pairs.set(id, pair);
-  }
-  const owners = [];
+  const collected = await collectDeliveryInventory({ lifecycleRoot });
+  if (!collected.ok) throw new Error('Delivery owner inventory is invalid.');
+  const owners = [...collected.value.pairs, ...collected.value.archived_pairs]
+    .filter(({ language, frontmatter }) => language === 'en'
+      && ['prd', 'non-prd-delivery'].includes(frontmatter.artifact_kind)
+      && frontmatter.relationships.feedback_ids.includes(feedbackId))
+    .map(({ frontmatter }) => frontmatter);
   const closureIds = new Set();
-  for (const pair of pairs.values()) {
-    if (!pair.en || !pair['zh-CN'] || !isDeepStrictEqual(pair.en, pair['zh-CN'])) {
-      throw new Error('Linked delivery evidence pair is incomplete or divergent.');
+  for (const closure of collected.value.closed_summaries.filter(({ frontmatter }) => (
+    frontmatter.relationships.feedback_ids.includes(feedbackId)
+  ))) {
+    const hashes = [];
+    for (const language of ['en', 'zh-CN']) {
+      const source = await existingFile(join(lifecycleRoot, closure.locators[language]), lifecycleRoot);
+      if (source === null || Buffer.byteLength(source) > MAX_DOCUMENT_BYTES) {
+        throw new Error('Closure inventory contains an invalid file.');
+      }
+      const document = splitDocument(source);
+      if (!document || !isDeepStrictEqual(document.frontmatter, closure.frontmatter)) {
+        throw new Error('Closure inventory changed after validation.');
+      }
+      hashes.push(extractClosureSummaryHash(document.body));
     }
-    const frontmatter = pair.en.frontmatter;
-    if (['prd', 'non-prd-delivery'].includes(frontmatter.artifact_kind)
-      && frontmatter.relationships.feedback_ids.includes(feedbackId)) {
-      owners.push(frontmatter);
-    } else if (frontmatter.artifact_kind === 'closure-summary' && pair.en.closureHash !== null) {
-      closureIds.add(`${frontmatter.artifact_id}:${pair.en.closureHash}`);
+    if (hashes[0] !== null && hashes[0] === hashes[1]) {
+      closureIds.add(`${closure.artifact_id}:${hashes[0]}`);
     }
   }
   return { owners, closureIds };

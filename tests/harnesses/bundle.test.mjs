@@ -36,7 +36,7 @@ test('runs the bundled validator from a clean managed-plugin copy without node_m
   );
   await writeFile(join(fixtures, 'invalid.json'), '{}\n');
   const alignmentFrontmatter = {
-    schema_version: 1,
+    schema_version: 2,
     artifact_id: 'feedback-retire-legacy',
     artifact_kind: 'feedback',
     primary_route: 'KNOWLEDGE_UPDATE',
@@ -96,9 +96,10 @@ Open.
   }));
   const project = join(install, 'project');
   const projectDelivery = join(project, 'docs', 'project-lifecycle', 'delivery');
-  await mkdir(projectDelivery, { recursive: true });
-  await copyFile(join(fixtures, 'alignment-en.md'), join(projectDelivery, 'feedback-retire-legacy-en.md'));
-  await copyFile(join(fixtures, 'alignment.md'), join(projectDelivery, 'feedback-retire-legacy.md'));
+  await mkdir(join(projectDelivery, 'feedback'), { recursive: true });
+  await writeFile(join(projectDelivery, 'layout.json'), '{"schema_version":1,"layout_version":2}\n');
+  await copyFile(join(fixtures, 'alignment-en.md'), join(projectDelivery, 'feedback', 'feedback-retire-legacy-en.md'));
+  await copyFile(join(fixtures, 'alignment.md'), join(projectDelivery, 'feedback', 'feedback-retire-legacy.md'));
   const alignmentState = join(fixtures, 'alignment-state.json');
   await writeFile(alignmentState, JSON.stringify({
     feedbacks: [{
@@ -144,7 +145,7 @@ Open.
   ], install);
   assert.equal(sync.status, 0);
   assert.equal(envelope(sync).value.row_count, 1);
-  assert.match(await readFile(join(project, 'docs', 'project-lifecycle', 'delivery', 'alignment-review-en.md'), 'utf8'), /feedback-retire-legacy/u);
+  assert.match(await readFile(join(project, 'docs', 'project-lifecycle', 'delivery', 'views', 'alignment-review-en.md'), 'utf8'), /feedback-retire-legacy/u);
 });
 
 test('keeps the legacy CLI path dependency-free in a managed-plugin cache', async (context) => {

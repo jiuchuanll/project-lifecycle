@@ -430,7 +430,16 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
       join(root, 'docs', 'project-lifecycle', 'delivery', 'prds', 'prd-retire-wiki-density', name),
       join(archive, name),
     );
+    const archivedSource = await readFile(join(archive, name), 'utf8');
+    await writeFile(
+      join(archive, name),
+      archivedSource
+        .replace('current_project_id: sample-project\n', '')
+        .replace('retention_tier: active', 'retention_tier: archive'),
+    );
   }
+  delete deliveryOwner.current_project_id;
+  deliveryOwner.retention_tier = 'archive';
   const closure = {
     artifact_id: 'closure-prd-retire-wiki-density',
     owner_artifact_id: 'prd-retire-wiki-density',
