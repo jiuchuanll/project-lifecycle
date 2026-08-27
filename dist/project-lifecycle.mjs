@@ -19343,7 +19343,11 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
   for (const item of activeItems) {
     if (!item.owner_artifact_id) continue;
     if (!byOwner[item.owner_artifact_id]) {
-      if (item.artifact_kind === "closure-summary" && retainedOwnerIds.has(item.owner_artifact_id)) continue;
+      if (item.artifact_kind === "closure-summary" && retainedOwnerIds.has(item.owner_artifact_id)) {
+        const retainedOwner = archivedByOwner[item.owner_artifact_id].assets.find((candidate) => candidate.artifact_id === item.owner_artifact_id && ["prd", "non-prd-delivery"].includes(candidate.artifact_kind));
+        if (retainedOwner && !ownerKindMismatch(item, retainedOwner)) continue;
+        return failure5("DELIVERY_INVENTORY_OWNER_MISMATCH", `/${item.artifact_id}`, "Closure summary and retained physical owner kinds must match.");
+      }
       return failure5("DELIVERY_INVENTORY_OWNER_MISSING", `/${item.artifact_id}`, "Every active owned asset requires one active physical owner.");
     }
     if (ownerKindMismatch(item, byOwner[item.owner_artifact_id].owner)) {

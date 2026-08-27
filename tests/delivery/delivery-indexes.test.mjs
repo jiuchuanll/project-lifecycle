@@ -179,6 +179,15 @@ test('rejects half pairs, path mismatches, unknown files, symlinks, and noncanon
   const crossKindResult = await collectDeliveryInventory({ lifecycleRoot: crossKind.lifecycleRoot });
   assert.equal(crossKindResult.ok, false);
   assert.equal(crossKindResult.errors[0].code, 'DELIVERY_INVENTORY_OWNER_MISMATCH');
+
+  const retainedCrossKind = await fixture(context);
+  await writePair(retainedCrossKind.lifecycleRoot, 'delivery/non-prd/prd-retained-v1/closure/closure-retained-cross-kind-en.md', frontmatter({
+    artifact_id: 'closure-retained-cross-kind', artifact_kind: 'closure-summary', owner_artifact_id: 'prd-retained-v1',
+    retention_tier: 'closed-summary',
+  }));
+  const retainedCrossKindResult = await collectDeliveryInventory({ lifecycleRoot: retainedCrossKind.lifecycleRoot });
+  assert.equal(retainedCrossKindResult.ok, false);
+  assert.equal(retainedCrossKindResult.errors[0].code, 'DELIVERY_INVENTORY_OWNER_MISMATCH');
 });
 
 test('rejects delivery trees beyond the managed depth and file-count bounds', async (context) => {
