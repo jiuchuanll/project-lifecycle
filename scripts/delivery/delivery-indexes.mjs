@@ -55,7 +55,10 @@ const renderOwner = (inventory, owner, language) => {
   const ownerRoot = owner.artifact_kind === 'prd'
     ? `delivery/prds/${owner.artifact_id}`
     : `delivery/non-prd/${owner.artifact_id}`;
-  const active = inventory.by_owner[owner.artifact_id]?.assets ?? [];
+  const active = inventory.by_owner[owner.artifact_id]?.assets
+    ?? (inventory.closed_summaries ?? []).filter((item) => (
+      item.owner_artifact_id === owner.artifact_id && item.locators.en.startsWith('delivery/')
+    ));
   const archived = inventory.archived_by_owner[owner.artifact_id]?.assets ?? [];
   return [
     NOTICE,
@@ -80,7 +83,15 @@ export const generateDeliveryIndexes = async ({ inventory } = {}) => {
   for (const language of ['en', 'zh-CN']) {
     files.push({ locator: `delivery/${languageName(language)}`, language, content: renderRoot(inventory, language) });
   }
-  for (const owner of inventory.owners) {
+  const ownersById = new Map(inventory.owners.map((owner) => [owner.artifact_id, owner]));
+  for (const { owner_artifact_id: ownerId, assets } of Object.values(inventory.archived_by_owner ?? {})) {
+    const retainedOwner = assets.find(({ artifact_id: id, artifact_kind: kind }) => (
+      id === ownerId && ['prd', 'non-prd-delivery'].includes(kind)
+    ));
+    if (retainedOwner && !ownersById.has(ownerId)) ownersById.set(ownerId, retainedOwner);
+  }
+  const owners = [...ownersById.values()].sort((left, right) => compareCodePoints(left.artifact_id, right.artifact_id));
+  for (const owner of owners) {
     const root = owner.artifact_kind === 'prd'
       ? `delivery/prds/${owner.artifact_id}`
       : `delivery/non-prd/${owner.artifact_id}`;

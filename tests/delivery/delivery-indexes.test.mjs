@@ -122,6 +122,8 @@ test('collects canonical v2 pairs by one physical owner and renders paired index
     'delivery/INDEX.md',
     'delivery/non-prd/non-prd-index-repair/INDEX-en.md',
     'delivery/non-prd/non-prd-index-repair/INDEX.md',
+    'delivery/prds/prd-retained-v1/INDEX-en.md',
+    'delivery/prds/prd-retained-v1/INDEX.md',
     'delivery/prds/prd-search-v1/INDEX-en.md',
     'delivery/prds/prd-search-v1/INDEX.md',
     'delivery/prds/prd-wiki-v1/INDEX-en.md',

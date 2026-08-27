@@ -1,4 +1,4 @@
-import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
+import { lstat, opendir, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -21,6 +21,8 @@ const CHILD_DIRECTORIES = Object.freeze({
 });
 const V2_DIRECTORIES = new Set(['feedback', 'non-prd', 'prds', 'views']);
 const V2_ROOT_FILES = new Set(['INDEX-en.md', 'INDEX.md', 'layout.json']);
+const ARCHIVE_DIRECTORIES = new Set(['feedback', 'non-prd', 'prds']);
+const MAX_ROOT_ENTRIES = 1000;
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 
 const inside = (root, candidate) => {
@@ -61,6 +63,16 @@ const existingDirectory = async (path, parentReal) => {
     if (error.code === 'ENOENT') return null;
     throw error;
   }
+};
+
+const boundedEntries = async (directory) => {
+  const entries = [];
+  for await (const entry of await opendir(directory)) {
+    entries.push(entry);
+    if (entries.length > MAX_ROOT_ENTRIES) throw new Error('Delivery root is unbounded.');
+  }
+  entries.sort((left, right) => compareCodePoints(left.name, right.name));
+  return entries;
 };
 
 const ownerFrontmatter = async (path, ownerRootReal) => {
@@ -157,18 +169,22 @@ export const resolvePhysicalOwner = async ({ lifecycleRoot, frontmatter } = {}) 
 };
 
 export const detectDeliveryLayout = async ({ root } = {}) => {
+  let lifecycleRoot;
   let deliveryRoot;
   try {
-    ({ deliveryRoot } = await resolveDeliveryRoot(root, { allowMissing: true }));
+    ({ lifecycleRoot, deliveryRoot } = await resolveDeliveryRoot(root, { allowMissing: true }));
   } catch {
     return failure('DELIVERY_LAYOUT_PATH_INVALID', '/root', 'Delivery layout inspection requires a bounded regular project root.');
   }
   if (deliveryRoot === null) return ok({ kind: 'EMPTY', marker: null, evidence_locators: [] });
 
   try {
-    const entries = await readdir(deliveryRoot, { withFileTypes: true });
+    const entries = await boundedEntries(deliveryRoot);
+    const archiveRoot = await existingDirectory(join(lifecycleRoot, 'archive/delivery'), lifecycleRoot);
+    const archiveEntries = archiveRoot === null ? [] : await boundedEntries(archiveRoot);
     const evidenceLocators = entries.map(({ name }) => `delivery/${name}`).sort(compareCodePoints);
-    if (entries.some((entry) => entry.isSymbolicLink())) {
+    if (entries.some((entry) => entry.isSymbolicLink())
+      || archiveEntries.some((entry) => entry.isSymbolicLink())) {
       return failure('DELIVERY_LAYOUT_PATH_INVALID', '/delivery', 'Managed delivery entries cannot be symbolic links.');
     }
     const markerEntry = entries.find(({ name }) => name === 'layout.json');
@@ -192,9 +208,12 @@ export const detectDeliveryLayout = async ({ root } = {}) => {
     const unknown = entries.filter((entry) => (
       entry.isDirectory() ? !V2_DIRECTORIES.has(entry.name) : !V2_ROOT_FILES.has(entry.name)
     ));
+    const archiveInvalid = archiveEntries.some((entry) => (
+      !entry.isDirectory() || !ARCHIVE_DIRECTORIES.has(entry.name)
+    ));
     if (marker !== null) {
       return ok({
-        kind: flatMarkdown.length > 0 || unknown.length > 0 ? 'INVALID_MIXED' : 'V2',
+        kind: flatMarkdown.length > 0 || unknown.length > 0 || archiveInvalid ? 'INVALID_MIXED' : 'V2',
         marker,
         evidence_locators: evidenceLocators,
       });

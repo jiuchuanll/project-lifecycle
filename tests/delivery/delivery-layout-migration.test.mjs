@@ -80,6 +80,16 @@ test('previews a deterministic owner-centric migration without mutating the life
   assert.equal(preview.value.route, 'NON_PRD_DELIVERY', JSON.stringify(preview.value.needs_user));
   assert.equal(preview.value.selected_solution_id, 'solution-owner-centric-delivery-layout-v2');
   assert.match(preview.value.plan_hash, /^sha256:[0-9a-f]{64}$/u);
+  assert.deepEqual(preview.value.generated_writes, [
+    'delivery/INDEX-en.md',
+    'delivery/INDEX.md',
+    'delivery/layout.json',
+    'delivery/non-prd/repair-wiki-v1/INDEX-en.md',
+    'delivery/non-prd/repair-wiki-v1/INDEX.md',
+    'delivery/prds/prd-wiki-v1/INDEX-en.md',
+    'delivery/prds/prd-wiki-v1/INDEX.md',
+  ]);
+  assert.ok(preview.value.removals.includes('delivery/prd-wiki-v1-en.md'));
   assert.deepEqual(preview.value.moves.find(({ artifact_id: id }) => id === 'feedback-density').to, {
     en: 'delivery/feedback/feedback-density-en.md',
     'zh-CN': 'delivery/feedback/feedback-density.md',
@@ -187,6 +197,23 @@ test('requires exact approval and backup references before migration', async (co
   assert.equal(result.errors[0].code, 'DELIVERY_MIGRATION_APPROVAL_REQUIRED');
 });
 
+test('requires the exact selected solution before migration publication', async (context) => {
+  const root = await createLegacy(context);
+  const owner_mappings = [{ artifact_id: 'architecture-shared', owner_artifact_id: 'prd-wiki-v1' }];
+  const preview = await inspectLegacyDeliveryLayout({ root, owner_mappings });
+  const result = await migrateDeliveryLayout({
+    root,
+    owner_mappings,
+    selected_solution_id: 'solution-different',
+    plan_hash: preview.value.plan_hash,
+    source_fingerprint: preview.value.source_fingerprint,
+    approval_ref: 'approval:delivery-layout-v2',
+    backup_ref: 'backup:delivery-layout-v1',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'DELIVERY_MIGRATION_SOLUTION_REQUIRED');
+});
+
 test('restores the legacy tree when publication fails late', async (context) => {
   const root = await createLegacy(context);
   const owner_mappings = [{ artifact_id: 'architecture-shared', owner_artifact_id: 'prd-wiki-v1' }];
@@ -197,6 +224,7 @@ test('restores the legacy tree when publication fails late', async (context) => 
     owner_mappings,
     plan_hash: preview.value.plan_hash,
     source_fingerprint: preview.value.source_fingerprint,
+    selected_solution_id: preview.value.selected_solution_id,
     approval_ref: 'approval:delivery-layout-v2',
     backup_ref: 'backup:delivery-layout-v1',
   }, {
@@ -218,6 +246,7 @@ test('rolls back a retained publication when live v2 validation fails', async (c
     owner_mappings,
     plan_hash: preview.value.plan_hash,
     source_fingerprint: preview.value.source_fingerprint,
+    selected_solution_id: preview.value.selected_solution_id,
     approval_ref: 'approval:delivery-layout-v2',
     backup_ref: 'backup:delivery-layout-v1',
   }, {
@@ -241,6 +270,7 @@ test('atomically publishes v2 documents and generated indexes', async (context) 
     owner_mappings,
     plan_hash: preview.value.plan_hash,
     source_fingerprint: preview.value.source_fingerprint,
+    selected_solution_id: preview.value.selected_solution_id,
     approval_ref: 'approval:delivery-layout-v2',
     backup_ref: 'backup:delivery-layout-v1',
   });

@@ -197,6 +197,7 @@ Open.
   const migrationInput = join(fixtures, 'delivery-migration.json');
   await writeFile(migrationInput, JSON.stringify({
     owner_mappings: [],
+    selected_solution_id: previewValue.selected_solution_id,
     plan_hash: previewValue.plan_hash,
     source_fingerprint: previewValue.source_fingerprint,
     approval_ref: 'approval:bundle-migration',

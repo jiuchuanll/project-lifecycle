@@ -18339,7 +18339,7 @@ var validateImpactDeclaration = (value) => {
 };
 
 // scripts/delivery/delivery-layout.mjs
-import { lstat as lstat4, readFile as readFile4, readdir as readdir2, realpath as realpath5 } from "node:fs/promises";
+import { lstat as lstat4, opendir as opendir2, readFile as readFile4, realpath as realpath5 } from "node:fs/promises";
 import { isAbsolute as isAbsolute6, join as join4, relative as relative4, resolve as resolve4, sep as sep4 } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 var DELIVERY_LAYOUT = Object.freeze({ schema_version: 1, layout_version: 2 });
@@ -18354,6 +18354,8 @@ var CHILD_DIRECTORIES = Object.freeze({
 });
 var V2_DIRECTORIES = /* @__PURE__ */ new Set(["feedback", "non-prd", "prds", "views"]);
 var V2_ROOT_FILES = /* @__PURE__ */ new Set(["INDEX-en.md", "INDEX.md", "layout.json"]);
+var ARCHIVE_DIRECTORIES = /* @__PURE__ */ new Set(["feedback", "non-prd", "prds"]);
+var MAX_ROOT_ENTRIES = 1e3;
 var failure = (code, path, message) => fail([createError(code, path, message)]);
 var inside2 = (root, candidate) => {
   const fromRoot = relative4(root, candidate);
@@ -18388,6 +18390,15 @@ var existingDirectory = async (path, parentReal) => {
     if (error.code === "ENOENT") return null;
     throw error;
   }
+};
+var boundedEntries = async (directory) => {
+  const entries = [];
+  for await (const entry2 of await opendir2(directory)) {
+    entries.push(entry2);
+    if (entries.length > MAX_ROOT_ENTRIES) throw new Error("Delivery root is unbounded.");
+  }
+  entries.sort((left, right) => compareCodePoints(left.name, right.name));
+  return entries;
 };
 var ownerFrontmatter = async (path, ownerRootReal) => {
   const state = await lstat4(path);
@@ -18467,17 +18478,20 @@ var resolvePhysicalOwner = async ({ lifecycleRoot, frontmatter } = {}) => {
   }
 };
 var detectDeliveryLayout = async ({ root } = {}) => {
+  let lifecycleRoot;
   let deliveryRoot;
   try {
-    ({ deliveryRoot } = await resolveDeliveryRoot(root, { allowMissing: true }));
+    ({ lifecycleRoot, deliveryRoot } = await resolveDeliveryRoot(root, { allowMissing: true }));
   } catch {
     return failure("DELIVERY_LAYOUT_PATH_INVALID", "/root", "Delivery layout inspection requires a bounded regular project root.");
   }
   if (deliveryRoot === null) return ok({ kind: "EMPTY", marker: null, evidence_locators: [] });
   try {
-    const entries = await readdir2(deliveryRoot, { withFileTypes: true });
+    const entries = await boundedEntries(deliveryRoot);
+    const archiveRoot = await existingDirectory(join4(lifecycleRoot, "archive/delivery"), lifecycleRoot);
+    const archiveEntries = archiveRoot === null ? [] : await boundedEntries(archiveRoot);
     const evidenceLocators = entries.map(({ name }) => `delivery/${name}`).sort(compareCodePoints);
-    if (entries.some((entry2) => entry2.isSymbolicLink())) {
+    if (entries.some((entry2) => entry2.isSymbolicLink()) || archiveEntries.some((entry2) => entry2.isSymbolicLink())) {
       return failure("DELIVERY_LAYOUT_PATH_INVALID", "/delivery", "Managed delivery entries cannot be symbolic links.");
     }
     const markerEntry = entries.find(({ name }) => name === "layout.json");
@@ -18498,9 +18512,10 @@ var detectDeliveryLayout = async ({ root } = {}) => {
     const flatMarkdown = entries.filter(({ name }) => name.endsWith(".md") && !["INDEX-en.md", "INDEX.md"].includes(name));
     const hierarchy = entries.filter((entry2) => entry2.isDirectory() && V2_DIRECTORIES.has(entry2.name));
     const unknown = entries.filter((entry2) => entry2.isDirectory() ? !V2_DIRECTORIES.has(entry2.name) : !V2_ROOT_FILES.has(entry2.name));
+    const archiveInvalid = archiveEntries.some((entry2) => !entry2.isDirectory() || !ARCHIVE_DIRECTORIES.has(entry2.name));
     if (marker !== null) {
       return ok({
-        kind: flatMarkdown.length > 0 || unknown.length > 0 ? "INVALID_MIXED" : "V2",
+        kind: flatMarkdown.length > 0 || unknown.length > 0 || archiveInvalid ? "INVALID_MIXED" : "V2",
         marker,
         evidence_locators: evidenceLocators
       });
@@ -19070,7 +19085,7 @@ var extractClosureSummaryHash = (body) => {
 };
 
 // scripts/delivery/delivery-inventory.mjs
-import { lstat as lstat5, open as open3, opendir as opendir2, readFile as readFile5, realpath as realpath6 } from "node:fs/promises";
+import { lstat as lstat5, open as open3, opendir as opendir3, readFile as readFile5, realpath as realpath6 } from "node:fs/promises";
 import { isAbsolute as isAbsolute7, join as join5, relative as relative5, resolve as resolve5, sep as sep5 } from "node:path";
 import { isDeepStrictEqual as isDeepStrictEqual3 } from "node:util";
 var MAX_ENTRIES = 2e3;
@@ -19164,7 +19179,7 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
   let entryCount = 0;
   const readDirectory = async (directory) => {
     const entries = [];
-    const handle = await opendir2(directory);
+    const handle = await opendir3(directory);
     for await (const entry2 of handle) {
       entries.push(entry2);
       if (entryCount + entries.length > MAX_ENTRIES) throw new Error("Delivery tree is unbounded.");
@@ -19746,7 +19761,7 @@ var renderRoot = (inventory, language) => {
 var renderOwner = (inventory, owner, language) => {
   const labels = text[language];
   const ownerRoot2 = owner.artifact_kind === "prd" ? `delivery/prds/${owner.artifact_id}` : `delivery/non-prd/${owner.artifact_id}`;
-  const active = inventory.by_owner[owner.artifact_id]?.assets ?? [];
+  const active = inventory.by_owner[owner.artifact_id]?.assets ?? (inventory.closed_summaries ?? []).filter((item) => item.owner_artifact_id === owner.artifact_id && item.locators.en.startsWith("delivery/"));
   const archived = inventory.archived_by_owner[owner.artifact_id]?.assets ?? [];
   return [
     NOTICE,
@@ -19770,7 +19785,13 @@ var generateDeliveryIndexes = async ({ inventory } = {}) => {
   for (const language of ["en", "zh-CN"]) {
     files.push({ locator: `delivery/${languageName(language)}`, language, content: renderRoot(inventory, language) });
   }
-  for (const owner of inventory.owners) {
+  const ownersById = new Map(inventory.owners.map((owner) => [owner.artifact_id, owner]));
+  for (const { owner_artifact_id: ownerId, assets } of Object.values(inventory.archived_by_owner ?? {})) {
+    const retainedOwner = assets.find(({ artifact_id: id, artifact_kind: kind }) => id === ownerId && ["prd", "non-prd-delivery"].includes(kind));
+    if (retainedOwner && !ownersById.has(ownerId)) ownersById.set(ownerId, retainedOwner);
+  }
+  const owners = [...ownersById.values()].sort((left, right) => compareCodePoints(left.artifact_id, right.artifact_id));
+  for (const owner of owners) {
     const root = owner.artifact_kind === "prd" ? `delivery/prds/${owner.artifact_id}` : `delivery/non-prd/${owner.artifact_id}`;
     for (const language of ["en", "zh-CN"]) {
       files.push({
@@ -19792,7 +19813,7 @@ var generateDeliveryIndexes = async ({ inventory } = {}) => {
 // scripts/delivery/delivery-layout-migration.mjs
 var import_yaml2 = __toESM(require_dist(), 1);
 import { createHash as createHash4 } from "node:crypto";
-import { lstat as lstat8, opendir as opendir4, readFile as readFile8, realpath as realpath9 } from "node:fs/promises";
+import { lstat as lstat8, opendir as opendir5, readFile as readFile8, realpath as realpath9 } from "node:fs/promises";
 import { dirname as dirname5, isAbsolute as isAbsolute10, join as join8, posix as posix4, relative as relative8, resolve as resolve7, sep as sep8 } from "node:path";
 import { isDeepStrictEqual as isDeepStrictEqual5 } from "node:util";
 
@@ -26830,9 +26851,9 @@ import {
   mkdir as mkdir2,
   mkdtemp,
   open as open4,
-  opendir as opendir3,
+  opendir as opendir4,
   readFile as readFile7,
-  readdir as readdir3,
+  readdir as readdir2,
   readlink,
   realpath as realpath8,
   rename as rename2,
@@ -26894,7 +26915,7 @@ var snapshotTree = async (lifecycleRoot, operationOverrides = {}) => {
   const rootState = await lstat7(lifecycleRoot);
   const rootReal = await realpath8(lifecycleRoot);
   if (!rootState.isDirectory() || rootState.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
-  const operations = { lstat: lstat7, open: open4, opendir: opendir3, readlink, realpath: realpath8, ...operationOverrides };
+  const operations = { lstat: lstat7, open: open4, opendir: opendir4, readlink, realpath: realpath8, ...operationOverrides };
   const entries = [];
   let discoveredEntries = 0;
   let totalBytes = 0;
@@ -27459,7 +27480,7 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], 
   const needsUser = [];
   let files;
   try {
-    const operations = { opendir: opendir4, ...legacyOperations };
+    const operations = { opendir: opendir5, ...legacyOperations };
     const inventoryState = { entries: 0, exceeded: false };
     files = [
       ...await readLegacyRoot(lifecycleRoot, "delivery", needsUser, operations, inventoryState),
@@ -27610,6 +27631,18 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], 
   needsUser.sort((a, b) => compareCodePoints(`${a.code}:${a.artifact_id ?? ""}:${a.locator ?? ""}`, `${b.code}:${b.artifact_id ?? ""}:${b.locator ?? ""}`));
   unresolvedExternalLinks.sort((a, b) => compareCodePoints(`${a.source}:${a.href}`, `${b.source}:${b.href}`));
   const candidateDirectories = [...new Set(moves.flatMap(({ to }) => LANGUAGES.map((language) => dirname5(to[language]))))].sort(compareCodePoints);
+  const ownerRoots = moves.filter(({ artifact_kind: kind }) => ROOT_KINDS2.has(kind));
+  const generatedWrites = [
+    "delivery/INDEX-en.md",
+    "delivery/INDEX.md",
+    "delivery/layout.json",
+    ...ownerRoots.flatMap(({ artifact_id: id, artifact_kind: kind }) => {
+      const root2 = kind === "prd" ? `delivery/prds/${id}` : `delivery/non-prd/${id}`;
+      return [`${root2}/INDEX-en.md`, `${root2}/INDEX.md`];
+    })
+  ].sort(compareCodePoints);
+  const targets = new Set(moves.flatMap(({ to }) => Object.values(to)));
+  const removals = [...new Set(moves.flatMap(({ from }) => Object.values(from)))].filter((locator) => !targets.has(locator)).sort(compareCodePoints);
   const result = {
     route: needsUser.length > 0 ? "NEEDS_USER" : "NON_PRD_DELIVERY",
     selected_solution_id: "solution-owner-centric-delivery-layout-v2",
@@ -27618,7 +27651,9 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], 
     managed_reference_rewrites: managedReferenceRewrites,
     unresolved_external_links: unresolvedExternalLinks,
     needs_user: needsUser,
-    candidate_directories: candidateDirectories
+    candidate_directories: candidateDirectories,
+    generated_writes: generatedWrites,
+    removals
   };
   result.plan_hash = hash2(canonical(result));
   return ok(freeze2(result));
@@ -27803,6 +27838,9 @@ var migrateDeliveryLayout = async (input = {}, operations = {}) => {
   if (!inspection.ok) return inspection;
   if (inspection.value.route === "NEEDS_USER") {
     return failure9("DELIVERY_MIGRATION_NEEDS_USER", "/owner_mappings", "Migration ownership must be resolved before publication.");
+  }
+  if (input.selected_solution_id !== inspection.value.selected_solution_id) {
+    return failure9("DELIVERY_MIGRATION_SOLUTION_REQUIRED", "/selected_solution_id", "Migration requires the exact selected solution from the approved preview.");
   }
   if (inspection.value.plan_hash !== input.plan_hash || inspection.value.source_fingerprint !== input.source_fingerprint) {
     return failure9("DELIVERY_MIGRATION_STALE", "/plan_hash", "Migration preview no longer matches the source tree.");

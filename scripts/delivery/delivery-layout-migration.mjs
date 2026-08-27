@@ -289,6 +289,20 @@ export const inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappin
   unresolvedExternalLinks.sort((a, b) => compareCodePoints(`${a.source}:${a.href}`, `${b.source}:${b.href}`));
   const candidateDirectories = [...new Set(moves.flatMap(({ to }) => LANGUAGES.map((language) => dirname(to[language]))))]
     .sort(compareCodePoints);
+  const ownerRoots = moves.filter(({ artifact_kind: kind }) => ROOT_KINDS.has(kind));
+  const generatedWrites = [
+    'delivery/INDEX-en.md',
+    'delivery/INDEX.md',
+    'delivery/layout.json',
+    ...ownerRoots.flatMap(({ artifact_id: id, artifact_kind: kind }) => {
+      const root = kind === 'prd' ? `delivery/prds/${id}` : `delivery/non-prd/${id}`;
+      return [`${root}/INDEX-en.md`, `${root}/INDEX.md`];
+    }),
+  ].sort(compareCodePoints);
+  const targets = new Set(moves.flatMap(({ to }) => Object.values(to)));
+  const removals = [...new Set(moves.flatMap(({ from }) => Object.values(from)))]
+    .filter((locator) => !targets.has(locator))
+    .sort(compareCodePoints);
   const result = {
     route: needsUser.length > 0 ? 'NEEDS_USER' : 'NON_PRD_DELIVERY',
     selected_solution_id: 'solution-owner-centric-delivery-layout-v2',
@@ -298,6 +312,8 @@ export const inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappin
     unresolved_external_links: unresolvedExternalLinks,
     needs_user: needsUser,
     candidate_directories: candidateDirectories,
+    generated_writes: generatedWrites,
+    removals,
   };
   result.plan_hash = hash(canonical(result));
   return ok(freeze(result));
@@ -502,6 +518,9 @@ export const migrateDeliveryLayout = async (input = {}, operations = {}) => {
   if (!inspection.ok) return inspection;
   if (inspection.value.route === 'NEEDS_USER') {
     return failure('DELIVERY_MIGRATION_NEEDS_USER', '/owner_mappings', 'Migration ownership must be resolved before publication.');
+  }
+  if (input.selected_solution_id !== inspection.value.selected_solution_id) {
+    return failure('DELIVERY_MIGRATION_SOLUTION_REQUIRED', '/selected_solution_id', 'Migration requires the exact selected solution from the approved preview.');
   }
   if (inspection.value.plan_hash !== input.plan_hash
     || inspection.value.source_fingerprint !== input.source_fingerprint) {

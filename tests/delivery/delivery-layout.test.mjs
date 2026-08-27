@@ -101,6 +101,12 @@ test('detects empty, legacy-flat, v2, and mixed layouts without mutating them', 
   await writeFile(join(mixed, 'docs/project-lifecycle/delivery/layout.json'), deliveryLayoutContent());
   await writeFile(join(mixed, 'docs/project-lifecycle/delivery/prd-wiki-v1.md'), '# Mixed\n');
   assert.equal((await detectDeliveryLayout({ root: mixed })).value.kind, 'INVALID_MIXED');
+
+  const archivedMixed = await rootFor(context);
+  await writeFile(join(archivedMixed, 'docs/project-lifecycle/delivery/layout.json'), deliveryLayoutContent());
+  await mkdir(join(archivedMixed, 'docs/project-lifecycle/archive/delivery'), { recursive: true });
+  await writeFile(join(archivedMixed, 'docs/project-lifecycle/archive/delivery/prd-old-en.md'), '# Legacy archive\n');
+  assert.equal((await detectDeliveryLayout({ root: archivedMixed })).value.kind, 'INVALID_MIXED');
 });
 
 test('rejects a symlinked delivery root before layout inspection', async (context) => {
