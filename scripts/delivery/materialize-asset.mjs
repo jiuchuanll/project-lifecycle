@@ -177,11 +177,16 @@ export const validateMaterializationRequest = (input = {}) => {
     || !boundedText(input.reason)) {
     return failure('ASSET_REQUEST_INVALID', '/', 'A bounded explicit delivery asset request is required.');
   }
-  const frontmatter = validateJson('delivery-frontmatter', input.frontmatter);
-  if (!frontmatter.ok) return failure('ASSET_FRONTMATTER_INVALID', '/frontmatter', 'Delivery Frontmatter must satisfy the shared contract.');
   if (input.frontmatter.schema_version !== 2) {
     return failure('DELIVERY_LAYOUT_MIGRATION_REQUIRED', '/frontmatter/schema_version', 'Delivery layout v2 is required before durable writes.');
   }
+  if (['prd', 'non-prd-delivery'].includes(input.frontmatter.artifact_kind)
+    && Object.hasOwn(input.frontmatter, 'owner_artifact_id')) {
+    const rootOwnership = validatePhysicalOwner(input.frontmatter);
+    if (!rootOwnership.ok) return rootOwnership;
+  }
+  const frontmatter = validateJson('delivery-frontmatter', input.frontmatter);
+  if (!frontmatter.ok) return failure('ASSET_FRONTMATTER_INVALID', '/frontmatter', 'Delivery Frontmatter must satisfy the shared contract.');
   const ownership = validatePhysicalOwner(input.frontmatter);
   if (!ownership.ok) return ownership;
   if (input.canonical_purpose_satisfied === true) {

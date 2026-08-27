@@ -147,6 +147,22 @@ test('requires current_project_id only for active delivery', async () => {
   assert.equal(validateJson('delivery-frontmatter', archived).ok, true);
 });
 
+test('requires schema-v2 root delivery owners to own themselves', async () => {
+  for (const artifactKind of ['prd', 'non-prd-delivery']) {
+    const frontmatter = await fixture('delivery-frontmatter.valid.json');
+    frontmatter.artifact_kind = artifactKind;
+    frontmatter.artifact_id = artifactKind === 'prd' ? 'prd-root-owner' : 'non-prd-root-owner';
+    frontmatter.owner_artifact_id = 'different-owner';
+    frontmatter.primary_route = artifactKind === 'prd' ? 'PRD_DELIVERY' : 'NON_PRD_DELIVERY';
+
+    const result = validateJson('delivery-frontmatter', frontmatter);
+
+    assert.ok(result.errors.some(({ code, path }) => (
+      code === 'STATE_REQUIREMENT_MISSING' && path === '/owner_artifact_id'
+    )));
+  }
+});
+
 test('keeps obligations owner-local and rejects a global obligation owner field', async () => {
   const frontmatter = await fixture('delivery-frontmatter.valid.json');
   frontmatter.obligations[0].owner_ref = 'global-obligations';

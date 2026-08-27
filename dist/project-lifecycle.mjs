@@ -17283,6 +17283,13 @@ var validateDeterministicOrder = (kind, value) => {
 var validateDeliveryFrontmatter = (value) => {
   const errors = [];
   const obligationIds = /* @__PURE__ */ new Set();
+  if (value.schema_version === 2 && ["prd", "non-prd-delivery"].includes(value.artifact_kind) && value.owner_artifact_id !== value.artifact_id) {
+    errors.push(createError(
+      ERROR_CODES.STATE_REQUIREMENT_MISSING,
+      "/owner_artifact_id",
+      "A schema-v2 root delivery owner must own itself."
+    ));
+  }
   for (const [index2, obligation] of value.obligations.entries()) {
     if (obligationIds.has(obligation.obligation_id)) {
       errors.push(createError(
@@ -19329,13 +19336,27 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
     archivedByOwner[item.owner_artifact_id].assets.push(item);
   }
   const retainedOwnerIds = new Set(Object.values(archivedByOwner).filter(({ owner_artifact_id: ownerId, assets }) => assets.some(({ artifact_id: id, artifact_kind: kind }) => id === ownerId && ["prd", "non-prd-delivery"].includes(kind))).map(({ owner_artifact_id: ownerId }) => ownerId));
+  const ownerKindMismatch = (item, owner) => {
+    const physicalOwnerKind = classify(item.locators.en)?.ownerKind ?? null;
+    return physicalOwnerKind !== null && physicalOwnerKind !== owner.artifact_kind;
+  };
   for (const item of activeItems) {
     if (!item.owner_artifact_id) continue;
     if (!byOwner[item.owner_artifact_id]) {
       if (item.artifact_kind === "closure-summary" && retainedOwnerIds.has(item.owner_artifact_id)) continue;
       return failure5("DELIVERY_INVENTORY_OWNER_MISSING", `/${item.artifact_id}`, "Every active owned asset requires one active physical owner.");
     }
+    if (ownerKindMismatch(item, byOwner[item.owner_artifact_id].owner)) {
+      return failure5("DELIVERY_INVENTORY_OWNER_MISMATCH", `/${item.artifact_id}`, "Owned asset and physical owner kinds must match.");
+    }
     byOwner[item.owner_artifact_id].assets.push(item);
+  }
+  for (const entry2 of Object.values(archivedByOwner)) {
+    const retainedOwner = entry2.assets.find(({ artifact_id: id, artifact_kind: kind }) => id === entry2.owner_artifact_id && ["prd", "non-prd-delivery"].includes(kind));
+    const owner = byOwner[entry2.owner_artifact_id]?.owner ?? retainedOwner;
+    if (owner && entry2.assets.some((item) => ownerKindMismatch(item, owner))) {
+      return failure5("DELIVERY_INVENTORY_OWNER_MISMATCH", `/${entry2.owner_artifact_id}`, "Archived assets and physical owner kinds must match.");
+    }
   }
   for (const entry2 of Object.values(byOwner)) sortItems(entry2.assets);
   for (const entry2 of Object.values(archivedByOwner)) sortItems(entry2.assets);
@@ -28005,11 +28026,15 @@ var validateMaterializationRequest = (input = {}) => {
   if (!record5(input) || !record5(input.frontmatter) || !record5(input.body) || typeof input.body.en !== "string" || typeof input.body["zh-CN"] !== "string" || !boundedText(input.reason)) {
     return failure10("ASSET_REQUEST_INVALID", "/", "A bounded explicit delivery asset request is required.");
   }
-  const frontmatter = validateJson("delivery-frontmatter", input.frontmatter);
-  if (!frontmatter.ok) return failure10("ASSET_FRONTMATTER_INVALID", "/frontmatter", "Delivery Frontmatter must satisfy the shared contract.");
   if (input.frontmatter.schema_version !== 2) {
     return failure10("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/frontmatter/schema_version", "Delivery layout v2 is required before durable writes.");
   }
+  if (["prd", "non-prd-delivery"].includes(input.frontmatter.artifact_kind) && Object.hasOwn(input.frontmatter, "owner_artifact_id")) {
+    const rootOwnership = validatePhysicalOwner(input.frontmatter);
+    if (!rootOwnership.ok) return rootOwnership;
+  }
+  const frontmatter = validateJson("delivery-frontmatter", input.frontmatter);
+  if (!frontmatter.ok) return failure10("ASSET_FRONTMATTER_INVALID", "/frontmatter", "Delivery Frontmatter must satisfy the shared contract.");
   const ownership = validatePhysicalOwner(input.frontmatter);
   if (!ownership.ok) return ownership;
   if (input.canonical_purpose_satisfied === true) {

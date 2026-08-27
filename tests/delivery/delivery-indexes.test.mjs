@@ -171,6 +171,14 @@ test('rejects half pairs, path mismatches, unknown files, symlinks, and noncanon
   const orphanResult = await collectDeliveryInventory({ lifecycleRoot: orphan.lifecycleRoot });
   assert.equal(orphanResult.ok, false);
   assert.equal(orphanResult.errors[0].code, 'DELIVERY_INVENTORY_OWNER_MISSING');
+
+  const crossKind = await fixture(context);
+  await writePair(crossKind.lifecycleRoot, 'delivery/prds/non-prd-index-repair/architecture/architecture-cross-kind-en.md', frontmatter({
+    artifact_id: 'architecture-cross-kind', artifact_kind: 'architecture', owner_artifact_id: 'non-prd-index-repair',
+  }));
+  const crossKindResult = await collectDeliveryInventory({ lifecycleRoot: crossKind.lifecycleRoot });
+  assert.equal(crossKindResult.ok, false);
+  assert.equal(crossKindResult.errors[0].code, 'DELIVERY_INVENTORY_OWNER_MISMATCH');
 });
 
 test('rejects delivery trees beyond the managed depth and file-count bounds', async (context) => {

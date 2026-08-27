@@ -283,13 +283,29 @@ export const collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overl
       id === ownerId && ['prd', 'non-prd-delivery'].includes(kind)
     )))
     .map(({ owner_artifact_id: ownerId }) => ownerId));
+  const ownerKindMismatch = (item, owner) => {
+    const physicalOwnerKind = classify(item.locators.en)?.ownerKind ?? null;
+    return physicalOwnerKind !== null && physicalOwnerKind !== owner.artifact_kind;
+  };
   for (const item of activeItems) {
     if (!item.owner_artifact_id) continue;
     if (!byOwner[item.owner_artifact_id]) {
       if (item.artifact_kind === 'closure-summary' && retainedOwnerIds.has(item.owner_artifact_id)) continue;
       return failure('DELIVERY_INVENTORY_OWNER_MISSING', `/${item.artifact_id}`, 'Every active owned asset requires one active physical owner.');
     }
+    if (ownerKindMismatch(item, byOwner[item.owner_artifact_id].owner)) {
+      return failure('DELIVERY_INVENTORY_OWNER_MISMATCH', `/${item.artifact_id}`, 'Owned asset and physical owner kinds must match.');
+    }
     byOwner[item.owner_artifact_id].assets.push(item);
+  }
+  for (const entry of Object.values(archivedByOwner)) {
+    const retainedOwner = entry.assets.find(({ artifact_id: id, artifact_kind: kind }) => (
+      id === entry.owner_artifact_id && ['prd', 'non-prd-delivery'].includes(kind)
+    ));
+    const owner = byOwner[entry.owner_artifact_id]?.owner ?? retainedOwner;
+    if (owner && entry.assets.some((item) => ownerKindMismatch(item, owner))) {
+      return failure('DELIVERY_INVENTORY_OWNER_MISMATCH', `/${entry.owner_artifact_id}`, 'Archived assets and physical owner kinds must match.');
+    }
   }
   for (const entry of Object.values(byOwner)) sortItems(entry.assets);
   for (const entry of Object.values(archivedByOwner)) sortItems(entry.assets);
