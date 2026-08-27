@@ -104,16 +104,17 @@ version bump does not upgrade any native-host support claim.
   materialization, topology application, and accepted Knowledge Diffs publish
   validated repository shards before the governance map with cross-shard rollback.
 
-## Upgrade from 0.4.0
+## Upgrade from any pre-0.5.0 version
 
-New delivery writes require layout v2. For a coherent legacy flat tree, run the
-read-only inspection and preview first. Resolve every `NEEDS_USER` owner mapping,
-review the complete generated-write/removal set and external-link risks, then
-execute only with the exact approved preview plus recoverable backup reference.
-Do not move files manually, infer owners from filenames, keep duplicate bodies,
-or edit a managed plugin cache. Repositories without delivery artifacts require
-no historical migration; the v2 marker and indexes are created by the bounded
-bootstrap or delivery workflow.
+This procedure applies whether upgrading from `0.4.0`, `0.3.x`, `0.2.0`, or
+`0.1.0`. New delivery writes require layout v2. For a coherent legacy flat
+delivery tree, run the read-only inspection and preview first. Resolve every
+`NEEDS_USER` owner mapping, review the complete generated-write/removal set and
+external-link risks, then execute only with the exact approved preview plus
+recoverable backup reference. Do not move files manually, infer owners from
+filenames, keep duplicate bodies, or edit a managed plugin cache. Repositories
+without delivery artifacts require no historical delivery migration; the v2
+marker and indexes are created by the bounded bootstrap or delivery workflow.
 
 ## Upgrade from 0.3.1
 
@@ -121,19 +122,24 @@ No knowledge schema or layout migration is required. Existing repositories gain
 the optional alignment Feedback marker and generated review pair only when a
 user-confirmed business-to-implementation divergence is captured. Refresh the
 marketplace and installed plugin after this release is merged; do not install
-npm packages or edit cached plugin files manually.
+npm packages or edit cached plugin files manually. The delivery migration rule
+above still applies when legacy flat delivery artifacts exist.
 
 ## Upgrade from 0.3.0
 
 No knowledge schema or layout migration is required. The dependency-free cache
 runtime introduced in `0.3.1` remains the supported candidate entry contract.
+The delivery migration rule above still applies when legacy flat delivery
+artifacts exist.
 
 ## Upgrade from 0.2.0
 
 No schema or layout migration is required. Existing accepted maps and paired
 capability assets remain authoritative. On the next bootstrap, repair, or
 affected-domain recalibration, the Agent applies the new user-controlled
-deepening choices and semantic gates only to the scope under review.
+deepening choices and semantic gates only to the scope under review. The
+delivery migration rule above still applies when legacy flat delivery artifacts
+exist.
 
 ## Upgrade from 0.1.0
 
@@ -156,6 +162,10 @@ redirect stub, symlink, or duplicate knowledge body. External Markdown links
 that cannot be proven safe to rewrite are reported as compatibility risks.
 Real project migration remains outside this release. Update a develop-bound
 local plugin only after the release PR is merged.
+
+This knowledge-layout procedure is separate from the delivery-layout migration
+rule above; repositories with both legacy knowledge and legacy delivery content
+must complete both approved migrations.
 
 ## Evidence boundary
 
