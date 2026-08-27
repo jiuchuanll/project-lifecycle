@@ -15645,8 +15645,9 @@ var delivery_frontmatter_schema_default = {
     "obligations"
   ],
   properties: {
-    schema_version: { const: 1 },
+    schema_version: { enum: [1, 2] },
     artifact_id: { $ref: "#/$defs/id" },
+    owner_artifact_id: { $ref: "#/$defs/id" },
     artifact_kind: {
       enum: ["feedback", "prd", "architecture", "guidance", "batch", "test-report", "closure-summary", "non-prd-delivery"]
     },
@@ -15685,6 +15686,34 @@ var delivery_frontmatter_schema_default = {
     }
   },
   allOf: [
+    {
+      if: {
+        properties: { schema_version: { const: 1 } },
+        required: ["schema_version"]
+      },
+      then: {
+        not: {
+          properties: { owner_artifact_id: {} },
+          required: ["owner_artifact_id"]
+        }
+      },
+      else: {
+        if: {
+          properties: { artifact_kind: { const: "feedback" } },
+          required: ["artifact_kind"]
+        },
+        then: {
+          not: {
+            properties: { owner_artifact_id: {} },
+            required: ["owner_artifact_id"]
+          }
+        },
+        else: {
+          properties: { owner_artifact_id: {} },
+          required: ["owner_artifact_id"]
+        }
+      }
+    },
     {
       not: {
         type: "object",

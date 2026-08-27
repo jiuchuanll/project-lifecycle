@@ -1,5 +1,5 @@
 ---
-schema_version: 1
+schema_version: 2
 artifact_id: feedback-template
 artifact_kind: feedback
 primary_route: PRD_DELIVERY

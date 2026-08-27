@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, readdir, rename, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -7,6 +7,7 @@ import test from 'node:test';
 import { stringify as stringifyYaml } from 'yaml';
 
 import { closureSummaryHash } from '../../scripts/lib/closure-summary.mjs';
+import { deliveryLayoutContent } from '../../scripts/delivery/delivery-layout.mjs';
 import { parseRestrictedYaml } from '../../scripts/lib/markdown.mjs';
 import { atomicWriteValidated } from '../../scripts/lib/atomic-write.mjs';
 import { materializeAsset, validateMaterializationRequest } from '../../scripts/delivery/materialize-asset.mjs';
@@ -28,24 +29,37 @@ const kinds = [
 const rootFor = async () => {
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-delivery-'));
   await mkdir(join(root, 'docs', 'project-lifecycle', 'delivery'), { recursive: true });
+  await writeFile(
+    join(root, 'docs', 'project-lifecycle', 'delivery', 'layout.json'),
+    deliveryLayoutContent(),
+  );
   return root;
 };
 
-const baseFrontmatter = (overrides = {}) => ({
-  schema_version: 1,
-  artifact_id: 'prd-wiki-layout-v2',
-  artifact_kind: 'prd',
-  primary_route: 'PRD_DELIVERY',
-  project_id_at_creation: 'sample-project',
-  current_project_id: 'sample-project',
-  domain_ids: ['wiki-workspace'],
-  knowledge_baseline: 'baseline-7',
-  relationships: { feedback_ids: [], prd_ids: [], legacy_artifact_refs: [] },
-  retention_tier: 'active',
-  reclassified_from_refs: [],
-  obligations: [],
-  ...overrides,
-});
+const baseFrontmatter = (overrides = {}) => {
+  const frontmatter = {
+    schema_version: 2,
+    artifact_id: 'prd-wiki-layout-v2',
+    owner_artifact_id: 'prd-wiki-layout-v2',
+    artifact_kind: 'prd',
+    primary_route: 'PRD_DELIVERY',
+    project_id_at_creation: 'sample-project',
+    current_project_id: 'sample-project',
+    domain_ids: ['wiki-workspace'],
+    knowledge_baseline: 'baseline-7',
+    relationships: { feedback_ids: [], prd_ids: [], legacy_artifact_refs: [] },
+    retention_tier: 'active',
+    reclassified_from_refs: [],
+    obligations: [],
+    ...overrides,
+  };
+  if (frontmatter.artifact_kind === 'feedback') delete frontmatter.owner_artifact_id;
+  else if (['prd', 'non-prd-delivery'].includes(frontmatter.artifact_kind)
+    && !Object.hasOwn(overrides, 'owner_artifact_id')) {
+    frontmatter.owner_artifact_id = frontmatter.artifact_id;
+  }
+  return frontmatter;
+};
 
 const ordinaryBody = {
   en: '# Wiki delivery\n\n## Scope\n\nBounded English outcome.\n\n## Evidence\n\nEvidence ref.\n',
@@ -103,8 +117,14 @@ test('ships exactly eight bilingual delivery template pairs with canonical kind 
     const zh = await readFile(new URL(`${name}.md`, assetRoot), 'utf8');
     assert.match(en, new RegExp(`artifact_kind: ${kind}`));
     assert.match(zh, new RegExp(`artifact_kind: ${kind}`));
-    assert.equal(validateJson('delivery-frontmatter', parseDeliveryFrontmatter(en)).ok, true);
-    assert.deepEqual(parseDeliveryFrontmatter(en), parseDeliveryFrontmatter(zh));
+    const frontmatter = parseDeliveryFrontmatter(en);
+    assert.equal(validateJson('delivery-frontmatter', frontmatter).ok, true);
+    assert.deepEqual(frontmatter, parseDeliveryFrontmatter(zh));
+    assert.equal(frontmatter.schema_version, 2);
+    if (kind === 'feedback') assert.equal(Object.hasOwn(frontmatter, 'owner_artifact_id'), false);
+    else if (['prd', 'non-prd-delivery'].includes(kind)) {
+      assert.equal(frontmatter.owner_artifact_id, frontmatter.artifact_id);
+    } else assert.equal(frontmatter.owner_artifact_id, 'prd-template');
     assert.deepEqual(
       [...en.matchAll(/^(#{1,6}) /gm)].map((match) => match[1].length),
       [...zh.matchAll(/^(#{1,6}) /gm)].map((match) => match[1].length),
@@ -120,6 +140,10 @@ test('validates the complete threshold fixture matrix without choosing an artifa
       artifact_kind: fixture.artifact_kind,
       primary_route: fixture.primary_route,
     });
+    if (Object.hasOwn(fixture, 'owner_artifact_id')) {
+      if (fixture.owner_artifact_id === null) delete frontmatter.owner_artifact_id;
+      else frontmatter.owner_artifact_id = fixture.owner_artifact_id;
+    }
     const result = validateMaterializationRequest({
       reason: `case:${fixture.name}`,
       creation_origin: fixture.creation_origin,
@@ -139,8 +163,8 @@ test('materializes an explicit PRD as one validated bilingual pair under the fix
   assert.equal(result.ok, true);
   assert.equal(result.value.status, 'created');
   assert.deepEqual(result.value.locators, {
-    en: 'delivery/prd-wiki-layout-v2-en.md',
-    'zh-CN': 'delivery/prd-wiki-layout-v2.md',
+    en: 'delivery/prds/prd-wiki-layout-v2/prd-wiki-layout-v2-en.md',
+    'zh-CN': 'delivery/prds/prd-wiki-layout-v2/prd-wiki-layout-v2.md',
   });
   const lifecycleRoot = join(root, 'docs', 'project-lifecycle');
   const [en, zh] = await Promise.all([
@@ -150,6 +174,75 @@ test('materializes an explicit PRD as one validated bilingual pair under the fix
   assert.deepEqual(parseDeliveryFrontmatter(en), parseDeliveryFrontmatter(zh));
   assert.match(en, /Bounded English outcome/);
   assert.match(zh, /限定的中文结果/);
+});
+
+test('materializes a child pair beneath its one existing PRD owner', async () => {
+  const root = await rootFor();
+  assert.equal((await materializeAsset(request(root))).ok, true);
+  const result = await materializeAsset(request(root, {
+    frontmatter: baseFrontmatter({
+      artifact_id: 'batch-wiki-layout',
+      artifact_kind: 'batch',
+      owner_artifact_id: 'prd-wiki-layout-v2',
+    }),
+  }));
+
+  assert.deepEqual(result.value.locators, {
+    en: 'delivery/prds/prd-wiki-layout-v2/batches/batch-wiki-layout-en.md',
+    'zh-CN': 'delivery/prds/prd-wiki-layout-v2/batches/batch-wiki-layout.md',
+  });
+});
+
+test('requires layout v2 and one valid physical owner before writing', async () => {
+  const missingMarker = await rootFor();
+  await rename(
+    join(missingMarker, 'docs/project-lifecycle/delivery/layout.json'),
+    join(missingMarker, 'docs/project-lifecycle/layout.json.removed'),
+  );
+  assert.equal((await materializeAsset(request(missingMarker))).errors[0].code, 'DELIVERY_LAYOUT_MIGRATION_REQUIRED');
+
+  const legacyFrontmatter = baseFrontmatter();
+  legacyFrontmatter.schema_version = 1;
+  delete legacyFrontmatter.owner_artifact_id;
+  assert.equal(validateJson('delivery-frontmatter', legacyFrontmatter).ok, true);
+  assert.equal((await materializeAsset(request(await rootFor(), {
+    frontmatter: legacyFrontmatter,
+  }))).errors[0].code, 'DELIVERY_LAYOUT_MIGRATION_REQUIRED');
+
+  const root = await rootFor();
+  const missingOwner = await materializeAsset(request(root, {
+    frontmatter: baseFrontmatter({
+      artifact_id: 'batch-without-owner',
+      artifact_kind: 'batch',
+      owner_artifact_id: 'prd-missing',
+    }),
+  }));
+  assert.equal(missingOwner.errors[0].code, 'DELIVERY_OWNER_MISMATCH');
+
+  const mismatchedRoot = validateMaterializationRequest(request('/tmp/example', {
+    frontmatter: baseFrontmatter({ owner_artifact_id: 'prd-other' }),
+  }));
+  assert.equal(mismatchedRoot.errors[0].code, 'DELIVERY_OWNER_MISMATCH');
+
+  const ownerlessChild = baseFrontmatter({
+    artifact_id: 'batch-ownerless',
+    artifact_kind: 'batch',
+  });
+  delete ownerlessChild.owner_artifact_id;
+  assert.equal(validateMaterializationRequest(request('/tmp/example', {
+    frontmatter: ownerlessChild,
+  })).errors[0].code, 'ASSET_FRONTMATTER_INVALID');
+
+  const ambiguous = await rootFor();
+  await mkdir(join(ambiguous, 'docs/project-lifecycle/delivery/prds/shared-owner'), { recursive: true });
+  await mkdir(join(ambiguous, 'docs/project-lifecycle/delivery/non-prd/shared-owner'), { recursive: true });
+  assert.equal((await materializeAsset(request(ambiguous, {
+    frontmatter: baseFrontmatter({
+      artifact_id: 'batch-ambiguous-owner',
+      artifact_kind: 'batch',
+      owner_artifact_id: 'shared-owner',
+    }),
+  }))).errors[0].code, 'DELIVERY_OWNER_MISMATCH');
 });
 
 test('rejects a lifecycle root symlink before writing outside the project', async () => {
@@ -164,6 +257,23 @@ test('rejects a lifecycle root symlink before writing outside the project', asyn
   assert.equal(result.ok, false);
   assert.equal(result.errors[0].code, 'ASSET_PATH_INVALID');
   assert.deepEqual(await readdir(join(outside, 'delivery')), []);
+});
+
+test('rejects a symlinked owner directory without writing outside the project', async (context) => {
+  const root = await rootFor();
+  const outside = await mkdtemp(join(tmpdir(), 'project-lifecycle-delivery-owner-outside-'));
+  context.after(() => Promise.all([
+    rm(root, { recursive: true, force: true }),
+    rm(outside, { recursive: true, force: true }),
+  ]));
+  await mkdir(join(root, 'docs/project-lifecycle/delivery/prds'));
+  await symlink(outside, join(root, 'docs/project-lifecycle/delivery/prds/prd-wiki-layout-v2'));
+
+  const result = await materializeAsset(request(root));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'ASSET_PATH_INVALID');
+  assert.deepEqual(await readdir(outside), []);
 });
 
 test('accepts a bounded human-readable materialization reason', () => {
@@ -195,7 +305,7 @@ test('rejects inferred PRD creation and architecture without their explicit gate
   }));
   assert.equal(architecture.ok, false);
   assert.equal(architecture.errors[0].code, 'ARCHITECTURE_DECLARATION_REQUIRED');
-  assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
+  assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), ['layout.json']);
 });
 
 test('rejects redundant or route-incompatible durable assets before writing', async () => {
@@ -207,7 +317,7 @@ test('rejects redundant or route-incompatible durable assets before writing', as
     frontmatter: baseFrontmatter({ primary_route: 'KNOWLEDGE_UPDATE' }),
   }));
   assert.equal(knowledgeOnly.errors[0].code, 'ROUTE_ASSET_MISMATCH');
-  assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
+  assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), ['layout.json']);
 });
 
 test('reserves the generated alignment review artifact ID before materialization', async () => {
@@ -220,7 +330,7 @@ test('reserves the generated alignment review artifact ID before materialization
     assert.equal(result.ok, false);
     assert.equal(result.errors[0].code, 'ASSET_FRONTMATTER_INVALID');
   }
-  assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
+  assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), ['layout.json']);
 });
 
 test('materializes alignment Feedback under knowledge control without creating a delivery owner', async () => {
@@ -239,6 +349,10 @@ test('materializes alignment Feedback under knowledge control without creating a
   assert.equal(result.ok, true);
   assert.equal(result.value.status, 'created');
   assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), [
+    'feedback',
+    'layout.json',
+  ]);
+  assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery', 'feedback')), [
     'feedback-retire-wiki-density-en.md',
     'feedback-retire-wiki-density.md',
   ]);
@@ -258,7 +372,7 @@ test('rejects invalid alignment Feedback before writing either language', async 
     const result = await materializeAsset(request(root, { frontmatter, body }));
     assert.equal(result.ok, false);
     assert.match(result.errors[0].code, /^ALIGNMENT_/u);
-    assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
+    assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), ['layout.json']);
   }
 });
 
@@ -278,7 +392,7 @@ test('rejects an active alignment marker on retained Feedback', async () => {
     }));
     assert.equal(result.ok, false, retentionTier);
     assert.equal(result.errors[0].code, 'ALIGNMENT_RETENTION_INVALID', retentionTier);
-    assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
+    assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), ['layout.json']);
   }
 });
 
@@ -309,10 +423,13 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
     frontmatter: deliveryOwner,
     body: ordinaryBody,
   }))).ok, true);
-  const archive = join(root, 'docs', 'project-lifecycle', 'archive', 'delivery');
+  const archive = join(root, 'docs', 'project-lifecycle', 'archive', 'delivery', 'prds', 'prd-retire-wiki-density');
   await mkdir(archive, { recursive: true });
   for (const name of ['prd-retire-wiki-density-en.md', 'prd-retire-wiki-density.md']) {
-    await rename(join(root, 'docs', 'project-lifecycle', 'delivery', name), join(archive, name));
+    await rename(
+      join(root, 'docs', 'project-lifecycle', 'delivery', 'prds', 'prd-retire-wiki-density', name),
+      join(archive, name),
+    );
   }
   const closure = {
     artifact_id: 'closure-prd-retire-wiki-density',
@@ -382,6 +499,7 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
     frontmatter: baseFrontmatter({
       artifact_id: 'closure-prd-retire-wiki-density',
       artifact_kind: 'closure-summary',
+      owner_artifact_id: 'prd-retire-wiki-density',
       relationships: {
         feedback_ids: [feedbackId],
         prd_ids: ['prd-retire-wiki-density'],
@@ -395,7 +513,7 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
     root,
     'docs',
     'project-lifecycle',
-    'delivery',
+    'delivery', 'prds', 'prd-retire-wiki-density', 'closure',
     'closure-prd-retire-wiki-density-en.md',
   ), 'utf8');
   assert.match(persistedClosure, new RegExp(`project-lifecycle:closure-summary sha256=${closureSummaryHash(closure)}`, 'u'));
@@ -411,7 +529,7 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
 
   const resolved = await materializeAsset(resolvedRequest);
   assert.equal(resolved.ok, true);
-  const source = await readFile(join(root, 'docs', 'project-lifecycle', 'delivery', `${feedbackId}-en.md`), 'utf8');
+  const source = await readFile(join(root, 'docs', 'project-lifecycle', 'delivery', 'feedback', `${feedbackId}-en.md`), 'utf8');
   assert.doesNotMatch(source, /project-lifecycle:alignment/u);
 
   const laterUpdate = await materializeAsset(request(root, {
@@ -476,7 +594,7 @@ test('requires no-remediation approval and knowledge evidence in retained Feedba
   assert.equal(resolved.ok, true);
   for (const language of ['en', 'zh-CN']) {
     const suffix = language === 'en' ? '-en.md' : '.md';
-    const source = await readFile(join(root, 'docs', 'project-lifecycle', 'delivery', `${feedbackId}${suffix}`), 'utf8');
+    const source = await readFile(join(root, 'docs', 'project-lifecycle', 'delivery', 'feedback', `${feedbackId}${suffix}`), 'utf8');
     assert.match(source, /NO_REMEDIATION_ACCEPTED/u);
     assert.match(source, /decision:retain-divergence/u);
     assert.match(source, /knowledge-resolution:retained-divergence/u);
@@ -562,7 +680,7 @@ test('reuses titleless 0.3.1 Feedback whose managed hash follows the first line'
   assert.equal((await materializeAsset(request(root, { frontmatter, body: titleless }))).ok, true);
 
   for (const suffix of ['-en', '']) {
-    const path = join(root, 'docs', 'project-lifecycle', 'delivery', `${feedbackId}${suffix}.md`);
+    const path = join(root, 'docs', 'project-lifecycle', 'delivery', 'feedback', `${feedbackId}${suffix}.md`);
     const source = await readFile(path, 'utf8');
     const legacy = source.replace(
       /(\n---\n\n)(<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n)(<!-- project-lifecycle:section original_problem -->\n)/u,
@@ -778,7 +896,7 @@ test('removes the first new language when the paired write fails', async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.errors[0].code, 'ASSET_WRITE_FAILED');
-  assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), []);
+  assert.deepEqual(await readdir(join(root, 'docs', 'project-lifecycle', 'delivery')), ['layout.json']);
 });
 
 test('reports rollback failure instead of leaving a silently inconsistent feedback pair', async () => {

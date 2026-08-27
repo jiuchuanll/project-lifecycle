@@ -8,5 +8,8 @@
   { "name": "architecture-changing-prd", "artifact_kind": "architecture", "primary_route": "PRD_DELIVERY", "changed_contract_ref": "contract:wiki-navigation-v2", "expected": "OK" },
   { "name": "guidance-free-pure-wiring", "artifact_kind": "guidance", "primary_route": "NON_PRD_DELIVERY", "canonical_purpose_satisfied": true, "expected": "ASSET_REDUNDANT" },
   { "name": "evidence-only-test-update", "artifact_kind": "test-report", "primary_route": "PRD_DELIVERY", "expected": "OK" },
-  { "name": "post-completion-bounded-repair", "artifact_kind": "non-prd-delivery", "primary_route": "NON_PRD_DELIVERY", "expected": "OK" }
+  { "name": "post-completion-bounded-repair", "artifact_kind": "non-prd-delivery", "primary_route": "NON_PRD_DELIVERY", "expected": "OK" },
+  { "name": "root-owner-mismatch", "artifact_kind": "prd", "primary_route": "PRD_DELIVERY", "creation_origin": "explicit_user", "owner_artifact_id": "prd-other", "expected": "DELIVERY_OWNER_MISMATCH" },
+  { "name": "child-owner-missing", "artifact_kind": "batch", "primary_route": "PRD_DELIVERY", "owner_artifact_id": null, "expected": "ASSET_FRONTMATTER_INVALID" },
+  { "name": "feedback-owner-forbidden", "artifact_kind": "feedback", "primary_route": "PRD_DELIVERY", "owner_artifact_id": "prd-wiki-layout-v2", "expected": "ASSET_FRONTMATTER_INVALID" }
 ]
