@@ -79,7 +79,7 @@
     "allowed_context_ids": ["domain:wiki-workspace", "fact:wiki-layout", "request:wkii-page-better"],
     "forbidden_archive_paths": ["docs/project-lifecycle/archive/**"],
     "required_durable_files": [],
-    "forbidden_durable_files": ["docs/project-lifecycle/delivery/prd-wiki-en.md", "docs/project-lifecycle/delivery/prd-wiki.md"],
+    "forbidden_durable_files": ["docs/project-lifecycle/delivery/prds/prd-wiki/prd-wiki-en.md", "docs/project-lifecycle/delivery/prds/prd-wiki/prd-wiki.md"],
     "expected_route": null,
     "expected_stop": "NEEDS_USER",
     "required_human_gates": ["ROUTE_CLARIFICATION"],
@@ -184,7 +184,7 @@
     },
     "allowed_context_ids": ["domain:runtime-core", "domain:wiki-workspace", "feedback:wiki-search"],
     "forbidden_archive_paths": ["docs/project-lifecycle/archive/**"],
-    "required_durable_files": ["docs/project-lifecycle/delivery/feedback-wiki-search-en.md", "docs/project-lifecycle/delivery/feedback-wiki-search.md", "docs/project-lifecycle/delivery/prd-wiki-search-backend-en.md", "docs/project-lifecycle/delivery/prd-wiki-search-backend.md", "docs/project-lifecycle/delivery/prd-wiki-search-frontend-en.md", "docs/project-lifecycle/delivery/prd-wiki-search-frontend.md"],
+    "required_durable_files": ["docs/project-lifecycle/delivery/feedback/feedback-wiki-search-en.md", "docs/project-lifecycle/delivery/feedback/feedback-wiki-search.md", "docs/project-lifecycle/delivery/prds/prd-wiki-search-backend/prd-wiki-search-backend-en.md", "docs/project-lifecycle/delivery/prds/prd-wiki-search-backend/prd-wiki-search-backend.md", "docs/project-lifecycle/delivery/prds/prd-wiki-search-frontend/prd-wiki-search-frontend-en.md", "docs/project-lifecycle/delivery/prds/prd-wiki-search-frontend/prd-wiki-search-frontend.md"],
     "forbidden_durable_files": ["docs/project-lifecycle/knowledge/runtime-core-en.md", "docs/project-lifecycle/knowledge/wiki-workspace-en.md"],
     "expected_route": "PRD_DELIVERY",
     "expected_stop": null,
@@ -200,7 +200,7 @@
       "observation": {
         "selected_context_ids": ["domain:runtime-core", "domain:wiki-workspace", "feedback:wiki-search"],
         "archive_paths_read": [],
-        "durable_files_written": ["docs/project-lifecycle/delivery/feedback-wiki-search-en.md", "docs/project-lifecycle/delivery/feedback-wiki-search.md", "docs/project-lifecycle/delivery/prd-wiki-search-backend-en.md", "docs/project-lifecycle/delivery/prd-wiki-search-backend.md", "docs/project-lifecycle/delivery/prd-wiki-search-frontend-en.md", "docs/project-lifecycle/delivery/prd-wiki-search-frontend.md"],
+        "durable_files_written": ["docs/project-lifecycle/delivery/feedback/feedback-wiki-search-en.md", "docs/project-lifecycle/delivery/feedback/feedback-wiki-search.md", "docs/project-lifecycle/delivery/prds/prd-wiki-search-backend/prd-wiki-search-backend-en.md", "docs/project-lifecycle/delivery/prds/prd-wiki-search-backend/prd-wiki-search-backend.md", "docs/project-lifecycle/delivery/prds/prd-wiki-search-frontend/prd-wiki-search-frontend-en.md", "docs/project-lifecycle/delivery/prds/prd-wiki-search-frontend/prd-wiki-search-frontend.md"],
         "route": "PRD_DELIVERY",
         "stop": null,
         "observed_human_gates": ["FEEDBACK_SCOPE_CONFIRMATION", "PRD_DECOMPOSITION_APPROVAL"],
@@ -232,7 +232,7 @@
     },
     "allowed_context_ids": ["domain:backend-service", "domain:frontend-shell", "repo:backend", "repo:frontend", "repo:governance"],
     "forbidden_archive_paths": ["governance/archive/**", "repos/backend/archive/**", "repos/frontend/archive/**"],
-    "required_durable_files": ["docs/project-lifecycle/delivery/prd-cross-repo-en.md", "docs/project-lifecycle/delivery/prd-cross-repo.md"],
+    "required_durable_files": ["docs/project-lifecycle/delivery/prds/prd-cross-repo/prd-cross-repo-en.md", "docs/project-lifecycle/delivery/prds/prd-cross-repo/prd-cross-repo.md"],
     "forbidden_durable_files": ["repos/backend/docs/project-lifecycle/project-map.json", "repos/frontend/docs/project-lifecycle/project-map.json"],
     "expected_route": "PRD_DELIVERY",
     "expected_stop": null,
@@ -248,7 +248,7 @@
       "observation": {
         "selected_context_ids": ["domain:backend-service", "domain:frontend-shell", "repo:backend", "repo:frontend", "repo:governance"],
         "archive_paths_read": [],
-        "durable_files_written": ["docs/project-lifecycle/delivery/prd-cross-repo-en.md", "docs/project-lifecycle/delivery/prd-cross-repo.md"],
+        "durable_files_written": ["docs/project-lifecycle/delivery/prds/prd-cross-repo/prd-cross-repo-en.md", "docs/project-lifecycle/delivery/prds/prd-cross-repo/prd-cross-repo.md"],
         "route": "PRD_DELIVERY",
         "stop": null,
         "observed_human_gates": ["CONFLICT_RESOLUTION", "MULTI_REPOSITORY_ACCEPTANCE"],
@@ -334,11 +334,11 @@
     "summary": "Close an accepted model-production delivery, preserve a compact summary, and gate any historical body retrieval during a later migration.",
     "fixture": {
       "max_entries": 8,
-      "files": ["docs/project-lifecycle/archive/prd-model-v1-en.md", "docs/project-lifecycle/delivery/closure-model-v1-en.md", "docs/project-lifecycle/delivery/prd-model-v2-en.md", "docs/project-lifecycle/project-map.json", "migration/model-v2.md"]
+      "files": ["docs/project-lifecycle/archive/delivery/prds/prd-model-v1/prd-model-v1-en.md", "docs/project-lifecycle/delivery/prds/prd-model-v1/closure/closure-model-v1-en.md", "docs/project-lifecycle/delivery/prds/prd-model-v2/prd-model-v2-en.md", "docs/project-lifecycle/project-map.json", "migration/model-v2.md"]
     },
     "allowed_context_ids": ["archive-receipt:model-v1", "closure:model-v1", "domain:live2d-rigging", "migration:model-v2"],
     "forbidden_archive_paths": ["docs/project-lifecycle/archive/private/**", "docs/project-lifecycle/archive/unrequested/**"],
-    "required_durable_files": ["docs/project-lifecycle/delivery/closure-model-v1-en.md", "docs/project-lifecycle/delivery/closure-model-v1.md", "docs/project-lifecycle/delivery/migration-model-v2-en.md", "docs/project-lifecycle/delivery/migration-model-v2.md"],
+    "required_durable_files": ["docs/project-lifecycle/delivery/prds/prd-model-v1/closure/closure-model-v1-en.md", "docs/project-lifecycle/delivery/prds/prd-model-v1/closure/closure-model-v1.md", "docs/project-lifecycle/delivery/non-prd/migration-model-v2/migration-model-v2-en.md", "docs/project-lifecycle/delivery/non-prd/migration-model-v2/migration-model-v2.md"],
     "forbidden_durable_files": ["docs/project-lifecycle/knowledge/archive-copy-en.md", "docs/project-lifecycle/knowledge/archive-copy.md"],
     "expected_route": "NON_PRD_DELIVERY",
     "expected_stop": null,
@@ -354,7 +354,7 @@
       "observation": {
         "selected_context_ids": ["archive-receipt:model-v1", "closure:model-v1", "domain:live2d-rigging", "migration:model-v2"],
         "archive_paths_read": ["docs/project-lifecycle/archive/prd-model-v1-en.md"],
-        "durable_files_written": ["docs/project-lifecycle/delivery/closure-model-v1-en.md", "docs/project-lifecycle/delivery/closure-model-v1.md", "docs/project-lifecycle/delivery/migration-model-v2-en.md", "docs/project-lifecycle/delivery/migration-model-v2.md"],
+        "durable_files_written": ["docs/project-lifecycle/delivery/prds/prd-model-v1/closure/closure-model-v1-en.md", "docs/project-lifecycle/delivery/prds/prd-model-v1/closure/closure-model-v1.md", "docs/project-lifecycle/delivery/non-prd/migration-model-v2/migration-model-v2-en.md", "docs/project-lifecycle/delivery/non-prd/migration-model-v2/migration-model-v2.md"],
         "route": "NON_PRD_DELIVERY",
         "stop": null,
         "observed_human_gates": ["ARCHIVE_ACCESS_APPROVAL", "CLOSURE_ACCEPTANCE"],

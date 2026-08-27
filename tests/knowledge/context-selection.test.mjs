@@ -239,10 +239,11 @@ test('validates caller routing, dependency grounding, delivery linkage, versions
     assert.equal(result.errors[0].code, entry.code);
   }
 
-  await writeFile(join(root, 'docs/project-lifecycle/delivery/prd-other-en.md'), delivery({ id: 'prd-other', domainIds: ['unrelated-workspace'] }));
+  await mkdir(join(root, 'docs/project-lifecycle/delivery/prds/prd-other'), { recursive: true });
+  await writeFile(join(root, 'docs/project-lifecycle/delivery/prds/prd-other/prd-other-en.md'), delivery({ id: 'prd-other', domainIds: ['unrelated-workspace'] }));
   const unlinked = await selectContext({
     ...baseInput(root),
-    task_delivery_refs: [{ artifact_id: 'prd-other', locator: 'delivery/prd-other-en.md' }],
+    task_delivery_refs: [{ artifact_id: 'prd-other', locator: 'delivery/prds/prd-other/prd-other-en.md' }],
   });
   assert.equal(unlinked.ok, false);
   assert.equal(unlinked.errors[0].code, 'CONTEXT_DELIVERY_INVALID');
@@ -272,13 +273,15 @@ test('pins accepted baselines, delivery identity/retention, and selected ID uniq
   assert.equal(invented.ok, true);
   assert.equal(invented.value.stop.code, 'NEEDS_EVIDENCE');
 
-  await writeFile(join(root, 'docs/project-lifecycle/delivery/prd-foreign-en.md'), delivery({ id: 'prd-foreign', projectId: 'foreign-project' }));
-  const foreign = await selectContext({ ...baseInput(root), task_delivery_refs: [{ artifact_id: 'prd-foreign', locator: 'delivery/prd-foreign-en.md' }] });
+  await mkdir(join(root, 'docs/project-lifecycle/delivery/prds/prd-foreign'), { recursive: true });
+  await writeFile(join(root, 'docs/project-lifecycle/delivery/prds/prd-foreign/prd-foreign-en.md'), delivery({ id: 'prd-foreign', projectId: 'foreign-project' }));
+  const foreign = await selectContext({ ...baseInput(root), task_delivery_refs: [{ artifact_id: 'prd-foreign', locator: 'delivery/prds/prd-foreign/prd-foreign-en.md' }] });
   assert.equal(foreign.ok, false);
   assert.equal(foreign.errors[0].code, 'CONTEXT_DELIVERY_INVALID');
 
-  await writeFile(join(root, 'docs/project-lifecycle/delivery/prd-stale-en.md'), delivery({ id: 'prd-stale', baseline: 'baseline-old' }));
-  const stale = await selectContext({ ...baseInput(root), task_delivery_refs: [{ artifact_id: 'prd-stale', locator: 'delivery/prd-stale-en.md' }] });
+  await mkdir(join(root, 'docs/project-lifecycle/delivery/prds/prd-stale'), { recursive: true });
+  await writeFile(join(root, 'docs/project-lifecycle/delivery/prds/prd-stale/prd-stale-en.md'), delivery({ id: 'prd-stale', baseline: 'baseline-old' }));
+  const stale = await selectContext({ ...baseInput(root), task_delivery_refs: [{ artifact_id: 'prd-stale', locator: 'delivery/prds/prd-stale/prd-stale-en.md' }] });
   assert.equal(stale.ok, true, JSON.stringify(stale));
   assert.equal(stale.value.stop.code, 'CONFLICT');
   assert.deepEqual(stale.value.material_exclusions, [{
@@ -286,8 +289,9 @@ test('pins accepted baselines, delivery identity/retention, and selected ID uniq
   }]);
   assert.equal(stale.value.selected_context.some(({ id }) => id === 'prd-stale'), false);
 
-  await writeFile(join(root, 'docs/project-lifecycle/delivery/wiki-workspace-en.md'), delivery({ id: 'wiki-workspace', kind: 'architecture' }));
-  const collision = await selectContext({ ...baseInput(root), task_delivery_refs: [{ artifact_id: 'wiki-workspace', locator: 'delivery/wiki-workspace-en.md' }] });
+  await mkdir(join(root, 'docs/project-lifecycle/delivery/prds/wiki-workspace/architecture'), { recursive: true });
+  await writeFile(join(root, 'docs/project-lifecycle/delivery/prds/wiki-workspace/architecture/wiki-workspace-en.md'), delivery({ id: 'wiki-workspace', kind: 'architecture' }));
+  const collision = await selectContext({ ...baseInput(root), task_delivery_refs: [{ artifact_id: 'wiki-workspace', locator: 'delivery/prds/wiki-workspace/architecture/wiki-workspace-en.md' }] });
   assert.equal(collision.ok, false);
   assert.equal(collision.errors[0].code, 'CONTEXT_SELECTION_CONFLICT');
 });

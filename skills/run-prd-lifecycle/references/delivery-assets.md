@@ -8,6 +8,19 @@ Create an artifact only when it has a distinct durable job, a stable owner, and 
 
 Every materialized delivery asset is an English/Chinese logical pair. English is the Agent-default read. Language-neutral IDs, routes, baselines, relationships, state, retention, and evidence references must match; prose is localized.
 
+## Physical Layout and Ownership
+
+The fixed delivery schema is identified by `delivery/layout.json`. Every PRD or non-PRD delivery root is exactly one physical owner: its own stable artifact ID is also its `owner_artifact_id`. A child architecture, guidance, batch, test-report, or closure-summary pair declares the same `owner_artifact_id` and lives only beneath that owner. Semantic relationships such as `relationships.prd_ids` do not create a second physical copy.
+
+Use these canonical locations:
+
+- Feedback remains independent at `delivery/feedback/<feedback-id>-en.md` and its Chinese mirror.
+- A PRD owner is at `delivery/prds/<prd-id>/<prd-id>-en.md`; its children use `architecture/`, `guidance/`, `batches/`, `test-reports/`, or `closure/` beneath that owner.
+- A non-PRD owner uses the same shape beneath `delivery/non-prd/<owner-id>/`.
+- Generated root and owner `INDEX` pairs are navigation only. Generated alignment views live under `delivery/views/`.
+
+Never write new flat delivery documents. If a coherent legacy flat tree is found, first run a read-only inspection and migration preview. The preview must resolve every child to one owner or pause for user mapping, report external-link risks, and bind the selected solution ID, plan hash, and source fingerprint. Durable migration additionally requires explicit approval and backup references, exact preview replay, atomic publication, live v2 validation, and rollback on failure.
+
 ## Canonical Jobs
 
 - Feedback: original problem, scenario, expectation, source, and coverage.
@@ -27,7 +40,7 @@ Do not duplicate content across artifacts. Link to authoritative evidence. Deliv
 
 ## Active Alignment Projection
 
-`delivery/alignment-review-en.md` and `delivery/alignment-review.md` are generated bilingual activity views, not delivery owners or history ledgers. Regenerate them from validated active Feedback, linked owners, and closure summaries. Each row has exactly five fields: `feedback_id`, localized `title`, `primary_domain_id`, derived `alignment_phase`, and sorted unique `owner_ref` list.
+`delivery/views/alignment-review-en.md` and `delivery/views/alignment-review.md` are generated bilingual activity views, not delivery owners or history ledgers. Regenerate them from validated active Feedback, linked owners, and closure summaries. Each row has exactly five fields: `feedback_id`, localized `title`, `primary_domain_id`, derived `alignment_phase`, and sorted unique `owner_ref` list.
 
 The only active phases are `REVIEW_REQUIRED`, `DELIVERY_OPEN`, `KNOWLEDGE_WRITEBACK`, and `DEFERRED`. `DEFERRED` applies only while no required linked owner exists; once one is linked, linked owner state takes precedence. A row remains `DELIVERY_OPEN` while any required linked owner is open. It reaches `KNOWLEDGE_WRITEBACK` only after every required linked owner has accepted closure and Feedback coverage. Completed items contribute no row. Never place evidence bodies, code paths, original narrative, risk prose, scope, tests, Knowledge Diff bodies, chronology, reasoning, or free-form notes in this projection.
 

@@ -324,3 +324,15 @@ test('keeps knowledge control during confirmed alignment Feedback capture', asyn
   assert.match(materialization, /accepted business decision[^\n]*verified implementation state/i);
   assert.match(materialization, /must not claim[^\n]*implementation[^\n]*removed/i);
 });
+
+test('recognizes the explicit owner-centric delivery migration boundary', async () => {
+  const bootstrap = await readFile(
+    new URL('../../skills/maintain-project-knowledge/references/bootstrap-and-calibration.md', import.meta.url),
+    'utf8',
+  );
+  assert.match(bootstrap, /`delivery\/layout\.json`/u);
+  assert.match(bootstrap, /preview-delivery-layout-migration/u);
+  assert.match(bootstrap, /selected solution ID.*plan hash.*source fingerprint/is);
+  assert.match(bootstrap, /ambiguous.*owner.*NEEDS_USER/is);
+  assert.match(bootstrap, /run-prd-lifecycle.*durable migration/is);
+});

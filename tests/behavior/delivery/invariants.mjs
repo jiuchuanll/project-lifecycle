@@ -11,10 +11,12 @@ const ASSET_KINDS = new Set(['closure-summary', 'feedback', 'non-prd-delivery', 
 const HUMAN_GATES = new Set([
   'BUSINESS_DISPOSITION_CONFIRMATION',
   'CONFLICT_RESOLUTION',
+  'DELIVERY_MIGRATION_APPROVAL',
   'KNOWLEDGE_APPROVAL',
   'MULTI_REPOSITORY_ACCEPTANCE',
   'NONE',
   'PRD_CREATION_APPROVAL',
+  'OWNER_MAPPING_CONFIRMATION',
   'ROUTE_CLARIFICATION',
 ]);
 const OBLIGATIONS = new Set([
@@ -33,6 +35,12 @@ const FIELDS = new Set([
   'forbidden_outcomes', 'human_gate_satisfied', 'input_summary', 'prd_creation_origin',
   'proposed_artifact_kind', 'required_human_gate', 'route_candidate', 'scenario_id',
 ]);
+const OPTIONAL_FIELDS = new Set([
+  'delivery_layout_action', 'intent_materialized_without_acceptance', 'selected_solution_id',
+]);
+const DELIVERY_LAYOUT_ACTIONS = new Set([
+  'AMBIGUOUS_MIGRATION', 'DEFAULT_RETRIEVAL', 'MIGRATION_PREVIEW', 'OWNER_CONTINUATION',
+]);
 
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -44,7 +52,7 @@ const sorted = (values) => [...values].sort(compareCodePoints);
 
 const validateScenario = (scenario, index) => {
   const path = `/scenarios/${index}`;
-  if (!record(scenario) || Object.keys(scenario).some((key) => !FIELDS.has(key))) {
+  if (!record(scenario) || Object.keys(scenario).some((key) => !FIELDS.has(key) && !OPTIONAL_FIELDS.has(key))) {
     return failure('SCENARIO_SHAPE_INVALID', path, 'Scenario uses a closed deterministic shape.');
   }
   const required = [...FIELDS];
@@ -81,6 +89,16 @@ const validateScenario = (scenario, index) => {
   }
   if (scenario.prd_creation_origin !== null && !['agent_inferred', 'explicit_user'].includes(scenario.prd_creation_origin)) {
     return failure('SCENARIO_ORIGIN_INVALID', `${path}/prd_creation_origin`, 'Unsupported PRD creation origin.');
+  }
+  if (Object.hasOwn(scenario, 'delivery_layout_action')
+    && (!DELIVERY_LAYOUT_ACTIONS.has(scenario.delivery_layout_action)
+      || scenario.intent_materialized_without_acceptance !== false
+      || (scenario.selected_solution_id !== null && !isSafeReference(scenario.selected_solution_id)))) {
+    return failure('SCENARIO_LAYOUT_INVALID', `${path}/delivery_layout_action`, 'Delivery layout scenarios require one bounded action without acceptance claims.');
+  }
+  if (scenario.delivery_layout_action === 'MIGRATION_PREVIEW'
+    && scenario.selected_solution_id !== 'solution-owner-centric-delivery-layout-v2') {
+    return failure('SCENARIO_LAYOUT_INVALID', `${path}/selected_solution_id`, 'Migration preview requires the selected owner-centric solution.');
   }
   const route = validateRoute(scenario.route_candidate);
   if (!route.ok || route.value.primary_route !== scenario.expected_primary_route
@@ -122,7 +140,8 @@ export const evaluateDeliveryScenario = (scenario) => {
   const outsideDelivery = ['KNOWLEDGE_UPDATE', 'OUTSIDE_PLUGIN'].includes(route.value.primary_route);
   const gateBlocked = scenario.required_human_gate !== 'NONE' && !scenario.human_gate_satisfied;
   const obligationBlocked = scenario.expected_obligation_kinds.length > 0;
-  const closure = outsideDelivery ? 'OUTSIDE_DELIVERY' : (stopped || gateBlocked || obligationBlocked ? 'BLOCKED' : 'ALLOWED');
+  const layoutOnly = ['MIGRATION_PREVIEW', 'OWNER_CONTINUATION'].includes(scenario.delivery_layout_action);
+  const closure = outsideDelivery ? 'OUTSIDE_DELIVERY' : (layoutOnly || stopped || gateBlocked || obligationBlocked ? 'BLOCKED' : 'ALLOWED');
   const feedbackOnlyCapture = route.value.primary_route === 'KNOWLEDGE_UPDATE'
     && scenario.proposed_artifact_kind === 'feedback'
     && scenario.required_human_gate === 'BUSINESS_DISPOSITION_CONFIRMATION'
@@ -131,7 +150,7 @@ export const evaluateDeliveryScenario = (scenario) => {
   let durableKinds = [];
   if (feedbackOnlyCapture) {
     durableKinds = ['feedback'];
-  } else if (!outsideDelivery && !stopped && !(scenario.proposed_artifact_kind === 'prd'
+  } else if (!layoutOnly && !outsideDelivery && !stopped && !(scenario.proposed_artifact_kind === 'prd'
     && scenario.prd_creation_origin === 'agent_inferred' && !scenario.human_gate_satisfied)) {
     durableKinds = [scenario.proposed_artifact_kind];
     if (closure === 'ALLOWED') durableKinds.push('closure-summary');
@@ -169,7 +188,12 @@ export const evaluateDeliveryScenario = (scenario) => {
   const ownerId = scenario.proposed_artifact_kind ? artifactIdFor(scenario) : null;
   for (const kind of durableKinds) {
     const id = kind === 'closure-summary' ? `closure-${ownerId}` : ownerId;
-    allowedFiles.push(`delivery/${id}-en.md`, `delivery/${id}.md`);
+    const directory = kind === 'feedback'
+      ? 'delivery/feedback'
+      : scenario.proposed_artifact_kind === 'prd'
+        ? `delivery/prds/${ownerId}${kind === 'closure-summary' ? '/closure' : ''}`
+        : `delivery/non-prd/${ownerId}${kind === 'closure-summary' ? '/closure' : ''}`;
+    allowedFiles.push(`${directory}/${id}-en.md`, `${directory}/${id}.md`);
   }
   const outcomes = [];
   if (route.value.stop) outcomes.push('NEEDS_USER');
