@@ -243,6 +243,16 @@ test('requires layout v2 and one valid physical owner before writing', async () 
       owner_artifact_id: 'shared-owner',
     }),
   }))).errors[0].code, 'DELIVERY_OWNER_MISMATCH');
+
+  const emptyOwner = await rootFor();
+  await mkdir(join(emptyOwner, 'docs/project-lifecycle/delivery/prds/prd-empty'), { recursive: true });
+  assert.equal((await materializeAsset(request(emptyOwner, {
+    frontmatter: baseFrontmatter({
+      artifact_id: 'batch-empty-owner',
+      artifact_kind: 'batch',
+      owner_artifact_id: 'prd-empty',
+    }),
+  }))).errors[0].code, 'DELIVERY_OWNER_MISMATCH');
 });
 
 test('rejects a lifecycle root symlink before writing outside the project', async () => {
@@ -468,6 +478,21 @@ test('keeps an active marker until complete delivery and knowledge resolution ar
     evidence_refs: ['verification:retirement'],
     closure_ref: 'acceptance:retirement',
   };
+  const wrongOwnerRequest = request(root, {
+    frontmatter: baseFrontmatter({
+      artifact_id: 'closure-prd-retire-wiki-density',
+      artifact_kind: 'closure-summary',
+      owner_artifact_id: 'prd-other-owner',
+      relationships: {
+        feedback_ids: [feedbackId],
+        prd_ids: ['prd-retire-wiki-density'],
+        legacy_artifact_refs: [],
+      },
+    }),
+    closure_summary: closure,
+    body: ordinaryBody,
+  });
+  assert.equal(validateMaterializationRequest(wrongOwnerRequest).errors[0].code, 'CLOSURE_SUMMARY_INVALID');
   const resolvedRequest = request(root, {
     frontmatter,
     body: (() => {

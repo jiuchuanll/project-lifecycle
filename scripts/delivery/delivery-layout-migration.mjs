@@ -98,7 +98,16 @@ const readLegacyRoot = async (lifecycleRoot, rootLocator, issues) => {
 const linksFrom = (body, source) => [...body.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/gu)]
   .map((match) => match[1])
   .filter((href) => /^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith('//'))
-  .map((href) => ({ source, href }));
+  .map((href) => {
+    const scheme = /^([a-z][a-z0-9+.-]*):/iu.exec(href)?.[1]?.toLowerCase() ?? 'https';
+    let authority = null;
+    try {
+      authority = new URL(href, 'https://external.invalid').host || null;
+    } catch {
+      // The raw target is intentionally not returned.
+    }
+    return { source, scheme, authority, href_hash: hash(href) };
+  });
 
 export const inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [] } = {}) => {
   if (!Array.isArray(mappings) || mappings.length > 200) {
@@ -243,6 +252,8 @@ export const inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappin
   const managedReferenceRewrites = [];
   for (const { pair } of complete) {
     for (const language of LANGUAGES) {
+      const movedSource = targetBySource.get(pair[language].locator);
+      if (!movedSource) continue;
       for (const match of pair[language].body.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/gu)) {
         const href = match[1];
         if (/^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith('//') || href.startsWith('#')) continue;
@@ -252,9 +263,8 @@ export const inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappin
           needsUser.push({ code: 'LINK_UNSAFE', artifact_id: pair[language].frontmatter.artifact_id, locator: pair[language].locator });
           continue;
         }
-        const target = targetBySource.get(resolved);
-        if (!target) continue;
-        const rewritten = posix.relative(posix.dirname(targetBySource.get(pair[language].locator)), target);
+        const target = targetBySource.get(resolved) ?? resolved;
+        const rewritten = posix.relative(posix.dirname(movedSource), target);
         managedReferenceRewrites.push({
           source: pair[language].locator,
           href,

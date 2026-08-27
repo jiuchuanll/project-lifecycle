@@ -155,7 +155,7 @@ The migration first performs a read-only bounded inventory of active and archive
 - exact old and proposed new locators;
 - artifact IDs, kinds, languages, and proposed physical owners;
 - managed references that can be rewritten deterministically;
-- external Markdown references that require risk review;
+- external Markdown reference risks represented by scheme, authority, and target hash without returning raw URLs;
 - incomplete bilingual pairs, duplicate IDs, invalid Frontmatter, unsafe paths, and ambiguous owners;
 - the exact write, move, and removal set.
 

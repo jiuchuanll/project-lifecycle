@@ -1,8 +1,10 @@
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
+import { parseRestrictedYaml } from '../lib/markdown.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 
@@ -59,6 +61,19 @@ const existingDirectory = async (path, parentReal) => {
     if (error.code === 'ENOENT') return null;
     throw error;
   }
+};
+
+const ownerFrontmatter = async (path, ownerRootReal) => {
+  const state = await lstat(path);
+  const physical = await realpath(path);
+  if (!state.isFile() || state.isSymbolicLink() || !inside(ownerRootReal, physical)) throw new Error('Unsafe owner document.');
+  const source = (await readFile(physical, 'utf8')).replaceAll('\r\n', '\n');
+  const closing = source.indexOf('\n---\n', 4);
+  if (!source.startsWith('---\n') || closing === -1) throw new Error('Owner Frontmatter is missing.');
+  const parsed = parseRestrictedYaml(source.slice(4, closing), '/frontmatter');
+  if (!parsed.ok || !validateJson('delivery-frontmatter', parsed.value).ok
+    || parsed.value.schema_version !== 2) throw new Error('Owner Frontmatter is invalid.');
+  return parsed.value;
 };
 
 const resolveDeliveryRoot = async (root, { allowMissing = false } = {}) => {
@@ -121,7 +136,17 @@ export const resolvePhysicalOwner = async ({ lifecycleRoot, frontmatter } = {}) 
         join(delivery, directory, frontmatter.owner_artifact_id),
         delivery,
       );
-      if (owner !== null) candidates.push({ artifact_kind: kind, artifact_id: frontmatter.owner_artifact_id });
+      if (owner !== null) {
+        const base = join(owner, frontmatter.owner_artifact_id);
+        const [en, zh] = await Promise.all([
+          ownerFrontmatter(`${base}-en.md`, owner),
+          ownerFrontmatter(`${base}.md`, owner),
+        ]);
+        if (!isDeepStrictEqual(en, zh) || en.artifact_id !== frontmatter.owner_artifact_id
+          || en.artifact_kind !== kind || en.owner_artifact_id !== en.artifact_id
+          || en.retention_tier !== 'active') throw new Error('Physical owner pair is invalid.');
+        candidates.push({ artifact_kind: kind, artifact_id: frontmatter.owner_artifact_id });
+      }
     }
     return candidates.length === 1
       ? ok(candidates[0])

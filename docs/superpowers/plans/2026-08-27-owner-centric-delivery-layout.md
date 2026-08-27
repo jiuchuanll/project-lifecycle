@@ -543,7 +543,9 @@ assert.deepEqual(preview.value.moves.find(({ artifact_id }) => artifact_id === '
   'delivery/feedback/feedback-density-en.md');
 assert.deepEqual(preview.value.unresolved_external_links, [{
   source: 'delivery/prd-wiki-v1-en.md',
-  href: 'https://example.test/spec',
+  scheme: 'https',
+  authority: 'example.test',
+  href_hash: '<sha256>',
 }]);
 ```
 

@@ -32,7 +32,7 @@ const writePair = async (root, metadata, { archived = false, external = false } 
   for (const language of ['en', 'zh-CN']) {
     const name = `${metadata.artifact_id}${language === 'en' ? '-en' : ''}.md`;
     const link = external && language === 'en'
-      ? '\n[Architecture](architecture-shared-en.md "canonical")\n[External](https://example.test/spec)\n'
+      ? '\n[Project map](../project-map.json)\n[Architecture](architecture-shared-en.md "canonical")\n[External](https://example.test/spec)\n'
       : '';
     await writeFile(join(directory, name), `---\n${JSON.stringify(metadata)}\n---\n# ${metadata.artifact_id}${link}`);
   }
@@ -41,6 +41,8 @@ const writePair = async (root, metadata, { archived = false, external = false } 
 const createLegacy = async (context, { ambiguous = false, missingPair = false, mixed = false } = {}) => {
   const root = await mkdtemp(join(tmpdir(), 'delivery-layout-migration-'));
   context.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, 'docs/project-lifecycle'), { recursive: true });
+  await writeFile(join(root, 'docs/project-lifecycle/project-map.json'), '{}\n');
   await writePair(root, frontmatter('feedback-density', 'feedback'));
   await writePair(root, frontmatter('prd-wiki-v1', 'prd'), { external: true });
   await writePair(root, frontmatter('repair-wiki-v1', 'non-prd-delivery'));
@@ -88,15 +90,42 @@ test('previews a deterministic owner-centric migration without mutating the life
   });
   assert.deepEqual(preview.value.unresolved_external_links, [{
     source: 'delivery/prd-wiki-v1-en.md',
-    href: 'https://example.test/spec',
+    scheme: 'https',
+    authority: 'example.test',
+    href_hash: 'sha256:3d7d97d14835d9e523c95881c5320869a7930f879312f3785525ea7861c3bbf9',
   }]);
-  assert.deepEqual(preview.value.managed_reference_rewrites, [{
-    source: 'delivery/prd-wiki-v1-en.md',
-    href: 'architecture-shared-en.md',
-    rewritten_href: 'architecture/architecture-shared-en.md',
-  }]);
+  assert.deepEqual(preview.value.managed_reference_rewrites, [
+    {
+      source: 'delivery/prd-wiki-v1-en.md',
+      href: '../project-map.json',
+      rewritten_href: '../../../project-map.json',
+    },
+    {
+      source: 'delivery/prd-wiki-v1-en.md',
+      href: 'architecture-shared-en.md',
+      rewritten_href: 'architecture/architecture-shared-en.md',
+    },
+  ]);
   assert.equal(Object.isFrozen(preview.value), true);
   assert.deepEqual(after, before);
+});
+
+test('does not echo credential-bearing external URLs or crash on unmapped child links', async (context) => {
+  const root = await createLegacy(context, { ambiguous: true });
+  const delivery = join(root, 'docs/project-lifecycle/delivery');
+  const child = frontmatter('architecture-shared', 'architecture');
+  const protectedUrl = ['https://user', 'value@example.test/spec?session=value'].join(':');
+  for (const language of ['en', 'zh-CN']) {
+    const name = `architecture-shared${language === 'en' ? '-en' : ''}.md`;
+    await writeFile(join(delivery, name), `---\n${JSON.stringify(child)}\n---\n# child\n[Owner](prd-wiki-v1-en.md)\n[Protected](${protectedUrl})\n`);
+  }
+
+  const preview = await inspectLegacyDeliveryLayout({ root });
+
+  assert.equal(preview.ok, true, JSON.stringify(preview));
+  assert.equal(preview.value.route, 'NEEDS_USER');
+  assert.equal(JSON.stringify(preview.value).includes('user:value'), false);
+  assert.equal(JSON.stringify(preview.value).includes('session=value'), false);
 });
 
 test('returns NEEDS_USER for ambiguous ownership, incomplete pairs, mixed layout, and contradictory mappings', async (context) => {
@@ -201,6 +230,7 @@ test('atomically publishes v2 documents and generated indexes', async (context) 
   assert.match(architecture, /owner_artifact_id: prd-wiki-v1/u);
   assert.match(architecture, /# architecture-shared/u);
   const owner = await readFile(join(root, 'docs/project-lifecycle/delivery/prds/prd-wiki-v1/prd-wiki-v1-en.md'), 'utf8');
+  assert.match(owner, /\[Project map\]\(\.\.\/\.\.\/\.\.\/project-map\.json\)/u);
   assert.match(owner, /\[Architecture\]\(architecture\/architecture-shared-en\.md "canonical"\)/u);
   assert.match(await readFile(join(root, 'docs/project-lifecycle/delivery/INDEX-en.md'), 'utf8'), /prd-wiki-v1/u);
   assert.match(await readFile(join(root, 'docs/project-lifecycle/delivery/prds/prd-wiki-v1/INDEX-en.md'), 'utf8'), /architecture-shared/u);

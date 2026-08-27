@@ -23,6 +23,10 @@ import { fail, ok } from '../lib/result.mjs';
 import { assertBoundedRelativePath, resolveInside } from '../lib/safe-path.mjs';
 
 const hash = (content) => createHash('sha256').update(content).digest('hex');
+const MAX_SNAPSHOT_ENTRIES = 10_000;
+const MAX_SNAPSHOT_DEPTH = 16;
+const MAX_SNAPSHOT_FILE_BYTES = 4_194_304;
+const MAX_SNAPSHOT_TOTAL_BYTES = 67_108_864;
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const inside = (root, candidate) => {
   const fromRoot = relative(root, candidate);
@@ -74,8 +78,13 @@ const snapshotTree = async (lifecycleRoot) => {
   const rootReal = await realpath(lifecycleRoot);
   if (!rootState.isDirectory() || rootState.isSymbolicLink()) throw pathError('PATH_SYMLINK_ESCAPE');
   const entries = [];
-  const visit = async (directory, prefix = '') => {
+  let totalBytes = 0;
+  const visit = async (directory, prefix = '', depth = 0) => {
+    if (depth > MAX_SNAPSHOT_DEPTH) throw pathError('LAYOUT_TREE_LIMIT_EXCEEDED');
     const children = await readdir(directory, { withFileTypes: true });
+    if (entries.length + children.length > MAX_SNAPSHOT_ENTRIES) {
+      throw pathError('LAYOUT_TREE_LIMIT_EXCEEDED');
+    }
     children.sort((left, right) => compareCodePoints(left.name, right.name));
     for (const child of children) {
       const absolute = join(directory, child.name);
@@ -85,8 +94,13 @@ const snapshotTree = async (lifecycleRoot) => {
         const physical = await realpath(absolute);
         if (!inside(rootReal, physical)) throw pathError('PATH_SYMLINK_ESCAPE');
         entries.push({ locator: `${locator}/`, type: 'directory' });
-        await visit(physical, locator);
+        await visit(physical, locator, depth + 1);
       } else if (state.isFile()) {
+        if (state.size > MAX_SNAPSHOT_FILE_BYTES
+          || totalBytes + state.size > MAX_SNAPSHOT_TOTAL_BYTES) {
+          throw pathError('LAYOUT_TREE_LIMIT_EXCEEDED');
+        }
+        totalBytes += state.size;
         entries.push({ locator, type: 'file', hash: hash(await readFile(absolute)) });
       } else if (state.isSymbolicLink()) {
         let physical;

@@ -1,4 +1,4 @@
-import { lstat, open, readFile, readdir, realpath } from 'node:fs/promises';
+import { lstat, open, opendir, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -36,13 +36,18 @@ const canonicalIndex = (locator) => /^delivery\/(?:INDEX(?:-en)?\.md|(?:prds|non
 const readPrefix = async (path) => {
   const handle = await open(path, 'r');
   try {
-    const buffer = Buffer.alloc(MAX_FRONTMATTER_BYTES);
-    for (let offset = 0; offset < buffer.length; offset += 1) {
-      const { bytesRead } = await handle.read(buffer, offset, 1, offset);
+    const buffer = Buffer.alloc(MAX_FRONTMATTER_BYTES + 1);
+    let total = 0;
+    while (total < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, total, buffer.length - total, total);
       if (bytesRead === 0) break;
-      const source = buffer.subarray(0, offset + 1).toString('utf8').replaceAll('\r\n', '\n');
+      total += bytesRead;
+      const source = buffer.subarray(0, total).toString('utf8').replaceAll('\r\n', '\n');
       const closing = source.indexOf('\n---\n', 4);
-      if (source.startsWith('---\n') && closing !== -1) return source.slice(0, closing + 5);
+      if (source.startsWith('---\n') && closing !== -1
+        && Buffer.byteLength(source.slice(0, closing + 5)) <= MAX_FRONTMATTER_BYTES) {
+        return source.slice(0, closing + 5);
+      }
     }
     throw new Error('Frontmatter is missing or unbounded.');
   } finally {
@@ -106,6 +111,16 @@ export const collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overl
 
   const sources = new Map();
   let entryCount = 0;
+  const readDirectory = async (directory) => {
+    const entries = [];
+    const handle = await opendir(directory);
+    for await (const entry of handle) {
+      entries.push(entry);
+      if (entryCount + entries.length > MAX_ENTRIES) throw new Error('Delivery tree is unbounded.');
+    }
+    entries.sort((left, right) => compareCodePoints(left.name, right.name));
+    return entries;
+  };
   const scan = async (rootLocator) => {
     const lexical = join(lifecycleRoot, rootLocator);
     let root;
@@ -119,7 +134,7 @@ export const collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overl
     }
     const visit = async (directory, relativeDirectory, depth) => {
       if (depth > MAX_DEPTH) throw new Error('Delivery tree exceeds the managed depth.');
-      for (const entry of await readdir(directory, { withFileTypes: true })) {
+      for (const entry of await readDirectory(directory)) {
         entryCount += 1;
         if (entryCount > MAX_ENTRIES || entry.isSymbolicLink()) throw new Error('Delivery tree is unsafe or unbounded.');
         const path = join(directory, entry.name);
@@ -258,13 +273,23 @@ export const collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overl
   const byOwner = {};
   const archivedByOwner = {};
   for (const owner of owners) byOwner[owner.artifact_id] = { owner, assets: [] };
-  for (const item of activeItems) {
-    if (item.owner_artifact_id && byOwner[item.owner_artifact_id]) byOwner[item.owner_artifact_id].assets.push(item);
-  }
   for (const item of archivedItems) {
     if (!item.owner_artifact_id) continue;
     archivedByOwner[item.owner_artifact_id] ??= { owner_artifact_id: item.owner_artifact_id, assets: [] };
     archivedByOwner[item.owner_artifact_id].assets.push(item);
+  }
+  const retainedOwnerIds = new Set(Object.values(archivedByOwner)
+    .filter(({ owner_artifact_id: ownerId, assets }) => assets.some(({ artifact_id: id, artifact_kind: kind }) => (
+      id === ownerId && ['prd', 'non-prd-delivery'].includes(kind)
+    )))
+    .map(({ owner_artifact_id: ownerId }) => ownerId));
+  for (const item of activeItems) {
+    if (!item.owner_artifact_id) continue;
+    if (!byOwner[item.owner_artifact_id]) {
+      if (item.artifact_kind === 'closure-summary' && retainedOwnerIds.has(item.owner_artifact_id)) continue;
+      return failure('DELIVERY_INVENTORY_OWNER_MISSING', `/${item.artifact_id}`, 'Every active owned asset requires one active physical owner.');
+    }
+    byOwner[item.owner_artifact_id].assets.push(item);
   }
   for (const entry of Object.values(byOwner)) sortItems(entry.assets);
   for (const entry of Object.values(archivedByOwner)) sortItems(entry.assets);

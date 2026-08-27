@@ -19,7 +19,7 @@ Use these canonical locations:
 - A non-PRD owner uses the same shape beneath `delivery/non-prd/<owner-id>/`.
 - Generated root and owner `INDEX` pairs are navigation only. Generated alignment views live under `delivery/views/`.
 
-Never write new flat delivery documents. If a coherent legacy flat tree is found, first run a read-only inspection and migration preview. The preview must resolve every child to one owner or pause for user mapping, report external-link risks, and bind the selected solution ID, plan hash, and source fingerprint. Durable migration additionally requires explicit approval and backup references, exact preview replay, atomic publication, live v2 validation, and rollback on failure.
+Never write new flat delivery documents. If a coherent legacy flat tree is found, first run a read-only inspection and migration preview. The preview must resolve every child to one owner or pause for user mapping, report external-link risks through scheme, authority, and a target hash without echoing raw URLs, and bind the selected solution ID, plan hash, and source fingerprint. Durable migration additionally requires explicit approval and backup references, exact preview replay, atomic publication, live v2 validation, and rollback on failure.
 
 ## Canonical Jobs
 

@@ -18139,7 +18139,7 @@ var validateFixtures = async (rootValue) => {
 };
 
 // scripts/delivery/alignment-marker.mjs
-import { isDeepStrictEqual } from "node:util";
+import { isDeepStrictEqual as isDeepStrictEqual2 } from "node:util";
 
 // scripts/lib/reference-safety.mjs
 import { isAbsolute as isAbsolute5, posix as posix2 } from "node:path";
@@ -18341,6 +18341,7 @@ var validateImpactDeclaration = (value) => {
 // scripts/delivery/delivery-layout.mjs
 import { lstat as lstat4, readFile as readFile4, readdir as readdir2, realpath as realpath5 } from "node:fs/promises";
 import { isAbsolute as isAbsolute6, join as join4, relative as relative4, resolve as resolve4, sep as sep4 } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 var DELIVERY_LAYOUT = Object.freeze({ schema_version: 1, layout_version: 2 });
 var ID2 = /^[a-z][a-z0-9-]*$/u;
 var ROOT_KINDS = /* @__PURE__ */ new Set(["prd", "non-prd-delivery"]);
@@ -18387,6 +18388,17 @@ var existingDirectory = async (path, parentReal) => {
     if (error.code === "ENOENT") return null;
     throw error;
   }
+};
+var ownerFrontmatter = async (path, ownerRootReal) => {
+  const state = await lstat4(path);
+  const physical = await realpath5(path);
+  if (!state.isFile() || state.isSymbolicLink() || !inside2(ownerRootReal, physical)) throw new Error("Unsafe owner document.");
+  const source = (await readFile4(physical, "utf8")).replaceAll("\r\n", "\n");
+  const closing = source.indexOf("\n---\n", 4);
+  if (!source.startsWith("---\n") || closing === -1) throw new Error("Owner Frontmatter is missing.");
+  const parsed = parseRestrictedYaml(source.slice(4, closing), "/frontmatter");
+  if (!parsed.ok || !validateJson("delivery-frontmatter", parsed.value).ok || parsed.value.schema_version !== 2) throw new Error("Owner Frontmatter is invalid.");
+  return parsed.value;
 };
 var resolveDeliveryRoot = async (root, { allowMissing = false } = {}) => {
   if (typeof root !== "string" || !isAbsolute6(root)) throw new Error("Absolute project root required.");
@@ -18439,7 +18451,15 @@ var resolvePhysicalOwner = async ({ lifecycleRoot, frontmatter } = {}) => {
         join4(delivery, directory, frontmatter.owner_artifact_id),
         delivery
       );
-      if (owner !== null) candidates.push({ artifact_kind: kind, artifact_id: frontmatter.owner_artifact_id });
+      if (owner !== null) {
+        const base = join4(owner, frontmatter.owner_artifact_id);
+        const [en, zh] = await Promise.all([
+          ownerFrontmatter(`${base}-en.md`, owner),
+          ownerFrontmatter(`${base}.md`, owner)
+        ]);
+        if (!isDeepStrictEqual(en, zh) || en.artifact_id !== frontmatter.owner_artifact_id || en.artifact_kind !== kind || en.owner_artifact_id !== en.artifact_id || en.retention_tier !== "active") throw new Error("Physical owner pair is invalid.");
+        candidates.push({ artifact_kind: kind, artifact_id: frontmatter.owner_artifact_id });
+      }
     }
     return candidates.length === 1 ? ok(candidates[0]) : failure("DELIVERY_OWNER_MISMATCH", "/owner_artifact_id", "Exactly one physical delivery owner must exist.");
   } catch {
@@ -18868,10 +18888,10 @@ var validateAlignmentFeedbackPair = ({ frontmatter, bodies } = {}) => {
   if (!en.ok) return en;
   const zh = extractBody(bodies["zh-CN"], "zh-CN");
   if (!zh.ok) return zh;
-  if (!isDeepStrictEqual(en.value.marker, zh.value.marker)) {
+  if (!isDeepStrictEqual2(en.value.marker, zh.value.marker)) {
     return failure4("ALIGNMENT_PAIR_MISMATCH", "/body", "Localized Feedback must share one alignment marker.");
   }
-  if (!isDeepStrictEqual(en.value.heading_levels, zh.value.heading_levels)) {
+  if (!isDeepStrictEqual2(en.value.heading_levels, zh.value.heading_levels)) {
     return failure4("ALIGNMENT_PAIR_MISMATCH", "/body", "Localized Feedback requires matching heading structure.");
   }
   if (en.value.marker && !frontmatter.domain_ids.includes(en.value.marker.primary_domain_id)) {
@@ -18887,7 +18907,7 @@ var validateAlignmentFeedbackDocuments = ({ documents, projectMap } = {}) => {
   if (!map.ok) return failure4("ALIGNMENT_PROJECT_MAP_INVALID", "/project_map", "Alignment validation requires a valid project map.");
   const en = splitDeliveryDocument(documents?.en);
   const zh = splitDeliveryDocument(documents?.["zh-CN"]);
-  if (!en || !zh || !isDeepStrictEqual(en.frontmatter, zh.frontmatter)) {
+  if (!en || !zh || !isDeepStrictEqual2(en.frontmatter, zh.frontmatter)) {
     return failure4("ALIGNMENT_PAIR_MISMATCH", "/documents", "Alignment Feedback documents require identical valid Frontmatter.");
   }
   const pair = validateAlignmentFeedbackPair({
@@ -18913,7 +18933,7 @@ var validateAlignmentFeedbackDocuments = ({ documents, projectMap } = {}) => {
     }
   });
 };
-var sameSorted = (left, right) => isDeepStrictEqual(
+var sameSorted = (left, right) => isDeepStrictEqual2(
   [...left].sort(compareCodePoints),
   [...right].sort(compareCodePoints)
 );
@@ -19012,7 +19032,7 @@ var validateAlignmentExit = ({
 // scripts/delivery/alignment-review.mjs
 import { lstat as lstat6, mkdir, readFile as readFile6, realpath as realpath7, unlink as unlink2 } from "node:fs/promises";
 import { isAbsolute as isAbsolute8, join as join6, relative as relative6, sep as sep6 } from "node:path";
-import { isDeepStrictEqual as isDeepStrictEqual3 } from "node:util";
+import { isDeepStrictEqual as isDeepStrictEqual4 } from "node:util";
 
 // scripts/lib/closure-summary.mjs
 import { createHash as createHash2 } from "node:crypto";
@@ -19050,9 +19070,9 @@ var extractClosureSummaryHash = (body) => {
 };
 
 // scripts/delivery/delivery-inventory.mjs
-import { lstat as lstat5, open as open3, readFile as readFile5, readdir as readdir3, realpath as realpath6 } from "node:fs/promises";
+import { lstat as lstat5, open as open3, opendir as opendir2, readFile as readFile5, realpath as realpath6 } from "node:fs/promises";
 import { isAbsolute as isAbsolute7, join as join5, relative as relative5, resolve as resolve5, sep as sep5 } from "node:path";
-import { isDeepStrictEqual as isDeepStrictEqual2 } from "node:util";
+import { isDeepStrictEqual as isDeepStrictEqual3 } from "node:util";
 var MAX_ENTRIES = 2e3;
 var MAX_DEPTH = 4;
 var MAX_FRONTMATTER_BYTES = 65536;
@@ -19077,13 +19097,17 @@ var canonicalIndex = (locator) => /^delivery\/(?:INDEX(?:-en)?\.md|(?:prds|non-p
 var readPrefix = async (path) => {
   const handle = await open3(path, "r");
   try {
-    const buffer = Buffer.alloc(MAX_FRONTMATTER_BYTES);
-    for (let offset = 0; offset < buffer.length; offset += 1) {
-      const { bytesRead } = await handle.read(buffer, offset, 1, offset);
+    const buffer = Buffer.alloc(MAX_FRONTMATTER_BYTES + 1);
+    let total = 0;
+    while (total < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, total, buffer.length - total, total);
       if (bytesRead === 0) break;
-      const source = buffer.subarray(0, offset + 1).toString("utf8").replaceAll("\r\n", "\n");
+      total += bytesRead;
+      const source = buffer.subarray(0, total).toString("utf8").replaceAll("\r\n", "\n");
       const closing = source.indexOf("\n---\n", 4);
-      if (source.startsWith("---\n") && closing !== -1) return source.slice(0, closing + 5);
+      if (source.startsWith("---\n") && closing !== -1 && Buffer.byteLength(source.slice(0, closing + 5)) <= MAX_FRONTMATTER_BYTES) {
+        return source.slice(0, closing + 5);
+      }
     }
     throw new Error("Frontmatter is missing or unbounded.");
   } finally {
@@ -19138,6 +19162,16 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
   }
   const sources = /* @__PURE__ */ new Map();
   let entryCount = 0;
+  const readDirectory = async (directory) => {
+    const entries = [];
+    const handle = await opendir2(directory);
+    for await (const entry2 of handle) {
+      entries.push(entry2);
+      if (entryCount + entries.length > MAX_ENTRIES) throw new Error("Delivery tree is unbounded.");
+    }
+    entries.sort((left, right) => compareCodePoints(left.name, right.name));
+    return entries;
+  };
   const scan = async (rootLocator) => {
     const lexical = join5(lifecycleRoot, rootLocator);
     let root;
@@ -19151,7 +19185,7 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
     }
     const visit = async (directory, relativeDirectory, depth) => {
       if (depth > MAX_DEPTH) throw new Error("Delivery tree exceeds the managed depth.");
-      for (const entry2 of await readdir3(directory, { withFileTypes: true })) {
+      for (const entry2 of await readDirectory(directory)) {
         entryCount += 1;
         if (entryCount > MAX_ENTRIES || entry2.isSymbolicLink()) throw new Error("Delivery tree is unsafe or unbounded.");
         const path = join5(directory, entry2.name);
@@ -19251,7 +19285,7 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
   const archivedPairs = [];
   const artifactIds = /* @__PURE__ */ new Set();
   for (const [key, pair] of grouped) {
-    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual2(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
+    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual3(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
       return failure5("DELIVERY_INVENTORY_PAIR_INVALID", `/${key}`, "Delivery artifacts require one matching bilingual pair.");
     }
     const item = itemFromPair(pair);
@@ -19274,13 +19308,19 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
   const byOwner = {};
   const archivedByOwner = {};
   for (const owner of owners) byOwner[owner.artifact_id] = { owner, assets: [] };
-  for (const item of activeItems) {
-    if (item.owner_artifact_id && byOwner[item.owner_artifact_id]) byOwner[item.owner_artifact_id].assets.push(item);
-  }
   for (const item of archivedItems) {
     if (!item.owner_artifact_id) continue;
     archivedByOwner[item.owner_artifact_id] ??= { owner_artifact_id: item.owner_artifact_id, assets: [] };
     archivedByOwner[item.owner_artifact_id].assets.push(item);
+  }
+  const retainedOwnerIds = new Set(Object.values(archivedByOwner).filter(({ owner_artifact_id: ownerId, assets }) => assets.some(({ artifact_id: id, artifact_kind: kind }) => id === ownerId && ["prd", "non-prd-delivery"].includes(kind))).map(({ owner_artifact_id: ownerId }) => ownerId));
+  for (const item of activeItems) {
+    if (!item.owner_artifact_id) continue;
+    if (!byOwner[item.owner_artifact_id]) {
+      if (item.artifact_kind === "closure-summary" && retainedOwnerIds.has(item.owner_artifact_id)) continue;
+      return failure5("DELIVERY_INVENTORY_OWNER_MISSING", `/${item.artifact_id}`, "Every active owned asset requires one active physical owner.");
+    }
+    byOwner[item.owner_artifact_id].assets.push(item);
   }
   for (const entry2 of Object.values(byOwner)) sortItems(entry2.assets);
   for (const entry2 of Object.values(archivedByOwner)) sortItems(entry2.assets);
@@ -19459,7 +19499,7 @@ var discoverAlignmentInventory = async (lifecycleRoot) => {
       throw new Error("Delivery inventory contains an unsafe document.");
     }
     const document3 = splitDeliveryDocument2(await readFile6(physical, "utf8"));
-    if (!document3 || !isDeepStrictEqual3(document3.frontmatter, entry2.frontmatter)) {
+    if (!document3 || !isDeepStrictEqual4(document3.frontmatter, entry2.frontmatter)) {
       throw new Error("Delivery inventory changed after validation.");
     }
     const pair = pairs.get(entry2.frontmatter.artifact_id) ?? {};
@@ -19470,7 +19510,7 @@ var discoverAlignmentInventory = async (lifecycleRoot) => {
   const owners = [];
   const closureProofs = /* @__PURE__ */ new Set();
   for (const [id, pair] of pairs) {
-    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual3(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
+    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual4(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
       throw new Error(`Delivery pair ${id} is incomplete or divergent.`);
     }
     const frontmatter = pair.en.frontmatter;
@@ -19524,7 +19564,7 @@ var ensureProjectionDirectory = async (lifecycleRoot) => {
 var sameRecords = (supplied, authoritative, identity) => {
   const suppliedById = new Map(supplied.map((value) => [identity(value), value]));
   const authoritativeById = new Map(authoritative.map((value) => [identity(value), value]));
-  return suppliedById.size === supplied.length && suppliedById.size === authoritativeById.size && [...authoritativeById].every(([id, value]) => isDeepStrictEqual3(suppliedById.get(id), value));
+  return suppliedById.size === supplied.length && suppliedById.size === authoritativeById.size && [...authoritativeById].every(([id, value]) => isDeepStrictEqual4(suppliedById.get(id), value));
 };
 var validateAuthoritativeInventory = async (lifecycleRoot, input) => {
   const inventory = await discoverAlignmentInventory(lifecycleRoot);
@@ -19655,8 +19695,8 @@ var NOTICE = "<!-- Generated by Project Lifecycle from validated delivery Frontm
 var failure7 = (code, path, message) => fail([createError(code, path, message)]);
 var languageName = (language) => language === "en" ? "INDEX-en.md" : "INDEX.md";
 var text = {
-  en: { title: "Delivery", feedback: "Feedback", owners: "Owners", assets: "Owned assets", archive: "Retained archive", empty: "None." },
-  "zh-CN": { title: "交付", feedback: "反馈", owners: "所有者", assets: "所属文档", archive: "保留归档", empty: "无。" }
+  en: { title: "Delivery", feedback: "Feedback", owners: "Owners", retained: "Retained owners", closures: "Closure summaries", views: "Views", assets: "Owned assets", archive: "Retained archive", empty: "None." },
+  "zh-CN": { title: "交付", feedback: "反馈", owners: "所有者", retained: "保留的所有者", closures: "闭环摘要", views: "视图", assets: "所属文档", archive: "保留归档", empty: "无。" }
 };
 var entry = (item, language, fromDirectory) => {
   const locator = item.locators[language];
@@ -19670,7 +19710,38 @@ var renderRoot = (inventory, language) => {
     const root = owner.artifact_kind === "prd" ? `delivery/prds/${owner.artifact_id}` : `delivery/non-prd/${owner.artifact_id}`;
     return `- [\`${owner.artifact_id}\`](${posix3.relative("delivery", `${root}/${languageName(language)}`)}) — kind: \`${owner.artifact_kind}\``;
   });
-  return [NOTICE, `# ${labels.title}`, "", `## ${labels.feedback}`, "", ...feedback.length ? feedback : [`- ${labels.empty}`], "", `## ${labels.owners}`, "", ...owners.length ? owners : [`- ${labels.empty}`], ""].join("\n");
+  const activeOwnerIds = new Set(inventory.owners.map(({ artifact_id: id }) => id));
+  const retained = Object.values(inventory.archived_by_owner ?? {}).map(({ owner_artifact_id: ownerId, assets }) => assets.find(({ artifact_id: id, artifact_kind: kind }) => id === ownerId && ["prd", "non-prd-delivery"].includes(kind))).filter((owner) => owner && !activeOwnerIds.has(owner.artifact_id)).map((owner) => entry(owner, language, "delivery"));
+  const closures = (inventory.closed_summaries ?? []).map((item) => entry(item, language, "delivery"));
+  const views = (inventory.views ?? []).map((item) => {
+    const target = posix3.relative("delivery", item.locators[language]);
+    return `- [\`${item.artifact_id}\`](${target})`;
+  });
+  return [
+    NOTICE,
+    `# ${labels.title}`,
+    "",
+    `## ${labels.feedback}`,
+    "",
+    ...feedback.length ? feedback : [`- ${labels.empty}`],
+    "",
+    `## ${labels.owners}`,
+    "",
+    ...owners.length ? owners : [`- ${labels.empty}`],
+    "",
+    `## ${labels.retained}`,
+    "",
+    ...retained.length ? retained : [`- ${labels.empty}`],
+    "",
+    `## ${labels.closures}`,
+    "",
+    ...closures.length ? closures : [`- ${labels.empty}`],
+    "",
+    `## ${labels.views}`,
+    "",
+    ...views.length ? views : [`- ${labels.empty}`],
+    ""
+  ].join("\n");
 };
 var renderOwner = (inventory, owner, language) => {
   const labels = text[language];
@@ -19721,9 +19792,9 @@ var generateDeliveryIndexes = async ({ inventory } = {}) => {
 // scripts/delivery/delivery-layout-migration.mjs
 var import_yaml2 = __toESM(require_dist(), 1);
 import { createHash as createHash4 } from "node:crypto";
-import { lstat as lstat8, readFile as readFile8, readdir as readdir5, realpath as realpath9 } from "node:fs/promises";
+import { lstat as lstat8, readFile as readFile8, readdir as readdir4, realpath as realpath9 } from "node:fs/promises";
 import { dirname as dirname5, isAbsolute as isAbsolute10, join as join8, posix as posix4, relative as relative8, resolve as resolve7, sep as sep8 } from "node:path";
-import { isDeepStrictEqual as isDeepStrictEqual4 } from "node:util";
+import { isDeepStrictEqual as isDeepStrictEqual5 } from "node:util";
 
 // node_modules/mdast-util-to-string/lib/index.js
 var emptyOptions = {};
@@ -26759,7 +26830,7 @@ import {
   mkdir as mkdir2,
   mkdtemp,
   readFile as readFile7,
-  readdir as readdir4,
+  readdir as readdir3,
   readlink,
   realpath as realpath8,
   rename as rename2,
@@ -26770,6 +26841,10 @@ import {
 } from "node:fs/promises";
 import { dirname as dirname4, isAbsolute as isAbsolute9, join as join7, relative as relative7, resolve as resolve6, sep as sep7 } from "node:path";
 var hash = (content3) => createHash3("sha256").update(content3).digest("hex");
+var MAX_SNAPSHOT_ENTRIES = 1e4;
+var MAX_SNAPSHOT_DEPTH = 16;
+var MAX_SNAPSHOT_FILE_BYTES = 4194304;
+var MAX_SNAPSHOT_TOTAL_BYTES = 67108864;
 var failure8 = (code, path, message) => fail([createError(code, path, message)]);
 var inside6 = (root, candidate) => {
   const fromRoot = relative7(root, candidate);
@@ -26818,8 +26893,13 @@ var snapshotTree = async (lifecycleRoot) => {
   const rootReal = await realpath8(lifecycleRoot);
   if (!rootState.isDirectory() || rootState.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
   const entries = [];
-  const visit = async (directory, prefix = "") => {
-    const children = await readdir4(directory, { withFileTypes: true });
+  let totalBytes = 0;
+  const visit = async (directory, prefix = "", depth = 0) => {
+    if (depth > MAX_SNAPSHOT_DEPTH) throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+    const children = await readdir3(directory, { withFileTypes: true });
+    if (entries.length + children.length > MAX_SNAPSHOT_ENTRIES) {
+      throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+    }
     children.sort((left, right) => compareCodePoints(left.name, right.name));
     for (const child of children) {
       const absolute = join7(directory, child.name);
@@ -26829,8 +26909,12 @@ var snapshotTree = async (lifecycleRoot) => {
         const physical = await realpath8(absolute);
         if (!inside6(rootReal, physical)) throw pathError2("PATH_SYMLINK_ESCAPE");
         entries.push({ locator: `${locator}/`, type: "directory" });
-        await visit(physical, locator);
+        await visit(physical, locator, depth + 1);
       } else if (state.isFile()) {
+        if (state.size > MAX_SNAPSHOT_FILE_BYTES || totalBytes + state.size > MAX_SNAPSHOT_TOTAL_BYTES) {
+          throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+        }
+        totalBytes += state.size;
         entries.push({ locator, type: "file", hash: hash(await readFile7(absolute)) });
       } else if (state.isSymbolicLink()) {
         let physical;
@@ -27307,7 +27391,7 @@ var readLegacyRoot = async (lifecycleRoot, rootLocator, issues) => {
     const physical = await realpath9(path);
     if (!state.isDirectory() || state.isSymbolicLink() || !inside7(lifecycleRoot, physical)) throw new Error();
     const files = [];
-    for (const entry2 of await readdir5(physical, { withFileTypes: true })) {
+    for (const entry2 of await readdir4(physical, { withFileTypes: true })) {
       const locator = `${rootLocator}/${entry2.name}`;
       if (entry2.isDirectory() || entry2.isSymbolicLink() || !entry2.isFile()) {
         issues.push({ code: "MIXED_LAYOUT", artifact_id: null, locator });
@@ -27321,7 +27405,15 @@ var readLegacyRoot = async (lifecycleRoot, rootLocator, issues) => {
     throw error;
   }
 };
-var linksFrom = (body, source) => [...body.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/gu)].map((match) => match[1]).filter((href) => /^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith("//")).map((href) => ({ source, href }));
+var linksFrom = (body, source) => [...body.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/gu)].map((match) => match[1]).filter((href) => /^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith("//")).map((href) => {
+  const scheme = /^([a-z][a-z0-9+.-]*):/iu.exec(href)?.[1]?.toLowerCase() ?? "https";
+  let authority = null;
+  try {
+    authority = new URL(href, "https://external.invalid").host || null;
+  } catch {
+  }
+  return { source, scheme, authority, href_hash: hash2(href) };
+});
 var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [] } = {}) => {
   if (!Array.isArray(mappings) || mappings.length > 200) {
     return failure9("DELIVERY_MIGRATION_INPUT_INVALID", "/owner_mappings", "Owner mappings must be one bounded array.");
@@ -27392,7 +27484,7 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [] }
   const completeIds = /* @__PURE__ */ new Set();
   for (const [key, pair] of grouped) {
     const id = key.slice(key.indexOf(":") + 1);
-    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual4(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
+    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual5(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
       needsUser.push({ code: "PAIR_INCOMPLETE", artifact_id: id, locator: pair.en?.locator ?? pair["zh-CN"]?.locator ?? null });
       continue;
     }
@@ -27460,6 +27552,8 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [] }
   const managedReferenceRewrites = [];
   for (const { pair } of complete) {
     for (const language of LANGUAGES) {
+      const movedSource = targetBySource.get(pair[language].locator);
+      if (!movedSource) continue;
       for (const match of pair[language].body.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/gu)) {
         const href = match[1];
         if (/^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith("//") || href.startsWith("#")) continue;
@@ -27469,9 +27563,8 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [] }
           needsUser.push({ code: "LINK_UNSAFE", artifact_id: pair[language].frontmatter.artifact_id, locator: pair[language].locator });
           continue;
         }
-        const target = targetBySource.get(resolved);
-        if (!target) continue;
-        const rewritten = posix4.relative(posix4.dirname(targetBySource.get(pair[language].locator)), target);
+        const target = targetBySource.get(resolved) ?? resolved;
+        const rewritten = posix4.relative(posix4.dirname(movedSource), target);
         managedReferenceRewrites.push({
           source: pair[language].locator,
           href,
@@ -27711,7 +27804,7 @@ var import_yaml3 = __toESM(require_dist(), 1);
 import { createHash as createHash5 } from "node:crypto";
 import { lstat as lstat9, mkdir as mkdir3, readFile as readFile9, realpath as realpath10, rmdir as rmdir2, unlink as unlink3 } from "node:fs/promises";
 import { dirname as dirname6, isAbsolute as isAbsolute11, join as join9, relative as relative9, sep as sep9 } from "node:path";
-import { isDeepStrictEqual as isDeepStrictEqual5 } from "node:util";
+import { isDeepStrictEqual as isDeepStrictEqual6 } from "node:util";
 var MAX_BODY_BYTES = 131072;
 var MAX_DOCUMENT_BYTES2 = MAX_BODY_BYTES * 2;
 var FEEDBACK_SOURCE_SECTIONS = ["original_problem", "scenario", "expectation"];
@@ -27824,7 +27917,7 @@ ${body.startsWith("\n") ? body : `
 ${body}`}`;
 var validateRendered = (source, expectedFrontmatter, expectedBody) => {
   const parsed = splitDocument(source);
-  if (!parsed || !isDeepStrictEqual5(parsed.frontmatter, expectedFrontmatter) || parsed.body !== (expectedBody.startsWith("\n") ? expectedBody : `
+  if (!parsed || !isDeepStrictEqual6(parsed.frontmatter, expectedFrontmatter) || parsed.body !== (expectedBody.startsWith("\n") ? expectedBody : `
 ${expectedBody}`)) {
     return failure10("DELIVERY_DOCUMENT_INVALID", "/", "Rendered delivery document does not match its validated request.");
   }
@@ -27871,7 +27964,7 @@ var validateMaterializationRequest = (input = {}) => {
       return failure10("ASSET_BODY_INVALID", `/body/${language}`, "Complete localized delivery document must remain bounded.");
     }
   }
-  if (!isDeepStrictEqual5(headingLevels2(input.body.en), headingLevels2(input.body["zh-CN"]))) {
+  if (!isDeepStrictEqual6(headingLevels2(input.body.en), headingLevels2(input.body["zh-CN"]))) {
     return failure10("PAIR_SECTION_MISMATCH", "/body", "Localized delivery bodies require matching heading structure.");
   }
   if (input.frontmatter.artifact_kind === "feedback") {
@@ -27900,7 +27993,7 @@ var validateMaterializationRequest = (input = {}) => {
     }
     const summary = input.closure_summary;
     const feedbackIds = summary?.feedback_coverage?.map(({ feedback_id: feedbackId }) => feedbackId).sort();
-    if (summary !== void 0 && (!validateClosureSummary(summary).ok || summary.artifact_id !== input.frontmatter.artifact_id || !isDeepStrictEqual5(feedbackIds, [...input.frontmatter.relationships.feedback_ids].sort()) || summary.owner_artifact_id.startsWith("prd-") && !input.frontmatter.relationships.prd_ids.includes(summary.owner_artifact_id))) {
+    if (summary !== void 0 && (!validateClosureSummary(summary).ok || summary.artifact_id !== input.frontmatter.artifact_id || summary.owner_artifact_id !== input.frontmatter.owner_artifact_id || !isDeepStrictEqual6(feedbackIds, [...input.frontmatter.relationships.feedback_ids].sort()) || summary.owner_artifact_id.startsWith("prd-") && !input.frontmatter.relationships.prd_ids.includes(summary.owner_artifact_id))) {
       return failure10("CLOSURE_SUMMARY_INVALID", "/closure_summary", "Persisted closure proof must match the closure-summary asset identity.");
     }
   } else if (input.closure_summary !== void 0) {
@@ -27969,7 +28062,7 @@ var discoverAlignmentResolutionInventory = async (lifecycleRoot, feedbackId) => 
         throw new Error("Closure inventory contains an invalid file.");
       }
       const document3 = splitDocument(source);
-      if (!document3 || !isDeepStrictEqual5(document3.frontmatter, closure.frontmatter)) {
+      if (!document3 || !isDeepStrictEqual6(document3.frontmatter, closure.frontmatter)) {
         throw new Error("Closure inventory changed after validation.");
       }
       hashes.push(extractClosureSummaryHash(document3.body));
@@ -28019,7 +28112,19 @@ async function materializeAsset(input = {}, operations = {}) {
   if (!layout.ok || layout.value.kind !== "V2") {
     return failure10("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/root", "Delivery layout v2 is required before durable writes.");
   }
-  const owner = await resolvePhysicalOwner({ lifecycleRoot, frontmatter: input.frontmatter });
+  let owner = await resolvePhysicalOwner({ lifecycleRoot, frontmatter: input.frontmatter });
+  if (!owner.ok && input.frontmatter.artifact_kind === "closure-summary") {
+    const inventory = await collectDeliveryInventory({ lifecycleRoot });
+    if (inventory.ok) {
+      const retainedOwners = inventory.value.archived_pairs.filter(({ language, frontmatter }) => language === "en" && frontmatter.artifact_id === input.frontmatter.owner_artifact_id && frontmatter.owner_artifact_id === frontmatter.artifact_id && ["prd", "non-prd-delivery"].includes(frontmatter.artifact_kind));
+      if (retainedOwners.length === 1) {
+        owner = ok({
+          artifact_kind: retainedOwners[0].frontmatter.artifact_kind,
+          artifact_id: retainedOwners[0].frontmatter.artifact_id
+        });
+      }
+    }
+  }
   if (!owner.ok) return owner;
   const id = input.frontmatter.artifact_id;
   const locators = activeDeliveryPair(input.frontmatter, { ownerKind: owner.value.artifact_kind });
@@ -28088,7 +28193,7 @@ async function materializeAsset(input = {}, operations = {}) {
         return failure10("ALIGNMENT_OWNER_INVENTORY_INCOMPLETE", "/alignment_owners", "Marker exit requires a complete valid owner inventory from authoritative delivery assets.");
       }
       const suppliedOwnerById = new Map(suppliedOwners.map((owner2) => [owner2.artifact_id, owner2]));
-      if (suppliedOwnerById.size !== suppliedOwners.length || suppliedOwnerById.size !== inventory.owners.length || inventory.owners.some((owner2) => !isDeepStrictEqual5(
+      if (suppliedOwnerById.size !== suppliedOwners.length || suppliedOwnerById.size !== inventory.owners.length || inventory.owners.some((owner2) => !isDeepStrictEqual6(
         suppliedOwnerById.get(owner2.artifact_id),
         owner2
       ))) {
@@ -28150,7 +28255,7 @@ async function materializeAsset(input = {}, operations = {}) {
       bodies[language] = addFeedbackHashes(bodies[language], sourceHashes(sections));
       if (updating) {
         const prior = splitDocument(existing[language]);
-        if (!prior || !isDeepStrictEqual5(prior.frontmatter, input.frontmatter)) {
+        if (!prior || !isDeepStrictEqual6(prior.frontmatter, input.frontmatter)) {
           return failure10("HISTORY_BODY_CHANGED", `/body/${language}`, "Feedback identity and source history cannot be rewritten.");
         }
         const priorSections = extractFeedbackSections(prior.body);
@@ -28161,7 +28266,7 @@ async function materializeAsset(input = {}, operations = {}) {
           titleMigration ? withoutDocumentTitle(bodies[language]) : bodies[language]
         );
         const skeletonMatches = titleMigration ? feedbackFrame(prior.body) === feedbackFrame(bodies[language]) : priorSkeleton === nextSkeleton;
-        if (!priorSections || !nextSections || !isDeepStrictEqual5(sourceHashes(priorSections), sourceHashes(nextSections)) || !skeletonMatches) {
+        if (!priorSections || !nextSections || !isDeepStrictEqual6(sourceHashes(priorSections), sourceHashes(nextSections)) || !skeletonMatches) {
           return failure10("HISTORY_BODY_CHANGED", `/body/${language}`, "Feedback source history cannot change without an erratum or successor.");
         }
       }

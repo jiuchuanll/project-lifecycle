@@ -206,6 +206,16 @@ test('rejects a symlinked lifecycle root and a nested escaping symlink', async (
   assert.equal(rootLink.errors[0].code, 'PATH_SYMLINK_ESCAPE');
 });
 
+test('rejects lifecycle snapshots whose files exceed the bounded fingerprint budget', async (context) => {
+  const project = await createProject(context);
+  await writeFile(join(project.lifecycle, 'oversized.bin'), Buffer.alloc(4_194_305));
+
+  const result = await inspectLifecycleTree({ repositoryRoot: project.root });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'LAYOUT_TREE_LIMIT_EXCEEDED');
+});
+
 test('cleans the stage and preserves the original after a bilingual first-write failure', async (context) => {
   const project = await createProject(context);
   let calls = 0;

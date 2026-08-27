@@ -239,6 +239,7 @@ export const validateMaterializationRequest = (input = {}) => {
     if (summary !== undefined
       && (!validateClosureSummary(summary).ok
         || summary.artifact_id !== input.frontmatter.artifact_id
+        || summary.owner_artifact_id !== input.frontmatter.owner_artifact_id
         || !isDeepStrictEqual(feedbackIds, [...input.frontmatter.relationships.feedback_ids].sort())
         || (summary.owner_artifact_id.startsWith('prd-')
           && !input.frontmatter.relationships.prd_ids.includes(summary.owner_artifact_id)))) {
@@ -373,7 +374,24 @@ export async function materializeAsset(input = {}, operations = {}) {
   if (!layout.ok || layout.value.kind !== 'V2') {
     return failure('DELIVERY_LAYOUT_MIGRATION_REQUIRED', '/root', 'Delivery layout v2 is required before durable writes.');
   }
-  const owner = await resolvePhysicalOwner({ lifecycleRoot, frontmatter: input.frontmatter });
+  let owner = await resolvePhysicalOwner({ lifecycleRoot, frontmatter: input.frontmatter });
+  if (!owner.ok && input.frontmatter.artifact_kind === 'closure-summary') {
+    const inventory = await collectDeliveryInventory({ lifecycleRoot });
+    if (inventory.ok) {
+      const retainedOwners = inventory.value.archived_pairs.filter(({ language, frontmatter }) => (
+        language === 'en'
+        && frontmatter.artifact_id === input.frontmatter.owner_artifact_id
+        && frontmatter.owner_artifact_id === frontmatter.artifact_id
+        && ['prd', 'non-prd-delivery'].includes(frontmatter.artifact_kind)
+      ));
+      if (retainedOwners.length === 1) {
+        owner = ok({
+          artifact_kind: retainedOwners[0].frontmatter.artifact_kind,
+          artifact_id: retainedOwners[0].frontmatter.artifact_id,
+        });
+      }
+    }
+  }
   if (!owner.ok) return owner;
   const id = input.frontmatter.artifact_id;
   const locators = activeDeliveryPair(input.frontmatter, { ownerKind: owner.value.artifact_kind });
