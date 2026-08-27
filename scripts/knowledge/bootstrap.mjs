@@ -12,6 +12,7 @@ import { createError } from '../lib/errors.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
+import { generateDeliveryIndexes } from '../delivery/delivery-indexes.mjs';
 import { generateIndexes } from './generate-indexes.mjs';
 import { applyLayoutTransaction } from './layout-transaction.mjs';
 
@@ -234,7 +235,20 @@ export async function bootstrap({
 
   const generatedIndexes = generateIndexes({ map });
   if (!generatedIndexes.ok) return generatedIndexes;
-  const expectedFiles = generatedIndexes.value.files.filter(({ repository_id: repositoryId }) => repositoryId === null);
+  const generatedDeliveryIndexes = await generateDeliveryIndexes({
+    inventory: {
+      layout_version: 2,
+      feedbacks: [],
+      owners: [],
+      by_owner: {},
+      archived_by_owner: {},
+    },
+  });
+  if (!generatedDeliveryIndexes.ok) return generatedDeliveryIndexes;
+  const expectedFiles = [
+    ...generatedIndexes.value.files.filter(({ repository_id: repositoryId }) => repositoryId === null),
+    ...generatedDeliveryIndexes.value.files.map((file) => ({ ...file, repository_id: null })),
+  ];
   const expectedDirectories = [...new Set([
     'delivery',
     ...generatedIndexes.value.layout.directories

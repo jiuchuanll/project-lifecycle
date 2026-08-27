@@ -9,6 +9,7 @@ import { bootstrap } from '../../scripts/knowledge/bootstrap.mjs';
 import { analyzeImpact, hashProjectMap } from '../../scripts/knowledge/impact.mjs';
 import { materializeCapability } from '../../scripts/knowledge/materialize.mjs';
 import { proposeChange } from '../../scripts/knowledge/propose-change.mjs';
+import { deliveryLayoutContent } from '../../scripts/delivery/delivery-layout.mjs';
 
 const fixtureRoot = new URL('../fixtures/knowledge/topology/base/', import.meta.url);
 const materializationFixture = new URL('../fixtures/knowledge/materialization/valid-input.json', import.meta.url);
@@ -617,6 +618,8 @@ test('rejects a MERGE_DOMAIN candidate that rewrites undeclared parent fields', 
 
 test('applies an exact topology-only revalidation marker without constraint revisions', async (context) => {
   const root = await setup(context);
+  await mkdir(join(lifecycle(root), 'delivery'), { recursive: true });
+  await writeFile(join(lifecycle(root), 'delivery/layout.json'), deliveryLayoutContent());
   const map = await mapAt(root);
   const candidate = clone(map);
   candidate.domains[0].purpose = { en: 'Owns revised desktop interaction', 'zh-CN': '负责修订后的桌面交互' };

@@ -13,7 +13,7 @@
 
 ## 交付
 
-- [交付](delivery/)
+- [交付](delivery/INDEX.md)
 
 ## 进行中的变更
 

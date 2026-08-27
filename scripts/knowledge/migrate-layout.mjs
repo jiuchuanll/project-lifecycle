@@ -220,6 +220,7 @@ const inspectV1 = async ({ rootsByRepository, map, fingerprint, repositoryFinger
       lifecycleRoot: roots.lifecycleRoot,
       overlays,
       repository_id: repositoryId,
+      include_delivery: false,
     });
     if (!generated.ok) return failure('KNOWLEDGE_LAYOUT_MIGRATION_INVALID', '/', 'Canonical v2 indexes cannot be generated from the legacy tree.');
     indexes.push(...generated.value.files);

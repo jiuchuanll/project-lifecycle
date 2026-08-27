@@ -16,7 +16,7 @@ const constraintBlocks = (id) => id === 'desktop-experience'
 
 const capability = (id, pairedAsset, baseline = 'baseline-7') => `---\nid: ${id}\nknowledge_state: current\npaired_asset: ${pairedAsset}\nlast_verified_baseline: ${baseline}\nimplementation_refs:\n  - repo:src/${id}\nverification_refs:\n  - repo:test/${id}\n---\n\n# SECRET BODY ${id}\n${constraintBlocks(id)}`;
 
-const delivery = ({ id, tier = 'active', domainIds = ['wiki-workspace'], kind = 'prd', baseline = 'global-baseline-7', projectId = 'sample-project' }) => `---\nschema_version: 1\nartifact_id: ${id}\nartifact_kind: ${kind}\nprimary_route: PRD_DELIVERY\nproject_id_at_creation: ${projectId}\n${tier === 'active' ? `current_project_id: ${projectId}\n` : ''}domain_ids:\n${domainIds.map((domainId) => `  - ${domainId}`).join('\n')}\nknowledge_baseline: ${baseline}\nrelationships:\n  feedback_ids: []\n  prd_ids: []\n  legacy_artifact_refs: []\nretention_tier: ${tier}\nreclassified_from_refs: []\nobligations: []\n---\n\n# SECRET DELIVERY BODY ${id}\n`;
+const delivery = ({ id, tier = 'active', domainIds = ['wiki-workspace'], kind = 'prd', baseline = 'global-baseline-7', projectId = 'sample-project' }) => `---\nschema_version: 2\nartifact_id: ${id}\nartifact_kind: ${kind}\nowner_artifact_id: ${id}\nprimary_route: PRD_DELIVERY\nproject_id_at_creation: ${projectId}\n${tier === 'active' ? `current_project_id: ${projectId}\n` : ''}domain_ids:\n${domainIds.map((domainId) => `  - ${domainId}`).join('\n')}\nknowledge_baseline: ${baseline}\nrelationships:\n  feedback_ids: []\n  prd_ids: []\n  legacy_artifact_refs: []\nretention_tier: ${tier}\nreclassified_from_refs: []\nobligations: []\n---\n\n# SECRET DELIVERY BODY ${id}\n`;
 
 const projectMap = {
   schema_version: 2, project_id: 'sample-project',
@@ -97,7 +97,10 @@ const setup = async (context, map = projectMap) => {
   context.after(() => rm(root, { recursive: true, force: true }));
   const lifecycle = join(root, 'docs/project-lifecycle');
   await mkdir(join(lifecycle, 'knowledge'), { recursive: true });
-  await mkdir(join(lifecycle, 'delivery'), { recursive: true });
+  await mkdir(join(lifecycle, 'delivery/prds/prd-wiki-refresh'), { recursive: true });
+  await mkdir(join(lifecycle, 'archive/delivery/prds/prd-wiki-history'), { recursive: true });
+  await mkdir(join(lifecycle, 'archive/delivery/prds/prd-wiki-closed'), { recursive: true });
+  await writeFile(join(lifecycle, 'delivery/layout.json'), '{"schema_version":1,"layout_version":2}\n');
   await writeFile(join(lifecycle, 'project-map.json'), `${JSON.stringify(map, null, 2)}\n`);
   for (const domain of map.domains) {
     await mkdir(dirname(join(lifecycle, domain.paired_assets.en)), { recursive: true });
@@ -105,12 +108,12 @@ const setup = async (context, map = projectMap) => {
     await writeFile(join(lifecycle, domain.paired_assets.en), capability(domain.id, pairedAsset));
     await writeFile(join(lifecycle, domain.paired_assets['zh-CN']), capability(domain.id, pairedAsset));
   }
-  await writeFile(join(lifecycle, 'delivery/prd-wiki-refresh-en.md'), delivery({ id: 'prd-wiki-refresh' }));
-  await writeFile(join(lifecycle, 'delivery/prd-wiki-refresh.md'), delivery({ id: 'prd-wiki-refresh' }));
-  await writeFile(join(lifecycle, 'delivery/prd-wiki-history-en.md'), delivery({ id: 'prd-wiki-history', tier: 'archive' }));
-  await writeFile(join(lifecycle, 'delivery/prd-wiki-history.md'), delivery({ id: 'prd-wiki-history', tier: 'archive' }));
-  await writeFile(join(lifecycle, 'delivery/prd-wiki-closed-en.md'), delivery({ id: 'prd-wiki-closed', tier: 'closed-summary' }));
-  await writeFile(join(lifecycle, 'delivery/prd-wiki-closed.md'), delivery({ id: 'prd-wiki-closed', tier: 'closed-summary' }));
+  await writeFile(join(lifecycle, 'delivery/prds/prd-wiki-refresh/prd-wiki-refresh-en.md'), delivery({ id: 'prd-wiki-refresh' }));
+  await writeFile(join(lifecycle, 'delivery/prds/prd-wiki-refresh/prd-wiki-refresh.md'), delivery({ id: 'prd-wiki-refresh' }));
+  await writeFile(join(lifecycle, 'archive/delivery/prds/prd-wiki-history/prd-wiki-history-en.md'), delivery({ id: 'prd-wiki-history', tier: 'archive' }));
+  await writeFile(join(lifecycle, 'archive/delivery/prds/prd-wiki-history/prd-wiki-history.md'), delivery({ id: 'prd-wiki-history', tier: 'archive' }));
+  await writeFile(join(lifecycle, 'archive/delivery/prds/prd-wiki-closed/prd-wiki-closed-en.md'), delivery({ id: 'prd-wiki-closed', tier: 'closed-summary' }));
+  await writeFile(join(lifecycle, 'archive/delivery/prds/prd-wiki-closed/prd-wiki-closed.md'), delivery({ id: 'prd-wiki-closed', tier: 'closed-summary' }));
   const indexes = await generateIndexesFromRoot({ map, lifecycleRoot: lifecycle });
   assert.equal(indexes.ok, true, JSON.stringify(indexes));
   for (const file of indexes.value.files.filter(({ repository_id: repositoryId }) => repositoryId === null)) {
@@ -130,9 +133,9 @@ const baseInput = (root) => ({
     { source_id: 'wiki-workspace', kind: 'depends_on', target_id: 'source-workspace' },
   ],
   task_delivery_refs: [
-    { artifact_id: 'prd-wiki-refresh', locator: 'delivery/prd-wiki-refresh-en.md' },
-    { artifact_id: 'prd-wiki-history', locator: 'delivery/prd-wiki-history-en.md' },
-    { artifact_id: 'prd-wiki-closed', locator: 'delivery/prd-wiki-closed-en.md' },
+    { artifact_id: 'prd-wiki-refresh', locator: 'delivery/prds/prd-wiki-refresh/prd-wiki-refresh-en.md' },
+    { artifact_id: 'prd-wiki-history', locator: 'archive/delivery/prds/prd-wiki-history/prd-wiki-history-en.md' },
+    { artifact_id: 'prd-wiki-closed', locator: 'archive/delivery/prds/prd-wiki-closed/prd-wiki-closed-en.md' },
   ],
   material_exclusions: [], evidence_gaps: [], open_questions: [], conflicts: [],
 });
@@ -166,9 +169,9 @@ test('selects exact vertical constraints, explicit cyclic dependencies, and acti
     ['L1', 'knowledge/desktop-experience/desktop-experience-en.md', 'constraint-anchor'],
     ['L2', 'knowledge/desktop-experience/wiki-workspace-en.md', 'frontmatter'],
     ['L3', 'knowledge/desktop-experience/source-workspace-en.md', 'frontmatter'],
-    ['L4', 'delivery/prd-wiki-refresh-en.md', 'frontmatter'],
-    ['L5', 'delivery/prd-wiki-history-en.md', 'frontmatter'],
-    ['L4', 'delivery/prd-wiki-closed-en.md', 'frontmatter'],
+    ['L4', 'delivery/prds/prd-wiki-refresh/prd-wiki-refresh-en.md', 'frontmatter'],
+    ['L5', 'archive/delivery/prds/prd-wiki-history/prd-wiki-history-en.md', 'frontmatter'],
+    ['L4', 'archive/delivery/prds/prd-wiki-closed/prd-wiki-closed-en.md', 'frontmatter'],
   ]);
   assert.equal(reads.filter(({ level }) => level === 'L1').every(({ bytes_read: bytesRead }) => Number.isInteger(bytesRead) && bytesRead > 0), true);
   assert.equal(reads.some(({ locator, section }) => locator.includes('unrelated') && section === 'body'), false);
