@@ -17,7 +17,7 @@ test('keeps five native manifests on one plugin identity and canonical Skill sou
   for (const [host, path, explicitSkills] of manifests) {
     const manifest = await json(path);
     assert.equal(manifest.name, 'project-lifecycle', host);
-    assert.equal(manifest.version, '0.4.0', host);
+    assert.equal(manifest.version, '0.5.0', host);
     assert.equal(manifest.repository, canonicalRepository, host);
     assert.equal(manifest.author?.name, 'jiuchuanll', host);
     assert.equal(typeof manifest.description, 'string', host);
@@ -53,7 +53,7 @@ test('publishes root plugin entries through Codex and Claude marketplaces', asyn
   assert.deepEqual(claude.plugins, [{
     name: 'project-lifecycle',
     source: './',
-    version: '0.4.0',
+    version: '0.5.0',
     description: 'Build low-noise project knowledge and run traceable PRD delivery lifecycles.',
   }]);
 });

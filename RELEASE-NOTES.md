@@ -1,22 +1,41 @@
-# Project Lifecycle 0.4.0 candidate notes
+# Project Lifecycle 0.5.0 candidate notes
 
 Publication status: **PUBLIC PRE-RELEASE EVALUATION CANDIDATE**
 
 Host support gate: **NON-RELEASE CANDIDATE**
 
-Version `0.4.0` adds a user-confirmed business-to-implementation alignment flow
-for knowledge bootstrap and maintenance. Accepted business intent may be
-recorded without pretending the current code already implements it; the
-remaining divergence is captured as bounded Feedback and reviewed in a sparse
-generated projection before any PRD or non-PRD owner is materialized. The
-self-contained installed runtime introduced in `0.3.1` remains intact, so no
-npm dependency installation is required inside a host cache. This version
-remains private npm metadata and is published as repository source plus a
-deterministic release archive; the version bump does not upgrade any native-host
-support claim.
+Version `0.5.0` replaces the flat delivery namespace with a fixed owner-centric
+layout. Feedback remains independent, while each PRD or non-PRD root owns one
+stable directory containing its architecture, guidance, batches, test reports,
+and closure evidence. Existing schema-v1 delivery trees are handled through an
+explicit preview, approval-bound atomic migration, live validation, and
+rollback rather than silent rearrangement. The self-contained installed runtime
+introduced in `0.3.1` remains intact, so no npm dependency installation is
+required inside a host cache. This version remains private npm metadata and is
+published as repository source plus a deterministic release archive; the
+version bump does not upgrade any native-host support claim.
 
 ## What changed
 
+- `delivery/layout.json` identifies delivery layout v2. Active documents live
+  under `delivery/feedback/`, `delivery/prds/<owner-id>/`, or
+  `delivery/non-prd/<owner-id>/`; generated views live under `delivery/views/`.
+- `owner_artifact_id` is the sole physical ownership field. Root owners own
+  themselves, child documents have exactly one owner, and semantic PRD links do
+  not create duplicate physical copies.
+- Recursive inventory and bilingual root/Owner indexes are bounded by explicit
+  entry, depth, and byte limits. Active and retained paths reject symlinks,
+  noncanonical files, cross-kind owners, divergent pairs, and ownerless assets.
+- Legacy delivery inspection is read-only and reports exact moves, generated
+  writes, removals, managed-link rewrites, ambiguous ownership, and hashed
+  external-link risks. Publication requires the exact selected solution, plan
+  hash, source fingerprint, approval reference, and backup reference.
+- Migration uses the existing retained atomic layout transaction. It validates
+  the staged and published v2 tree, removes only approved legacy sources, and
+  restores the previous tree if publication, validation, or finalization fails.
+- Installed commands now cover layout inspection, preview, migration,
+  validation, materialization, closure, and delivery-index generation without
+  depending on repository `node_modules`.
 - Knowledge bootstrap and later maintenance now preserve two explicit truths:
   accepted business intent in canonical knowledge and observed implementation
   state in evidence. A confirmed divergence never masquerades as completed code.
@@ -85,6 +104,17 @@ support claim.
   materialization, topology application, and accepted Knowledge Diffs publish
   validated repository shards before the governance map with cross-shard rollback.
 
+## Upgrade from 0.4.0
+
+New delivery writes require layout v2. For a coherent legacy flat tree, run the
+read-only inspection and preview first. Resolve every `NEEDS_USER` owner mapping,
+review the complete generated-write/removal set and external-link risks, then
+execute only with the exact approved preview plus recoverable backup reference.
+Do not move files manually, infer owners from filenames, keep duplicate bodies,
+or edit a managed plugin cache. Repositories without delivery artifacts require
+no historical migration; the v2 marker and indexes are created by the bounded
+bootstrap or delivery workflow.
+
 ## Upgrade from 0.3.1
 
 No knowledge schema or layout migration is required. Existing repositories gain
@@ -137,7 +167,7 @@ local plugin only after the release PR is merged.
   and temporary questions with no durable write.
 - Codex `0.147.0-alpha.6.5` and Kimi Code `0.29.2` retained traces were produced
   for `0.1.0`. Their recorded failures and bounded remediation results remain
-  historical evidence and are not relabeled as `0.4.0` runs.
+  historical evidence and are not relabeled as `0.5.0` runs.
 - Claude Code, Cursor, and ZCode remain `NOT_TESTED` because native executables
   were unavailable. Structural passes never produce a `SUPPORTED` claim.
 
