@@ -14,8 +14,18 @@ import { collectEvidence } from '../knowledge/collect-evidence.mjs';
 import { validateFixtures } from '../validate-fixtures.mjs';
 import { validateAlignmentFeedbackDocuments } from '../delivery/alignment-marker.mjs';
 import { syncAlignmentReview } from '../delivery/alignment-review.mjs';
+import { closeDelivery } from '../delivery/close-delivery.mjs';
+import { collectDeliveryInventory } from '../delivery/delivery-inventory.mjs';
+import { generateDeliveryIndexes } from '../delivery/delivery-indexes.mjs';
+import { detectDeliveryLayout } from '../delivery/delivery-layout.mjs';
+import {
+  inspectLegacyDeliveryLayout,
+  migrateDeliveryLayout,
+} from '../delivery/delivery-layout-migration.mjs';
+import { materializeAsset } from '../delivery/materialize-asset.mjs';
+import { applyLayoutTransaction, inspectLifecycleTree } from '../knowledge/layout-transaction.mjs';
 
-const version = '0.4.0';
+const version = '0.5.0';
 const MAX_ALIGNMENT_DOCUMENT_BYTES = 262_144;
 const command = process.argv[2] ?? 'help';
 
@@ -178,14 +188,35 @@ const validAlignmentState = (value) => value !== null
     Array.isArray(value[field]) && value[field].length <= 1000
   ));
 
+const readBoundedEnvelope = async (file) => {
+  const source = await readInput(file, '/input', 1_048_576);
+  if (!source.ok) return source;
+  const parsed = parseJsonInput(source.value, '/input');
+  return parsed.ok && (parsed.value === null || typeof parsed.value !== 'object' || Array.isArray(parsed.value))
+    ? cliFailure('CLI_INPUT_INVALID', '/input', 'Input envelope must be one JSON object.')
+    : parsed;
+};
+
+const deliveryOptions = () => {
+  const options = parseNamedOptions(process.argv.slice(3), ['--root', '--input']);
+  return options && isAbsolute(options['--root']) && isAbsolute(options['--input']) ? options : null;
+};
+
 if (command === 'help') {
   emit(ok({
     version,
     commands: [
       'collect-evidence',
+      'close-delivery',
+      'generate-delivery-indexes',
+      'inspect-delivery-layout',
+      'materialize-delivery-asset',
+      'migrate-delivery-layout',
       'parse-facts',
+      'preview-delivery-layout-migration',
       'sync-alignment-review',
       'validate-alignment-feedback',
+      'validate-delivery-layout',
       'validate-fixtures',
       'validate-json',
       'validate-pair',
@@ -310,6 +341,99 @@ if (command === 'help') {
           phases: result.value.phases,
           locators: result.value.locators,
         }) : result);
+      }
+    }
+  }
+} else if (command === 'inspect-delivery-layout') {
+  const options = parseNamedOptions(process.argv.slice(3), ['--root']);
+  if (!options || !isAbsolute(options['--root'])) {
+    emit(cliFailure('CLI_USAGE', '/arguments', 'Usage: inspect-delivery-layout --root <absolute-project-root>.'), 2);
+  } else emit(await detectDeliveryLayout({ root: options['--root'] }));
+} else if (command === 'preview-delivery-layout-migration') {
+  const options = deliveryOptions();
+  if (!options) {
+    emit(cliFailure('CLI_USAGE', '/arguments', 'Usage: preview-delivery-layout-migration --root <absolute-project-root> --input <absolute-json-envelope>.'), 2);
+  } else {
+    const input = await readBoundedEnvelope(options['--input']);
+    emit(input.ok
+      ? await inspectLegacyDeliveryLayout({ root: options['--root'], owner_mappings: input.value.owner_mappings })
+      : input, input.ok ? undefined : 2);
+  }
+} else if (command === 'migrate-delivery-layout') {
+  const options = deliveryOptions();
+  if (!options) {
+    emit(cliFailure('CLI_USAGE', '/arguments', 'Usage: migrate-delivery-layout --root <absolute-project-root> --input <absolute-json-envelope>.'), 2);
+  } else {
+    const input = await readBoundedEnvelope(options['--input']);
+    emit(input.ok ? await migrateDeliveryLayout({ ...input.value, root: options['--root'] }) : input, input.ok ? undefined : 2);
+  }
+} else if (command === 'validate-delivery-layout') {
+  const options = parseNamedOptions(process.argv.slice(3), ['--root']);
+  if (!options || !isAbsolute(options['--root'])) {
+    emit(cliFailure('CLI_USAGE', '/arguments', 'Usage: validate-delivery-layout --root <absolute-project-root>.'), 2);
+  } else {
+    const layout = await detectDeliveryLayout({ root: options['--root'] });
+    if (!layout.ok || layout.value.kind !== 'V2') {
+      emit(layout.ok ? cliFailure('DELIVERY_LAYOUT_MIGRATION_REQUIRED', '/root', 'Delivery layout v2 is required.') : layout);
+    } else {
+      const inventory = await collectDeliveryInventory({ lifecycleRoot: resolve(options['--root'], 'docs/project-lifecycle') });
+      emit(inventory.ok ? ok({
+        layout_version: inventory.value.layout_version,
+        feedback_count: inventory.value.feedbacks.length,
+        owner_count: inventory.value.owners.length,
+        archived_owner_count: Object.keys(inventory.value.archived_by_owner).length,
+      }) : inventory);
+    }
+  }
+} else if (command === 'materialize-delivery-asset') {
+  const options = deliveryOptions();
+  if (!options) {
+    emit(cliFailure('CLI_USAGE', '/arguments', 'Usage: materialize-delivery-asset --root <absolute-project-root> --input <absolute-json-envelope>.'), 2);
+  } else {
+    const input = await readBoundedEnvelope(options['--input']);
+    emit(input.ok ? await materializeAsset({ ...input.value, root: options['--root'] }) : input, input.ok ? undefined : 2);
+  }
+} else if (command === 'close-delivery') {
+  const options = deliveryOptions();
+  if (!options) {
+    emit(cliFailure('CLI_USAGE', '/arguments', 'Usage: close-delivery --root <absolute-project-root> --input <absolute-json-envelope>.'), 2);
+  } else {
+    const input = await readBoundedEnvelope(options['--input']);
+    emit(input.ok ? closeDelivery(input.value) : input, input.ok ? undefined : 2);
+  }
+} else if (command === 'generate-delivery-indexes') {
+  const options = parseNamedOptions(process.argv.slice(3), ['--root']);
+  if (!options || !isAbsolute(options['--root'])) {
+    emit(cliFailure('CLI_USAGE', '/arguments', 'Usage: generate-delivery-indexes --root <absolute-project-root>.'), 2);
+  } else {
+    const lifecycleRoot = resolve(options['--root'], 'docs/project-lifecycle');
+    const [inventory, tree] = await Promise.all([
+      collectDeliveryInventory({ lifecycleRoot }),
+      inspectLifecycleTree({ repositoryRoot: options['--root'] }),
+    ]);
+    if (!inventory.ok || !tree.ok) emit(!inventory.ok ? inventory : tree);
+    else {
+      const indexes = await generateDeliveryIndexes({ inventory: inventory.value });
+      if (!indexes.ok) emit(indexes);
+      else {
+        const published = await applyLayoutTransaction({
+          repositoryRoot: options['--root'],
+          expectedFingerprint: tree.value.fingerprint,
+          candidateFiles: indexes.value.files.map(({ locator, content }) => ({
+            repository_id: null,
+            locator,
+            content,
+            validate: async (candidate) => candidate === content ? ok(candidate) : cliFailure('DELIVERY_INDEX_INVALID', `/${locator}`, 'Generated index changed.'),
+          })),
+          candidateDirectories: [],
+          deleteLocators: [],
+          validateCandidate: ({ lifecycleRoot: candidateRoot }) => collectDeliveryInventory({ lifecycleRoot: candidateRoot }),
+        });
+        emit(published.ok ? ok({
+          layout_version: 2,
+          locators: indexes.value.files.map(({ locator }) => locator),
+          changed: published.value.changed,
+        }) : published);
       }
     }
   }

@@ -12,6 +12,8 @@ Bootstrap schema v2 directly. Create both lifecycle-root indexes and the reposit
 
 If inspection finds a coherent v1 flat knowledge tree, report the exact move/reference plan and external-link risks, then ask once for migration approval. For multiple repositories, bind every registered owner to its explicit local repository root during inspection. After approval, the internal migration moves the whole accepted bilingual layout atomically, rewrites managed references, publishes repository shards before the governance map, removes old canonical copies, and verifies the v2 result. An ordinary temporary question performs no migration and no durable write.
 
+Inspect delivery independently through `delivery/layout.json`. A missing marker plus flat delivery pairs requires `run-prd-lifecycle` to run `preview-delivery-layout-migration`; knowledge bootstrap must not perform the durable migration itself. The preview binds a selected solution ID, plan hash, source fingerprint, owner mappings, and external-link risks. An ambiguous or missing physical owner returns `NEEDS_USER`. Only after explicit approval and a recoverable backup reference may `run-prd-lifecycle` perform the durable migration, validate the published v2 tree, and roll back on failure.
+
 ## Lightweight Evidence Pack
 
 Inspect only high-signal evidence needed to propose boundaries:

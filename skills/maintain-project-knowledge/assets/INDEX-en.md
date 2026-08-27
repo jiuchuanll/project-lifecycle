@@ -13,7 +13,7 @@
 
 ## Delivery
 
-- [Delivery](delivery/)
+- [Delivery](delivery/INDEX-en.md)
 
 ## Active changes
 

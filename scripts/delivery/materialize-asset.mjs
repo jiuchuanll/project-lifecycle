@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile, readdir, realpath, unlink } from 'node:fs/promises';
-import { isAbsolute, join, relative, sep } from 'node:path';
+import { lstat, mkdir, readFile, realpath, rmdir, unlink } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
 import { stringify as stringifyYaml } from 'yaml';
@@ -18,6 +18,13 @@ import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 import { validateAlignmentExit, validateAlignmentFeedbackPair } from './alignment-marker.mjs';
 import { validateClosureSummary } from './close-delivery.mjs';
+import { collectDeliveryInventory } from './delivery-inventory.mjs';
+import {
+  activeDeliveryPair,
+  detectDeliveryLayout,
+  resolvePhysicalOwner,
+  validatePhysicalOwner,
+} from './delivery-layout.mjs';
 
 const MAX_BODY_BYTES = 131_072;
 const MAX_DOCUMENT_BYTES = MAX_BODY_BYTES * 2;
@@ -170,8 +177,18 @@ export const validateMaterializationRequest = (input = {}) => {
     || !boundedText(input.reason)) {
     return failure('ASSET_REQUEST_INVALID', '/', 'A bounded explicit delivery asset request is required.');
   }
+  if (input.frontmatter.schema_version !== 2) {
+    return failure('DELIVERY_LAYOUT_MIGRATION_REQUIRED', '/frontmatter/schema_version', 'Delivery layout v2 is required before durable writes.');
+  }
+  if (['prd', 'non-prd-delivery'].includes(input.frontmatter.artifact_kind)
+    && Object.hasOwn(input.frontmatter, 'owner_artifact_id')) {
+    const rootOwnership = validatePhysicalOwner(input.frontmatter);
+    if (!rootOwnership.ok) return rootOwnership;
+  }
   const frontmatter = validateJson('delivery-frontmatter', input.frontmatter);
   if (!frontmatter.ok) return failure('ASSET_FRONTMATTER_INVALID', '/frontmatter', 'Delivery Frontmatter must satisfy the shared contract.');
+  const ownership = validatePhysicalOwner(input.frontmatter);
+  if (!ownership.ok) return ownership;
   if (input.canonical_purpose_satisfied === true) {
     return failure('ASSET_REDUNDANT', '/canonical_purpose_satisfied', 'An active owner already satisfies this canonical purpose.');
   }
@@ -227,6 +244,7 @@ export const validateMaterializationRequest = (input = {}) => {
     if (summary !== undefined
       && (!validateClosureSummary(summary).ok
         || summary.artifact_id !== input.frontmatter.artifact_id
+        || summary.owner_artifact_id !== input.frontmatter.owner_artifact_id
         || !isDeepStrictEqual(feedbackIds, [...input.frontmatter.relationships.feedback_ids].sort())
         || (summary.owner_artifact_id.startsWith('prd-')
           && !input.frontmatter.relationships.prd_ids.includes(summary.owner_artifact_id)))) {
@@ -241,10 +259,13 @@ export const validateMaterializationRequest = (input = {}) => {
   return ok(input);
 };
 
-const existingFile = async (path) => {
+const existingFile = async (path, lifecycleRoot) => {
   try {
     const stats = await lstat(path);
     if (stats.isSymbolicLink() || !stats.isFile()) throw Object.assign(new Error('Unsafe existing delivery target.'), { code: 'ASSET_PATH_INVALID' });
+    if (!inside(lifecycleRoot, await realpath(path))) {
+      throw Object.assign(new Error('Existing delivery target escapes lifecycle root.'), { code: 'ASSET_PATH_INVALID' });
+    }
     return await readFile(path, 'utf8');
   } catch (error) {
     if (error.code === 'ENOENT') return null;
@@ -252,65 +273,66 @@ const existingFile = async (path) => {
   }
 };
 
-const discoverAlignmentResolutionInventory = async (lifecycleRoot, feedbackId) => {
-  const roots = [await requireRegularDirectory(join(lifecycleRoot, 'delivery'), lifecycleRoot)];
+const ensureManagedDirectory = async (lifecycleRoot, locator) => {
+  const rootReal = await realpath(lifecycleRoot);
+  const created = [];
   try {
-    roots.push(await requireRegularDirectory(join(lifecycleRoot, 'archive', 'delivery'), lifecycleRoot));
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
-  const entries = [];
-  for (const root of roots) {
-    for (const name of await readdir(root)) {
-      if (name.endsWith('.md')
-        && !['alignment-review-en.md', 'alignment-review.md'].includes(name)) {
-        entries.push({ root, name });
+    let current = lifecycleRoot;
+    for (const segment of dirname(locator).split('/')) {
+      current = join(current, segment);
+      try {
+        const state = await lstat(current);
+        if (!state.isDirectory() || state.isSymbolicLink()) throw new Error('Unsafe managed delivery directory.');
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+        await mkdir(current);
+        created.push(current);
       }
+      if (!inside(rootReal, await realpath(current))) throw new Error('Managed delivery directory escapes lifecycle root.');
+    }
+    return created;
+  } catch (error) {
+    await cleanupManagedDirectories(created);
+    throw error;
+  }
+};
+
+const cleanupManagedDirectories = async (directories) => {
+  for (const directory of [...directories].reverse()) {
+    try {
+      await rmdir(directory);
+    } catch (error) {
+      if (!['ENOENT', 'ENOTEMPTY'].includes(error.code)) throw error;
     }
   }
-  if (entries.length > 2000) throw new Error('Delivery owner inventory is unbounded.');
-  const pairs = new Map();
-  for (const { root, name } of entries) {
-    const source = await existingFile(join(root, name));
-    if (source === null || Buffer.byteLength(source) > MAX_DOCUMENT_BYTES) {
-      throw new Error('Delivery owner inventory contains an invalid file.');
-    }
-    const document = splitDocument(source);
-    if (!document || !validateJson('delivery-frontmatter', document.frontmatter).ok) {
-      throw new Error('Delivery owner inventory contains invalid Frontmatter.');
-    }
-    const linkedOwner = ['prd', 'non-prd-delivery'].includes(document.frontmatter.artifact_kind)
-      && document.frontmatter.relationships.feedback_ids.includes(feedbackId);
-    const closureSummary = document.frontmatter.artifact_kind === 'closure-summary'
-      && document.frontmatter.relationships.feedback_ids.includes(feedbackId);
-    if (!linkedOwner && !closureSummary) continue;
-    const id = document.frontmatter.artifact_id;
-    const language = name === `${id}-en.md`
-      ? 'en'
-      : name === `${id}.md`
-        ? 'zh-CN'
-        : null;
-    if (language === null) throw new Error('Linked delivery owner uses a non-canonical locator.');
-    const pair = pairs.get(id) ?? {};
-    if (pair[language]) throw new Error('Linked delivery owner language is duplicated.');
-    pair[language] = {
-      frontmatter: document.frontmatter,
-      closureHash: closureSummary ? extractClosureSummaryHash(document.body) : null,
-    };
-    pairs.set(id, pair);
-  }
-  const owners = [];
+};
+
+const discoverAlignmentResolutionInventory = async (lifecycleRoot, feedbackId) => {
+  const collected = await collectDeliveryInventory({ lifecycleRoot });
+  if (!collected.ok) throw new Error('Delivery owner inventory is invalid.');
+  const owners = [...collected.value.pairs, ...collected.value.archived_pairs]
+    .filter(({ language, frontmatter }) => language === 'en'
+      && ['prd', 'non-prd-delivery'].includes(frontmatter.artifact_kind)
+      && frontmatter.relationships.feedback_ids.includes(feedbackId))
+    .map(({ frontmatter }) => frontmatter);
   const closureIds = new Set();
-  for (const pair of pairs.values()) {
-    if (!pair.en || !pair['zh-CN'] || !isDeepStrictEqual(pair.en, pair['zh-CN'])) {
-      throw new Error('Linked delivery evidence pair is incomplete or divergent.');
+  for (const closure of collected.value.closed_summaries.filter(({ frontmatter }) => (
+    frontmatter.relationships.feedback_ids.includes(feedbackId)
+  ))) {
+    const hashes = [];
+    for (const language of ['en', 'zh-CN']) {
+      const source = await existingFile(join(lifecycleRoot, closure.locators[language]), lifecycleRoot);
+      if (source === null || Buffer.byteLength(source) > MAX_DOCUMENT_BYTES) {
+        throw new Error('Closure inventory contains an invalid file.');
+      }
+      const document = splitDocument(source);
+      if (!document || !isDeepStrictEqual(document.frontmatter, closure.frontmatter)) {
+        throw new Error('Closure inventory changed after validation.');
+      }
+      hashes.push(extractClosureSummaryHash(document.body));
     }
-    const frontmatter = pair.en.frontmatter;
-    if (['prd', 'non-prd-delivery'].includes(frontmatter.artifact_kind)
-      && frontmatter.relationships.feedback_ids.includes(feedbackId)) {
-      owners.push(frontmatter);
-    } else if (frontmatter.artifact_kind === 'closure-summary' && pair.en.closureHash !== null) {
-      closureIds.add(`${frontmatter.artifact_id}:${pair.en.closureHash}`);
+    if (hashes[0] !== null && hashes[0] === hashes[1]) {
+      closureIds.add(`${closure.artifact_id}:${hashes[0]}`);
     }
   }
   return { owners, closureIds };
@@ -353,14 +375,37 @@ export async function materializeAsset(input = {}, operations = {}) {
   } catch {
     return failure('ASSET_PATH_INVALID', '/root', 'Delivery targets must be regular files beneath the fixed lifecycle root.');
   }
+  const layout = await detectDeliveryLayout({ root: input.root });
+  if (!layout.ok || layout.value.kind !== 'V2') {
+    return failure('DELIVERY_LAYOUT_MIGRATION_REQUIRED', '/root', 'Delivery layout v2 is required before durable writes.');
+  }
+  let owner = await resolvePhysicalOwner({ lifecycleRoot, frontmatter: input.frontmatter });
+  if (!owner.ok && input.frontmatter.artifact_kind === 'closure-summary') {
+    const inventory = await collectDeliveryInventory({ lifecycleRoot });
+    if (inventory.ok) {
+      const retainedOwners = inventory.value.archived_pairs.filter(({ language, frontmatter }) => (
+        language === 'en'
+        && frontmatter.artifact_id === input.frontmatter.owner_artifact_id
+        && frontmatter.owner_artifact_id === frontmatter.artifact_id
+        && ['prd', 'non-prd-delivery'].includes(frontmatter.artifact_kind)
+      ));
+      if (retainedOwners.length === 1) {
+        owner = ok({
+          artifact_kind: retainedOwners[0].frontmatter.artifact_kind,
+          artifact_id: retainedOwners[0].frontmatter.artifact_id,
+        });
+      }
+    }
+  }
+  if (!owner.ok) return owner;
   const id = input.frontmatter.artifact_id;
-  const locators = { en: `delivery/${id}-en.md`, 'zh-CN': `delivery/${id}.md` };
+  const locators = activeDeliveryPair(input.frontmatter, { ownerKind: owner.value.artifact_kind });
   const paths = Object.fromEntries(Object.entries(locators).map(([language, locator]) => [language, join(lifecycleRoot, locator)]));
   let existing;
   try {
     existing = {
-      en: await existingFile(paths.en),
-      'zh-CN': await existingFile(paths['zh-CN']),
+      en: await existingFile(paths.en, lifecycleRoot),
+      'zh-CN': await existingFile(paths['zh-CN'], lifecycleRoot),
     };
   } catch {
     return failure('ASSET_PATH_INVALID', '/root', 'Delivery targets must be regular files beneath the fixed lifecycle root.');
@@ -527,6 +572,12 @@ export async function materializeAsset(input = {}, operations = {}) {
     }
   }
   const write = operations.atomicWriteValidated ?? atomicWriteValidated;
+  let createdDirectories = [];
+  try {
+    createdDirectories = await ensureManagedDirectory(lifecycleRoot, locators.en);
+  } catch {
+    return failure('ASSET_PATH_INVALID', '/root', 'Delivery targets must be regular files beneath the fixed lifecycle root.');
+  }
   try {
     await write({
       root: lifecycleRoot,
@@ -555,6 +606,11 @@ export async function materializeAsset(input = {}, operations = {}) {
       throw error;
     }
   } catch {
+    try {
+      await cleanupManagedDirectories(createdDirectories);
+    } catch {
+      return failure('ASSET_ROLLBACK_FAILED', '/delivery', 'Delivery pair rollback failed; manual recovery is required.');
+    }
     return failure('ASSET_WRITE_FAILED', '/delivery', 'Delivery pair could not be written and validated.');
   }
 

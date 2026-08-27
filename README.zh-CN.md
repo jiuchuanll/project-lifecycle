@@ -13,7 +13,7 @@ Project Lifecycle 是一个共享、宿主中立的插件，用于构建低噪�
 ## 项目状态
 
 > [!IMPORTANT]
-> 本仓库已经开源，但版本 `0.4.0` 仍是**预发布评估候选**。它尚未发布到 npm，且目前
+> 本仓库已经开源，但版本 `0.5.0` 仍是**预发布评估候选**。它尚未发布到 npm，且目前
 > 没有任何原生宿主满足发布支持门禁。安装说明仅用于评估，不代表生产支持承诺。
 
 源代码、确定性发布压缩包和保留的一致性证据均已公开，可供检查和贡献。所有支持声明
@@ -95,7 +95,19 @@ docs/project-lifecycle/
 │       ├── <parent>.md     # 仅父节点已物化时存在
 │       ├── <parent>-en.md
 │       └── <child>-en.md   # 递归子节点正文与父目录共址
-└── delivery/               # 与 PRD 绑定的交付资产及运行记录
+└── delivery/               # 以 Owner 为中心的交付 Schema v2
+    ├── layout.json         # 固定布局标记
+    ├── INDEX-en.md         # 生成的 Agent 默认交付索引
+    ├── INDEX.md            # 生成的中文镜像
+    ├── feedback/           # 不依附 Owner 的 Feedback 文档对
+    ├── views/              # 生成的 alignment-review 文档对
+    ├── prds/<prd-id>/      # 一个自有 PRD 文档对及其阶段目录
+    │   ├── architecture/
+    │   ├── guidance/
+    │   ├── batches/
+    │   ├── test-reports/
+    │   └── closure/
+    └── non-prd/<owner-id>/ # 无 PRD 时使用相同的 Owner 分级结构
 ```
 
 正文规范路径完全由项目地图拓扑计算。顶层叶节点使用
@@ -112,6 +124,18 @@ docs/project-lifecycle/
 已有 `0.1.0` 平铺知识树需要一次显式迁移批准。Agent 会先展示移动计划和外部链接风险，
 批准后调用内部原子迁移，保留中英文内容与受管引用，并删除旧规范副本。系统不会提供
 公开迁移 CLI、Schema v1 注册表、重定向占位文件、符号链接或重复正文。
+
+交付布局 v2 保留 `delivery/` 作为阶段边界，同时避免把不同类型的过程文档平铺混放。
+每个 PRD 或非 PRD 根通过 `owner_artifact_id` 归属自身；架构、开发指导、批次、测试报告
+和闭环摘要只存在于这个唯一物理 Owner 之下。Feedback 独立保存在
+`delivery/feedback/`，生成视图保存在 `delivery/views/`，语义上的 PRD 关系不会产生重复
+物理副本。
+
+对于旧的平铺交付树，系统先进行只读检查与预览。预览会给出精确移动、Owner 映射、
+受管引用改写、外部链接风险、计划哈希和源指纹。正式迁移还要求已选方案、显式批准、
+可恢复备份引用以及对预览的精确重放。发布过程是原子的；在线校验失败时会恢复原树。
+需要保留的详细文档按同一 Owner 路径镜像到 `archive/delivery/`；普通检索只使用紧凑闭环
+证据，不读取归档正文。
 
 典型生命周期如下：
 
@@ -130,9 +154,18 @@ docs/project-lifecycle/
 对象，并提供以下命令：
 
 - `collect-evidence`
+- `close-delivery`
+- `generate-delivery-indexes`
+- `inspect-delivery-layout`
+- `materialize-delivery-asset`
+- `migrate-delivery-layout`
 - `validate-json`
 - `validate-pair`
 - `parse-facts`
+- `preview-delivery-layout-migration`
+- `sync-alignment-review`
+- `validate-alignment-feedback`
+- `validate-delivery-layout`
 - `validate-fixtures`
 - `version` 与 `help`
 
@@ -206,4 +239,4 @@ Project Lifecycle 使用 [Apache License 2.0](LICENSE) 开源。
 - KnowledgeVault 消费端迁移保持只读审计，直到至少一个宿主受支持且两个共享 Skill
   均被原生发现。详见[迁移方案](docs/migrations/knowledgevault-agent-app.md)。
 
-0.4.0 候选范围与升级说明见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。
+0.5.0 候选范围与升级说明见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。

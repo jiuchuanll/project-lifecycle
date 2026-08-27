@@ -1,6 +1,6 @@
 # Cursor installation
 
-Candidate version: `0.4.0`. Evidence status: `NOT_TESTED` until the native matrix is complete. Retained `0.1.0` traces are historical evidence, not validation of this candidate.
+Candidate version: `0.5.0`. Evidence status: `NOT_TESTED` until the native matrix is complete. Retained `0.1.0` traces are historical evidence, not validation of this candidate.
 
 Add the repository through Cursor's native local Plugin directory or marketplace UI using `.cursor-plugin/plugin.json`. Use a disposable profile and pin this exact candidate version.
 

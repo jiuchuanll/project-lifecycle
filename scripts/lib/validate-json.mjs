@@ -495,6 +495,16 @@ const validateDeliveryFrontmatter = (value) => {
   const errors = [];
   const obligationIds = new Set();
 
+  if (value.schema_version === 2
+    && ['prd', 'non-prd-delivery'].includes(value.artifact_kind)
+    && value.owner_artifact_id !== value.artifact_id) {
+    errors.push(createError(
+      ERROR_CODES.STATE_REQUIREMENT_MISSING,
+      '/owner_artifact_id',
+      'A schema-v2 root delivery owner must own itself.',
+    ));
+  }
+
   for (const [index, obligation] of value.obligations.entries()) {
     if (obligationIds.has(obligation.obligation_id)) {
       errors.push(createError(

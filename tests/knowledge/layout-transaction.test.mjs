@@ -206,6 +206,92 @@ test('rejects a symlinked lifecycle root and a nested escaping symlink', async (
   assert.equal(rootLink.errors[0].code, 'PATH_SYMLINK_ESCAPE');
 });
 
+test('rejects lifecycle snapshots whose files exceed the bounded fingerprint budget', async (context) => {
+  const project = await createProject(context);
+  await writeFile(join(project.lifecycle, 'oversized.bin'), Buffer.alloc(4_194_305));
+
+  const result = await inspectLifecycleTree({ repositoryRoot: project.root });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'LAYOUT_TREE_LIMIT_EXCEEDED');
+});
+
+test('stops lazy snapshot traversal at the entry limit without consuming the rest of a directory', async (context) => {
+  const project = await createProject(context);
+  let yielded = 0;
+  const result = await inspectLifecycleTree({
+    repositoryRoot: project.root,
+    snapshotOperations: {
+      opendir: async () => ({
+        async *[Symbol.asyncIterator]() {
+          while (true) {
+            yielded += 1;
+            yield {
+              name: `entry-${yielded}.md`,
+              isDirectory: () => false,
+              isFile: () => true,
+              isSymbolicLink: () => false,
+            };
+          }
+        },
+      }),
+      lstat: async () => ({
+        isDirectory: () => false,
+        isFile: () => true,
+        isSymbolicLink: () => false,
+        size: 0,
+      }),
+      open: async () => ({
+        read: async () => ({ bytesRead: 0 }),
+        close: async () => {},
+      }),
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'LAYOUT_TREE_LIMIT_EXCEEDED');
+  assert.equal(yielded, 10_001);
+});
+
+test('bounds snapshot hashing by bytes actually read instead of stale file metadata', async (context) => {
+  const project = await createProject(context);
+  let emitted = false;
+  const result = await inspectLifecycleTree({
+    repositoryRoot: project.root,
+    snapshotOperations: {
+      opendir: async () => ({
+        async *[Symbol.asyncIterator]() {
+          if (!emitted) {
+            emitted = true;
+            yield {
+              name: 'growing.md',
+              isDirectory: () => false,
+              isFile: () => true,
+              isSymbolicLink: () => false,
+            };
+          }
+        },
+      }),
+      lstat: async () => ({
+        isDirectory: () => false,
+        isFile: () => true,
+        isSymbolicLink: () => false,
+        size: 1,
+      }),
+      open: async () => ({
+        read: async (buffer) => {
+          buffer.fill(0x61);
+          return { bytesRead: buffer.length };
+        },
+        close: async () => {},
+      }),
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'LAYOUT_TREE_LIMIT_EXCEEDED');
+});
+
 test('cleans the stage and preserves the original after a bilingual first-write failure', async (context) => {
   const project = await createProject(context);
   let calls = 0;

@@ -71,7 +71,7 @@ test('stores a durable knowledge-only obligation on the relevant pending entry',
 });
 
 test('uses the Phase 1 transition validator for resolution and waiver', () => {
-  const owner = { kind: 'prd', frontmatter: frontmatter(), owner_locator: 'delivery/prd-wiki-layout-en.md' };
+  const owner = { kind: 'prd', frontmatter: frontmatter(), owner_locator: 'delivery/prds/prd-wiki-layout/prd-wiki-layout-en.md' };
   const created = storeObligation({ owner, next: open() });
   const resolved = storeObligation({
     owner: created.value.owner,
@@ -152,7 +152,7 @@ test('rejects duplicate local IDs and malformed qualified successor ownership', 
   const duplicate = frontmatter();
   duplicate.obligations = [open(), open()];
   const result = storeObligation({
-    owner: { kind: 'prd', frontmatter: duplicate, owner_locator: 'delivery/prd-wiki-layout-en.md' },
+    owner: { kind: 'prd', frontmatter: duplicate, owner_locator: 'delivery/prds/prd-wiki-layout/prd-wiki-layout-en.md' },
     next: open(),
   });
   assert.equal(result.ok, false);

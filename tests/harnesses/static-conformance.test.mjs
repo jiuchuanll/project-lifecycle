@@ -16,7 +16,7 @@ const validTrace = () => ({
   run_id: 'codex-smoke-1',
   scenario_id: 'smoke-project',
   run_number: 1,
-  plugin: { version: '0.4.0', commit: 'a'.repeat(40) },
+  plugin: { version: '0.5.0', commit: 'a'.repeat(40) },
   host: { id: 'codex', version: '1.0.0' },
   model: { identity: 'test-model', revision: 'model-revision-1' },
   parameters: { temperature: 0 },
@@ -38,7 +38,7 @@ test('passes static package conformance without host-local Skill copies', async 
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.deepEqual(result.value.skill_ids, ['maintain-project-knowledge', 'run-prd-lifecycle']);
   assert.deepEqual(result.value.host_ids, ['claude', 'codex', 'cursor', 'kimi', 'zcode']);
-  assert.equal(result.value.bundle_version, '0.4.0');
+  assert.equal(result.value.bundle_version, '0.5.0');
 });
 
 test('requires complete auditable PASS trace metadata', () => {

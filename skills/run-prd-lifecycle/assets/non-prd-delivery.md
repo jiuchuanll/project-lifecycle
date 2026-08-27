@@ -1,6 +1,7 @@
 ---
-schema_version: 1
+schema_version: 2
 artifact_id: non-prd-delivery-template
+owner_artifact_id: non-prd-delivery-template
 artifact_kind: non-prd-delivery
 primary_route: NON_PRD_DELIVERY
 project_id_at_creation: sample-project

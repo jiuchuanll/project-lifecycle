@@ -1,12 +1,13 @@
 ---
-schema_version: 1
-artifact_id: prd-search-v1
+schema_version: 2
+artifact_id: prd-wiki-layout-v1
 artifact_kind: prd
+owner_artifact_id: prd-wiki-layout-v1
 primary_route: PRD_DELIVERY
 project_id_at_creation: sample-project
 domain_ids:
-  - search-workspace
-knowledge_baseline: baseline-4
+  - wiki-workspace
+knowledge_baseline: baseline-3
 relationships:
   feedback_ids: []
   prd_ids: []
@@ -15,6 +16,6 @@ retention_tier: archive
 reclassified_from_refs: []
 obligations: []
 ---
-# Archived Search PRD
+# Archived Wiki layout PRD
 
-The former accepted search mode used exact matching. ARCHIVE-SEARCH-BODY-SECRET.
+The former accepted density was compact. ARCHIVE-WIKI-BODY-SECRET.

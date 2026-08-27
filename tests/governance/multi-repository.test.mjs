@@ -87,8 +87,8 @@ const setup = async (context) => {
   const governance = await repository(context, 'phase4-governance-', {
     [`docs/project-lifecycle/${commonLocators[0]}`]: `# Common contract\n\n${fixture.bodies.common}\n`,
     [`docs/project-lifecycle/${commonLocators[1]}`]: `# 公共契约\n\n${fixture.bodies.common}\n`,
-    'docs/project-lifecycle/delivery/prd-wiki-refinement-en.md': '# Wiki refinement PRD\n\nTwo bounded Delivery Units.\n',
-    'docs/project-lifecycle/delivery/prd-wiki-refinement.md': '# Wiki 精细化 PRD\n\n两个有边界的交付单元。\n',
+    'docs/project-lifecycle/delivery/prds/prd-wiki-refinement/prd-wiki-refinement-en.md': '# Wiki refinement PRD\n\nTwo bounded Delivery Units.\n',
+    'docs/project-lifecycle/delivery/prds/prd-wiki-refinement/prd-wiki-refinement.md': '# Wiki 精细化 PRD\n\n两个有边界的交付单元。\n',
   });
   const map = {
     schema_version: 2,

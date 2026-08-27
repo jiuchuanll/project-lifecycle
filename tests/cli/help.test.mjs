@@ -15,9 +15,16 @@ test('help lists all implemented commands in deterministic order', () => {
   assert.match(output, /validate-fixtures/);
   assert.deepEqual(result.value.commands, [
     'collect-evidence',
+    'close-delivery',
+    'generate-delivery-indexes',
+    'inspect-delivery-layout',
+    'materialize-delivery-asset',
+    'migrate-delivery-layout',
     'parse-facts',
+    'preview-delivery-layout-migration',
     'sync-alignment-review',
     'validate-alignment-feedback',
+    'validate-delivery-layout',
     'validate-fixtures',
     'validate-json',
     'validate-pair',
@@ -30,7 +37,7 @@ test('version emits one JSON result envelope', () => {
     encoding: 'utf8',
   });
 
-  assert.deepEqual(JSON.parse(output), { ok: true, value: { version: '0.4.0' }, errors: [] });
+  assert.deepEqual(JSON.parse(output), { ok: true, value: { version: '0.5.0' }, errors: [] });
   assert.equal(output.trimEnd().split('\n').length, 1);
 });
 

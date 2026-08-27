@@ -14,7 +14,7 @@ silently becoming accepted project truth.
 ## Project status
 
 > [!IMPORTANT]
-> This repository is open source, but version `0.4.0` remains a **pre-release
+> This repository is open source, but version `0.5.0` remains a **pre-release
 > evaluation candidate**. It is not published to npm, and no native host
 > currently satisfies the release support gate. Treat the installation guides
 > as evaluation instructions, not production-support claims.
@@ -111,7 +111,19 @@ docs/project-lifecycle/
 │       ├── <parent>.md     # optional only when the parent is materialized
 │       ├── <parent>-en.md
 │       └── <child>-en.md   # recursive child bodies share the parent directory
-└── delivery/               # PRD-bound delivery assets and runtime records
+└── delivery/               # owner-centric delivery schema v2
+    ├── layout.json         # fixed layout marker
+    ├── INDEX-en.md         # generated Agent-default delivery index
+    ├── INDEX.md            # generated Chinese mirror
+    ├── feedback/           # owner-independent Feedback pairs
+    ├── views/              # generated alignment-review pair
+    ├── prds/<prd-id>/      # one self-owned PRD pair plus owned phase folders
+    │   ├── architecture/
+    │   ├── guidance/
+    │   ├── batches/
+    │   ├── test-reports/
+    │   └── closure/
+    └── non-prd/<owner-id>/ # same owner-scoped shape without a PRD
 ```
 
 Canonical body locations are computed from map topology. A top-level leaf is
@@ -135,6 +147,21 @@ atomic migration, preserving bilingual content and managed references while
 removing old canonical copies. There is intentionally no public migration CLI,
 schema-v1 registry, redirect stub, symlink, or duplicate body.
 
+Delivery layout v2 keeps `delivery/` as the stage boundary while preventing a
+flat mixed-document directory. Every PRD or non-PRD root owns itself through
+`owner_artifact_id`; architecture, guidance, batches, test reports, and closure
+summaries live only beneath that one physical owner. Feedback remains independent
+under `delivery/feedback/`, generated views remain under `delivery/views/`, and
+semantic PRD relationships never create duplicate physical copies.
+
+A legacy flat delivery tree is inspected and previewed without mutation. The
+preview reports exact moves, owner mappings, managed-reference rewrites, external
+link risks, a plan hash, and a source fingerprint. Durable migration requires the
+selected solution, explicit approval, a recoverable backup reference, and exact
+preview replay. Publication is atomic; failed live validation restores the prior
+tree. Retained details mirror the same owner path under `archive/delivery/`, while
+ordinary retrieval uses compact closure evidence and does not read archive bodies.
+
 The typical lifecycle is:
 
 ```text
@@ -153,9 +180,18 @@ The release archive includes `dist/project-lifecycle.mjs` and the executable
 The CLI emits one JSON result object and provides these commands:
 
 - `collect-evidence`
+- `close-delivery`
+- `generate-delivery-indexes`
+- `inspect-delivery-layout`
+- `materialize-delivery-asset`
+- `migrate-delivery-layout`
 - `validate-json`
 - `validate-pair`
 - `parse-facts`
+- `preview-delivery-layout-migration`
+- `sync-alignment-review`
+- `validate-alignment-feedback`
+- `validate-delivery-layout`
 - `validate-fixtures`
 - `version` and `help`
 
@@ -241,4 +277,4 @@ Project Lifecycle is licensed under the [Apache License 2.0](LICENSE).
   and both shared Skills are discovered natively. See the
   [migration recipe](docs/migrations/knowledgevault-agent-app.md).
 
-See [RELEASE-NOTES.md](RELEASE-NOTES.md) for the exact 0.4.0 candidate scope and upgrade notes.
+See [RELEASE-NOTES.md](RELEASE-NOTES.md) for the exact 0.5.0 candidate scope and upgrade notes.

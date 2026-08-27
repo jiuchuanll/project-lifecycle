@@ -1,6 +1,6 @@
 # Claude Code installation
 
-Candidate version: `0.4.0`. Evidence status: `NOT_TESTED` until the native matrix is complete. Retained `0.1.0` traces are historical evidence, not validation of this candidate.
+Candidate version: `0.5.0`. Evidence status: `NOT_TESTED` until the native matrix is complete. Retained `0.1.0` traces are historical evidence, not validation of this candidate.
 
 For isolated local verification use `claude --plugin-dir <absolute-repository-path>`. Marketplace installation uses `.claude-plugin/marketplace.json` with source `./`.
 

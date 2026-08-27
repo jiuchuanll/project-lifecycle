@@ -4,6 +4,8 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  open,
+  opendir,
   readFile,
   readdir,
   readlink,
@@ -23,6 +25,10 @@ import { fail, ok } from '../lib/result.mjs';
 import { assertBoundedRelativePath, resolveInside } from '../lib/safe-path.mjs';
 
 const hash = (content) => createHash('sha256').update(content).digest('hex');
+const MAX_SNAPSHOT_ENTRIES = 10_000;
+const MAX_SNAPSHOT_DEPTH = 16;
+const MAX_SNAPSHOT_FILE_BYTES = 4_194_304;
+const MAX_SNAPSHOT_TOTAL_BYTES = 67_108_864;
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const inside = (root, candidate) => {
   const fromRoot = relative(root, candidate);
@@ -69,34 +75,64 @@ const lifecyclePaths = async (repositoryRoot, { allowMissing = false } = {}) => 
   return { projectRoot: physicalRoot, docsRoot, lifecycleRoot, exists: true };
 };
 
-const snapshotTree = async (lifecycleRoot) => {
+const snapshotTree = async (lifecycleRoot, operationOverrides = {}) => {
   const rootState = await lstat(lifecycleRoot);
   const rootReal = await realpath(lifecycleRoot);
   if (!rootState.isDirectory() || rootState.isSymbolicLink()) throw pathError('PATH_SYMLINK_ESCAPE');
+  const operations = { lstat, open, opendir, readlink, realpath, ...operationOverrides };
   const entries = [];
-  const visit = async (directory, prefix = '') => {
-    const children = await readdir(directory, { withFileTypes: true });
+  let discoveredEntries = 0;
+  let totalBytes = 0;
+  const readBoundedFile = async (path) => {
+    const handle = await operations.open(path, 'r');
+    try {
+      const buffer = Buffer.alloc(MAX_SNAPSHOT_FILE_BYTES + 1);
+      let bytesRead = 0;
+      while (bytesRead < buffer.length) {
+        const result = await handle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);
+        if (result.bytesRead === 0) break;
+        bytesRead += result.bytesRead;
+      }
+      if (bytesRead > MAX_SNAPSHOT_FILE_BYTES
+        || totalBytes + bytesRead > MAX_SNAPSHOT_TOTAL_BYTES) {
+        throw pathError('LAYOUT_TREE_LIMIT_EXCEEDED');
+      }
+      totalBytes += bytesRead;
+      return buffer.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+  };
+  const visit = async (directory, prefix = '', depth = 0) => {
+    if (depth > MAX_SNAPSHOT_DEPTH) throw pathError('LAYOUT_TREE_LIMIT_EXCEEDED');
+    const children = [];
+    for await (const child of await operations.opendir(directory)) {
+      discoveredEntries += 1;
+      if (discoveredEntries > MAX_SNAPSHOT_ENTRIES) throw pathError('LAYOUT_TREE_LIMIT_EXCEEDED');
+      children.push(child);
+    }
     children.sort((left, right) => compareCodePoints(left.name, right.name));
     for (const child of children) {
       const absolute = join(directory, child.name);
       const locator = prefix ? `${prefix}/${child.name}` : child.name;
-      const state = await lstat(absolute);
+      const state = await operations.lstat(absolute);
       if (state.isDirectory() && !state.isSymbolicLink()) {
-        const physical = await realpath(absolute);
+        const physical = await operations.realpath(absolute);
         if (!inside(rootReal, physical)) throw pathError('PATH_SYMLINK_ESCAPE');
         entries.push({ locator: `${locator}/`, type: 'directory' });
-        await visit(physical, locator);
+        await visit(physical, locator, depth + 1);
       } else if (state.isFile()) {
-        entries.push({ locator, type: 'file', hash: hash(await readFile(absolute)) });
+        if (state.size > MAX_SNAPSHOT_FILE_BYTES) throw pathError('LAYOUT_TREE_LIMIT_EXCEEDED');
+        entries.push({ locator, type: 'file', hash: hash(await readBoundedFile(absolute)) });
       } else if (state.isSymbolicLink()) {
         let physical;
         try {
-          physical = await realpath(absolute);
+          physical = await operations.realpath(absolute);
         } catch {
           throw pathError('PATH_SYMLINK_ESCAPE');
         }
         if (!inside(rootReal, physical)) throw pathError('PATH_SYMLINK_ESCAPE');
-        entries.push({ locator, type: 'symlink', target: await readlink(absolute) });
+        entries.push({ locator, type: 'symlink', target: await operations.readlink(absolute) });
       } else {
         throw pathError('LAYOUT_ROOT_INVALID');
       }
@@ -107,10 +143,10 @@ const snapshotTree = async (lifecycleRoot) => {
   return { fingerprint, entries };
 };
 
-export const inspectLifecycleTree = async ({ repositoryRoot } = {}) => {
+export const inspectLifecycleTree = async ({ repositoryRoot, snapshotOperations } = {}) => {
   try {
     const { lifecycleRoot } = await lifecyclePaths(repositoryRoot);
-    return ok(await snapshotTree(lifecycleRoot));
+    return ok(await snapshotTree(lifecycleRoot, snapshotOperations));
   } catch (error) {
     return failure(
       error?.code ?? 'LAYOUT_ROOT_INVALID',

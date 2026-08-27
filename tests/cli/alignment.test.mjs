@@ -46,7 +46,7 @@ const map = {
   }],
 };
 const frontmatter = {
-  schema_version: 1,
+  schema_version: 2,
   artifact_id: 'feedback-retire-legacy',
   artifact_kind: 'feedback',
   primary_route: 'KNOWLEDGE_UPDATE',
@@ -165,9 +165,10 @@ test('syncs one bounded active projection from an ephemeral absolute input', asy
   const root = await mkdtemp(join(tmpdir(), 'project-lifecycle-alignment-sync-cli-'));
   context.after(() => rm(root, { recursive: true, force: true }));
   const delivery = join(root, 'docs', 'project-lifecycle', 'delivery');
-  await mkdir(delivery, { recursive: true });
-  await writeFile(join(delivery, 'feedback-retire-legacy-en.md'), document('en'));
-  await writeFile(join(delivery, 'feedback-retire-legacy.md'), document('zh-CN'));
+  await mkdir(join(delivery, 'feedback'), { recursive: true });
+  await writeFile(join(delivery, 'layout.json'), '{"schema_version":1,"layout_version":2}\n');
+  await writeFile(join(delivery, 'feedback', 'feedback-retire-legacy-en.md'), document('en'));
+  await writeFile(join(delivery, 'feedback', 'feedback-retire-legacy.md'), document('zh-CN'));
   const state = join(root, 'alignment-state.json');
   await writeFile(state, JSON.stringify({
     feedbacks: [{
@@ -188,9 +189,9 @@ test('syncs one bounded active projection from an ephemeral absolute input', asy
   assert.deepEqual(envelope(result).value, {
     row_count: 1,
     phases: ['REVIEW_REQUIRED'],
-    locators: { en: 'delivery/alignment-review-en.md', 'zh-CN': 'delivery/alignment-review.md' },
+    locators: { en: 'delivery/views/alignment-review-en.md', 'zh-CN': 'delivery/views/alignment-review.md' },
   });
-  assert.match(await readFile(join(root, 'docs', 'project-lifecycle', 'delivery', 'alignment-review-en.md'), 'utf8'), /feedback-retire-legacy/u);
+  assert.match(await readFile(join(root, 'docs', 'project-lifecycle', 'delivery', 'views', 'alignment-review-en.md'), 'utf8'), /feedback-retire-legacy/u);
 });
 
 test('rejects an oversized sync envelope without echoing private input', async (context) => {

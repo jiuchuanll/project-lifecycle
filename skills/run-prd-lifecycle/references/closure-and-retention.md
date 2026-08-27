@@ -22,6 +22,8 @@ PRD creation, code merge, or owner closure alone is insufficient. Remove the mar
 
 Keep active material while delivery or a bounded repair remains open. At closure, retain a compact summary containing identity, outcome, acceptance, evidence, coverage, residual risk, and knowledge-handoff reference. Move detailed delivery evidence to archive only when policy requires retention; superseded or redundant intermediate artifacts leave default retrieval.
 
+Retained detailed pairs keep the same `owner_artifact_id` and move to the mirrored owner path under `archive/delivery/`; do not flatten, rename, or reassign their physical owner during closure. The compact closure summary and generated indexes retain exact locators. Default retrieval uses active metadata and compact closure evidence and does not read archived bodies. A later historical investigation still requires the knowledge Skill's Archive Access Receipt.
+
 Archive lookup later is receipt-gated by the knowledge Skill. Do not keep large bodies in active indexes merely because they existed during delivery.
 
 ## Runtime Cleanup

@@ -18,15 +18,19 @@ test('validates the complete bounded Phase 3 behavior matrix', () => {
     'explicit-prd',
     'genuine-ambiguity',
     'inferred-prd',
+    'legacy-delivery-layout-preview',
     'knowledge-alignment-feedback-capture',
     'knowledge-only',
     'main-flow-correction',
     'multi-repository-acceptance',
     'no-prd-fix',
     'normalized-typo',
+    'owner-scoped-prd-continuation',
     'outside-plugin',
     'parallel-conflict',
-  ]);
+    'ambiguous-legacy-owner',
+    'closed-owner-default-retrieval',
+  ].sort());
 });
 
 test('rejects missing expected and forbidden fields or unbounded context sets', () => {
@@ -93,10 +97,31 @@ test('captures confirmed alignment Feedback without creating a delivery owner or
   assert.equal(result.ok, true);
   assert.deepEqual(result.value.durable_asset_kinds, ['feedback']);
   assert.deepEqual(result.value.allowed_files, [
-    'delivery/feedback-knowledge-alignment-feedback-capture-en.md',
-    'delivery/feedback-knowledge-alignment-feedback-capture.md',
+    'delivery/feedback/feedback-knowledge-alignment-feedback-capture-en.md',
+    'delivery/feedback/feedback-knowledge-alignment-feedback-capture.md',
   ]);
   assert.equal(result.value.closure, 'OUTSIDE_DELIVERY');
   assert.equal(result.value.knowledge_candidate_owner, null);
   assert.equal(result.value.current_knowledge_written, false);
+});
+
+test('keeps owner continuation, migration preview, ambiguity, and closed retrieval bounded', () => {
+  const byId = new Map(scenarios.map((scenario) => [scenario.scenario_id, scenario]));
+  const expected = {
+    'owner-scoped-prd-continuation': ['PRD_DELIVERY', null],
+    'legacy-delivery-layout-preview': ['NON_PRD_DELIVERY', null],
+    'ambiguous-legacy-owner': [null, 'NEEDS_USER'],
+    'closed-owner-default-retrieval': ['OUTSIDE_PLUGIN', null],
+  };
+  for (const [id, [route, stop]] of Object.entries(expected)) {
+    const scenario = byId.get(id);
+    const result = evaluateDeliveryScenario(scenario);
+    assert.equal(result.ok, true, `${id}: ${JSON.stringify(result)}`);
+    assert.equal(result.value.primary_route, route);
+    assert.equal(result.value.stop, stop);
+    assert.equal(result.value.archive_reads, 0);
+    assert.equal(scenario.intent_materialized_without_acceptance, false);
+  }
+  assert.equal(byId.get('legacy-delivery-layout-preview').selected_solution_id, 'solution-owner-centric-delivery-layout-v2');
+  assert.deepEqual(evaluateDeliveryScenario(byId.get('legacy-delivery-layout-preview')).value.allowed_files, []);
 });

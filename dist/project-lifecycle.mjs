@@ -15,6 +15,10 @@ var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require
 var __commonJS = (cb, mod) => function __require2() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
+var __export = (target, all2) => {
+  for (var name in all2)
+    __defProp(target, name, { get: all2[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -43,24 +47,24 @@ var require_identity = __commonJS({
     var SCALAR = Symbol.for("yaml.scalar");
     var SEQ = Symbol.for("yaml.seq");
     var NODE_TYPE = Symbol.for("yaml.node.type");
-    var isAlias2 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === ALIAS;
-    var isDocument = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === DOC;
-    var isMap2 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === MAP;
-    var isPair2 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === PAIR;
-    var isScalar = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SCALAR;
-    var isSeq2 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SEQ;
-    function isCollection(node) {
-      if (node && typeof node === "object")
-        switch (node[NODE_TYPE]) {
+    var isAlias2 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === ALIAS;
+    var isDocument = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === DOC;
+    var isMap2 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === MAP;
+    var isPair2 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === PAIR;
+    var isScalar = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === SCALAR;
+    var isSeq2 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === SEQ;
+    function isCollection(node2) {
+      if (node2 && typeof node2 === "object")
+        switch (node2[NODE_TYPE]) {
           case MAP:
           case SEQ:
             return true;
         }
       return false;
     }
-    function isNode(node) {
-      if (node && typeof node === "object")
-        switch (node[NODE_TYPE]) {
+    function isNode(node2) {
+      if (node2 && typeof node2 === "object")
+        switch (node2[NODE_TYPE]) {
           case ALIAS:
           case MAP:
           case SCALAR:
@@ -69,7 +73,7 @@ var require_identity = __commonJS({
         }
       return false;
     }
-    var hasAnchor = (node) => (isScalar(node) || isCollection(node)) && !!node.anchor;
+    var hasAnchor = (node2) => (isScalar(node2) || isCollection(node2)) && !!node2.anchor;
     exports.ALIAS = ALIAS;
     exports.DOC = DOC;
     exports.MAP = MAP;
@@ -97,98 +101,98 @@ var require_visit = __commonJS({
     var BREAK = Symbol("break visit");
     var SKIP = Symbol("skip children");
     var REMOVE = Symbol("remove node");
-    function visit(node, visitor) {
+    function visit(node2, visitor) {
       const visitor_ = initVisitor(visitor);
-      if (identity.isDocument(node)) {
-        const cd = visit_(null, node.contents, visitor_, Object.freeze([node]));
+      if (identity.isDocument(node2)) {
+        const cd = visit_(null, node2.contents, visitor_, Object.freeze([node2]));
         if (cd === REMOVE)
-          node.contents = null;
+          node2.contents = null;
       } else
-        visit_(null, node, visitor_, Object.freeze([]));
+        visit_(null, node2, visitor_, Object.freeze([]));
     }
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path) {
-      const ctrl = callVisitor(key, node, visitor, path);
+    function visit_(key, node2, visitor, path) {
+      const ctrl = callVisitor(key, node2, visitor, path);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
         replaceNode(key, path, ctrl);
         return visit_(key, ctrl, visitor, path);
       }
       if (typeof ctrl !== "symbol") {
-        if (identity.isCollection(node)) {
-          path = Object.freeze(path.concat(node));
-          for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path);
+        if (identity.isCollection(node2)) {
+          path = Object.freeze(path.concat(node2));
+          for (let i = 0; i < node2.items.length; ++i) {
+            const ci = visit_(i, node2.items[i], visitor, path);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
               return BREAK;
             else if (ci === REMOVE) {
-              node.items.splice(i, 1);
+              node2.items.splice(i, 1);
               i -= 1;
             }
           }
-        } else if (identity.isPair(node)) {
-          path = Object.freeze(path.concat(node));
-          const ck = visit_("key", node.key, visitor, path);
+        } else if (identity.isPair(node2)) {
+          path = Object.freeze(path.concat(node2));
+          const ck = visit_("key", node2.key, visitor, path);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
-            node.key = null;
-          const cv = visit_("value", node.value, visitor, path);
+            node2.key = null;
+          const cv = visit_("value", node2.value, visitor, path);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
-            node.value = null;
+            node2.value = null;
         }
       }
       return ctrl;
     }
-    async function visitAsync(node, visitor) {
+    async function visitAsync(node2, visitor) {
       const visitor_ = initVisitor(visitor);
-      if (identity.isDocument(node)) {
-        const cd = await visitAsync_(null, node.contents, visitor_, Object.freeze([node]));
+      if (identity.isDocument(node2)) {
+        const cd = await visitAsync_(null, node2.contents, visitor_, Object.freeze([node2]));
         if (cd === REMOVE)
-          node.contents = null;
+          node2.contents = null;
       } else
-        await visitAsync_(null, node, visitor_, Object.freeze([]));
+        await visitAsync_(null, node2, visitor_, Object.freeze([]));
     }
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path) {
-      const ctrl = await callVisitor(key, node, visitor, path);
+    async function visitAsync_(key, node2, visitor, path) {
+      const ctrl = await callVisitor(key, node2, visitor, path);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
         replaceNode(key, path, ctrl);
         return visitAsync_(key, ctrl, visitor, path);
       }
       if (typeof ctrl !== "symbol") {
-        if (identity.isCollection(node)) {
-          path = Object.freeze(path.concat(node));
-          for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path);
+        if (identity.isCollection(node2)) {
+          path = Object.freeze(path.concat(node2));
+          for (let i = 0; i < node2.items.length; ++i) {
+            const ci = await visitAsync_(i, node2.items[i], visitor, path);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
               return BREAK;
             else if (ci === REMOVE) {
-              node.items.splice(i, 1);
+              node2.items.splice(i, 1);
               i -= 1;
             }
           }
-        } else if (identity.isPair(node)) {
-          path = Object.freeze(path.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path);
+        } else if (identity.isPair(node2)) {
+          path = Object.freeze(path.concat(node2));
+          const ck = await visitAsync_("key", node2.key, visitor, path);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
-            node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path);
+            node2.key = null;
+          const cv = await visitAsync_("value", node2.value, visitor, path);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
-            node.value = null;
+            node2.value = null;
         }
       }
       return ctrl;
@@ -211,32 +215,32 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path) {
+    function callVisitor(key, node2, visitor, path) {
       if (typeof visitor === "function")
-        return visitor(key, node, path);
-      if (identity.isMap(node))
-        return visitor.Map?.(key, node, path);
-      if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path);
-      if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path);
-      if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path);
-      if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path);
+        return visitor(key, node2, path);
+      if (identity.isMap(node2))
+        return visitor.Map?.(key, node2, path);
+      if (identity.isSeq(node2))
+        return visitor.Seq?.(key, node2, path);
+      if (identity.isPair(node2))
+        return visitor.Pair?.(key, node2, path);
+      if (identity.isScalar(node2))
+        return visitor.Scalar?.(key, node2, path);
+      if (identity.isAlias(node2))
+        return visitor.Alias?.(key, node2, path);
       return void 0;
     }
-    function replaceNode(key, path, node) {
+    function replaceNode(key, path, node2) {
       const parent = path[path.length - 1];
       if (identity.isCollection(parent)) {
-        parent.items[key] = node;
+        parent.items[key] = node2;
       } else if (identity.isPair(parent)) {
         if (key === "key")
-          parent.key = node;
+          parent.key = node2;
         else
-          parent.value = node;
+          parent.value = node2;
       } else if (identity.isDocument(parent)) {
-        parent.contents = node;
+        parent.contents = node2;
       } else {
         const pt = identity.isAlias(parent) ? "alias" : "scalar";
         throw new Error(`Cannot replace node with ${pt} parent`);
@@ -396,9 +400,9 @@ var require_directives = __commonJS({
         let tagNames;
         if (doc && tagEntries.length > 0 && identity.isNode(doc.contents)) {
           const tags = {};
-          visit.visit(doc.contents, (_key, node) => {
-            if (identity.isNode(node) && node.tag)
-              tags[node.tag] = true;
+          visit.visit(doc.contents, (_key, node2) => {
+            if (identity.isNode(node2) && node2.tag)
+              tags[node2.tag] = true;
           });
           tagNames = Object.keys(tags);
         } else
@@ -435,9 +439,9 @@ var require_anchors = __commonJS({
     function anchorNames(root) {
       const anchors = /* @__PURE__ */ new Set();
       visit.visit(root, {
-        Value(_key, node) {
-          if (node.anchor)
-            anchors.add(node.anchor);
+        Value(_key, node2) {
+          if (node2.anchor)
+            anchors.add(node2.anchor);
         }
       });
       return anchors;
@@ -641,20 +645,20 @@ var require_Alias = __commonJS({
         } else {
           nodes = [];
           visit.visit(doc, {
-            Node: (_key, node) => {
-              if (identity.isAlias(node) || identity.hasAnchor(node))
-                nodes.push(node);
+            Node: (_key, node2) => {
+              if (identity.isAlias(node2) || identity.hasAnchor(node2))
+                nodes.push(node2);
             }
           });
           if (ctx)
             ctx.aliasResolveCache = nodes;
         }
         let found = void 0;
-        for (const node of nodes) {
-          if (node === this)
+        for (const node2 of nodes) {
+          if (node2 === this)
             break;
-          if (node.anchor === this.source)
-            found = node;
+          if (node2.anchor === this.source)
+            found = node2;
         }
         return found;
       }
@@ -701,22 +705,22 @@ var require_Alias = __commonJS({
         return src;
       }
     };
-    function getAliasCount(doc, node, anchors2) {
-      if (identity.isAlias(node)) {
-        const source = node.resolve(doc);
+    function getAliasCount(doc, node2, anchors2) {
+      if (identity.isAlias(node2)) {
+        const source = node2.resolve(doc);
         const anchor = anchors2 && source && anchors2.get(source);
         return anchor ? anchor.count * anchor.aliasCount : 0;
-      } else if (identity.isCollection(node)) {
+      } else if (identity.isCollection(node2)) {
         let count = 0;
-        for (const item of node.items) {
+        for (const item of node2.items) {
           const c = getAliasCount(doc, item, anchors2);
           if (c > count)
             count = c;
         }
         return count;
-      } else if (identity.isPair(node)) {
-        const kc = getAliasCount(doc, node.key, anchors2);
-        const vc = getAliasCount(doc, node.value, anchors2);
+      } else if (identity.isPair(node2)) {
+        const kc = getAliasCount(doc, node2.key, anchors2);
+        const vc = getAliasCount(doc, node2.value, anchors2);
         return Math.max(kc, vc);
       }
       return 1;
@@ -806,10 +810,10 @@ var require_createNode = __commonJS({
           value = value.toJSON();
         }
         if (!value || typeof value !== "object") {
-          const node2 = new Scalar.Scalar(value);
+          const node3 = new Scalar.Scalar(value);
           if (ref)
-            ref.node = node2;
-          return node2;
+            ref.node = node3;
+          return node3;
         }
         tagObj = value instanceof Map ? schema[identity.MAP] : Symbol.iterator in Object(value) ? schema[identity.SEQ] : schema[identity.MAP];
       }
@@ -817,14 +821,14 @@ var require_createNode = __commonJS({
         onTagObj(tagObj);
         delete ctx.onTagObj;
       }
-      const node = tagObj?.createNode ? tagObj.createNode(ctx.schema, value, ctx) : typeof tagObj?.nodeClass?.from === "function" ? tagObj.nodeClass.from(ctx.schema, value, ctx) : new Scalar.Scalar(value);
+      const node2 = tagObj?.createNode ? tagObj.createNode(ctx.schema, value, ctx) : typeof tagObj?.nodeClass?.from === "function" ? tagObj.nodeClass.from(ctx.schema, value, ctx) : new Scalar.Scalar(value);
       if (tagName)
-        node.tag = tagName;
+        node2.tag = tagName;
       else if (!tagObj.default)
-        node.tag = tagObj.tag;
+        node2.tag = tagObj.tag;
       if (ref)
-        ref.node = node;
-      return node;
+        ref.node = node2;
+      return node2;
     }
     exports.createNode = createNode;
   }
@@ -894,10 +898,10 @@ var require_Collection = __commonJS({
           this.add(value);
         else {
           const [key, ...rest] = path;
-          const node = this.get(key, true);
-          if (identity.isCollection(node))
-            node.addIn(rest, value);
-          else if (node === void 0 && this.schema)
+          const node2 = this.get(key, true);
+          if (identity.isCollection(node2))
+            node2.addIn(rest, value);
+          else if (node2 === void 0 && this.schema)
             this.set(key, collectionFromPath(this.schema, rest, value));
           else
             throw new Error(`Expected YAML collection at ${key}. Remaining path: ${rest}`);
@@ -911,9 +915,9 @@ var require_Collection = __commonJS({
         const [key, ...rest] = path;
         if (rest.length === 0)
           return this.delete(key);
-        const node = this.get(key, true);
-        if (identity.isCollection(node))
-          return node.deleteIn(rest);
+        const node2 = this.get(key, true);
+        if (identity.isCollection(node2))
+          return node2.deleteIn(rest);
         else
           throw new Error(`Expected YAML collection at ${key}. Remaining path: ${rest}`);
       }
@@ -924,17 +928,17 @@ var require_Collection = __commonJS({
        */
       getIn(path, keepScalar) {
         const [key, ...rest] = path;
-        const node = this.get(key, true);
+        const node2 = this.get(key, true);
         if (rest.length === 0)
-          return !keepScalar && identity.isScalar(node) ? node.value : node;
+          return !keepScalar && identity.isScalar(node2) ? node2.value : node2;
         else
-          return identity.isCollection(node) ? node.getIn(rest, keepScalar) : void 0;
+          return identity.isCollection(node2) ? node2.getIn(rest, keepScalar) : void 0;
       }
       hasAllNullValues(allowScalar) {
-        return this.items.every((node) => {
-          if (!identity.isPair(node))
+        return this.items.every((node2) => {
+          if (!identity.isPair(node2))
             return false;
-          const n = node.value;
+          const n = node2.value;
           return n == null || allowScalar && identity.isScalar(n) && n.value == null && !n.commentBefore && !n.comment && !n.tag;
         });
       }
@@ -945,8 +949,8 @@ var require_Collection = __commonJS({
         const [key, ...rest] = path;
         if (rest.length === 0)
           return this.has(key);
-        const node = this.get(key, true);
-        return identity.isCollection(node) ? node.hasIn(rest) : false;
+        const node2 = this.get(key, true);
+        return identity.isCollection(node2) ? node2.hasIn(rest) : false;
       }
       /**
        * Sets a value in this collection. For `!!set`, `value` needs to be a
@@ -957,10 +961,10 @@ var require_Collection = __commonJS({
         if (rest.length === 0) {
           this.set(key, value);
         } else {
-          const node = this.get(key, true);
-          if (identity.isCollection(node))
-            node.setIn(rest, value);
-          else if (node === void 0 && this.schema)
+          const node2 = this.get(key, true);
+          if (identity.isCollection(node2))
+            node2.setIn(rest, value);
+          else if (node2 === void 0 && this.schema)
             this.set(key, collectionFromPath(this.schema, rest, value));
           else
             throw new Error(`Expected YAML collection at ${key}. Remaining path: ${rest}`);
@@ -997,14 +1001,14 @@ var require_foldFlowLines = __commonJS({
     var FOLD_FLOW = "flow";
     var FOLD_BLOCK = "block";
     var FOLD_QUOTED = "quoted";
-    function foldFlowLines(text, indent, mode = "flow", { indentAtStart, lineWidth = 80, minContentWidth = 20, onFold, onOverflow } = {}) {
+    function foldFlowLines(text4, indent, mode = "flow", { indentAtStart, lineWidth = 80, minContentWidth = 20, onFold, onOverflow } = {}) {
       if (!lineWidth || lineWidth < 0)
-        return text;
+        return text4;
       if (lineWidth < minContentWidth)
         minContentWidth = 0;
       const endStep = Math.max(1 + minContentWidth, 1 + lineWidth - indent.length);
-      if (text.length <= endStep)
-        return text;
+      if (text4.length <= endStep)
+        return text4;
       const folds = [];
       const escapedFolds = {};
       let end = lineWidth - indent.length;
@@ -1021,14 +1025,14 @@ var require_foldFlowLines = __commonJS({
       let escStart = -1;
       let escEnd = -1;
       if (mode === FOLD_BLOCK) {
-        i = consumeMoreIndentedLines(text, i, indent.length);
+        i = consumeMoreIndentedLines(text4, i, indent.length);
         if (i !== -1)
           end = i + endStep;
       }
-      for (let ch; ch = text[i += 1]; ) {
+      for (let ch; ch = text4[i += 1]; ) {
         if (mode === FOLD_QUOTED && ch === "\\") {
           escStart = i;
-          switch (text[i + 1]) {
+          switch (text4[i + 1]) {
             case "x":
               i += 3;
               break;
@@ -1045,12 +1049,12 @@ var require_foldFlowLines = __commonJS({
         }
         if (ch === "\n") {
           if (mode === FOLD_BLOCK)
-            i = consumeMoreIndentedLines(text, i, indent.length);
+            i = consumeMoreIndentedLines(text4, i, indent.length);
           end = i + indent.length + endStep;
           split = void 0;
         } else {
           if (ch === " " && prev && prev !== " " && prev !== "\n" && prev !== "	") {
-            const next = text[i + 1];
+            const next = text4[i + 1];
             if (next && next !== " " && next !== "\n" && next !== "	")
               split = i;
           }
@@ -1062,12 +1066,12 @@ var require_foldFlowLines = __commonJS({
             } else if (mode === FOLD_QUOTED) {
               while (prev === " " || prev === "	") {
                 prev = ch;
-                ch = text[i += 1];
+                ch = text4[i += 1];
                 overflow = true;
               }
               const j = i > escEnd + 1 ? i - 2 : escStart - 1;
               if (escapedFolds[j])
-                return text;
+                return text4;
               folds.push(j);
               escapedFolds[j] = true;
               end = j + endStep;
@@ -1082,39 +1086,39 @@ var require_foldFlowLines = __commonJS({
       if (overflow && onOverflow)
         onOverflow();
       if (folds.length === 0)
-        return text;
+        return text4;
       if (onFold)
         onFold();
-      let res = text.slice(0, folds[0]);
+      let res = text4.slice(0, folds[0]);
       for (let i2 = 0; i2 < folds.length; ++i2) {
         const fold = folds[i2];
-        const end2 = folds[i2 + 1] || text.length;
+        const end2 = folds[i2 + 1] || text4.length;
         if (fold === 0)
           res = `
-${indent}${text.slice(0, end2)}`;
+${indent}${text4.slice(0, end2)}`;
         else {
           if (mode === FOLD_QUOTED && escapedFolds[fold])
-            res += `${text[fold]}\\`;
+            res += `${text4[fold]}\\`;
           res += `
-${indent}${text.slice(fold + 1, end2)}`;
+${indent}${text4.slice(fold + 1, end2)}`;
         }
       }
       return res;
     }
-    function consumeMoreIndentedLines(text, i, indent) {
+    function consumeMoreIndentedLines(text4, i, indent) {
       let end = i;
       let start = i + 1;
-      let ch = text[start];
+      let ch = text4[start];
       while (ch === " " || ch === "	") {
         if (i < start + indent) {
-          ch = text[++i];
+          ch = text4[++i];
         } else {
           do {
-            ch = text[++i];
+            ch = text4[++i];
           } while (ch && ch !== "\n");
           end = i;
           start = i + 1;
-          ch = text[start];
+          ch = text4[start];
         }
       }
       return end;
@@ -1268,12 +1272,12 @@ ${indent}`) + "'";
       blockEndNewlines = /\n+(?!\n|$)/g;
     }
     function blockString({ comment, type, value }, ctx, onComment, onChompKeep) {
-      const { blockQuote, commentString, lineWidth } = ctx.options;
-      if (!blockQuote || /\n[\t ]+$/.test(value)) {
+      const { blockQuote: blockQuote2, commentString, lineWidth } = ctx.options;
+      if (!blockQuote2 || /\n[\t ]+$/.test(value)) {
         return quotedString(value, ctx);
       }
       const indent = ctx.indent || (ctx.forceBlockIndent || containsDocumentMarker(value) ? "  " : "");
-      const literal = blockQuote === "literal" ? true : blockQuote === "folded" || type === Scalar.Scalar.BLOCK_FOLDED ? false : type === Scalar.Scalar.BLOCK_LITERAL ? true : !lineLengthOverLimit(value, lineWidth, indent.length);
+      const literal = blockQuote2 === "literal" ? true : blockQuote2 === "folded" || type === Scalar.Scalar.BLOCK_FOLDED ? false : type === Scalar.Scalar.BLOCK_LITERAL ? true : !lineLengthOverLimit(value, lineWidth, indent.length);
       if (!value)
         return literal ? "|\n" : ">\n";
       let chomp;
@@ -1328,7 +1332,7 @@ ${indent}`) + "'";
         const foldedValue = value.replace(/\n+/g, "\n$&").replace(/(?:^|\n)([\t ].*)(?:([\n\t ]*)\n(?![\n\t ]))?/g, "$1$2").replace(/\n+/g, `$&${indent}`);
         let literalFallback = false;
         const foldOptions = getFoldOptions(ctx, true);
-        if (blockQuote !== "folded" && type !== Scalar.Scalar.BLOCK_FOLDED) {
+        if (blockQuote2 !== "folded" && type !== Scalar.Scalar.BLOCK_FOLDED) {
           foldOptions.onOverflow = () => {
             literalFallback = true;
           };
@@ -1486,16 +1490,16 @@ var require_stringify = __commonJS({
       }
       return tagObj;
     }
-    function stringifyProps(node, tagObj, { anchors: anchors$1, doc }) {
+    function stringifyProps(node2, tagObj, { anchors: anchors$1, doc }) {
       if (!doc.directives)
         return "";
       const props = [];
-      const anchor = (identity.isScalar(node) || identity.isCollection(node)) && node.anchor;
+      const anchor = (identity.isScalar(node2) || identity.isCollection(node2)) && node2.anchor;
       if (anchor && anchors.anchorIsValid(anchor)) {
         anchors$1.add(anchor);
         props.push(`&${anchor}`);
       }
-      const tag = node.tag ?? (tagObj.default ? null : tagObj.tag);
+      const tag = node2.tag ?? (tagObj.default ? null : tagObj.tag);
       if (tag)
         props.push(doc.directives.tagString(tag));
       return props.join(" ");
@@ -1517,15 +1521,15 @@ var require_stringify = __commonJS({
         }
       }
       let tagObj = void 0;
-      const node = identity.isNode(item) ? item : ctx.doc.createNode(item, { onTagObj: (o) => tagObj = o });
-      tagObj ?? (tagObj = getTagObject(ctx.doc.schema.tags, node));
-      const props = stringifyProps(node, tagObj, ctx);
+      const node2 = identity.isNode(item) ? item : ctx.doc.createNode(item, { onTagObj: (o) => tagObj = o });
+      tagObj ?? (tagObj = getTagObject(ctx.doc.schema.tags, node2));
+      const props = stringifyProps(node2, tagObj, ctx);
       if (props.length > 0)
         ctx.indentAtStart = (ctx.indentAtStart ?? 0) + props.length + 1;
-      const str = typeof tagObj.stringify === "function" ? tagObj.stringify(node, ctx, onComment, onChompKeep) : identity.isScalar(node) ? stringifyString.stringifyString(node, ctx, onComment, onChompKeep) : node.toString(ctx, onComment, onChompKeep);
+      const str = typeof tagObj.stringify === "function" ? tagObj.stringify(node2, ctx, onComment, onChompKeep) : identity.isScalar(node2) ? stringifyString.stringifyString(node2, ctx, onComment, onChompKeep) : node2.toString(ctx, onComment, onChompKeep);
       if (!props)
         return str;
-      return identity.isScalar(node) || str[0] === "{" || str[0] === "[" ? `${props} ${str}` : `${props}
+      return identity.isScalar(node2) || str[0] === "{" || str[0] === "[" ? `${props} ${str}` : `${props}
 ${ctx.indent}${str}`;
     }
     exports.createStringifyContext = createStringifyContext;
@@ -1633,8 +1637,8 @@ ${ctx.indent}`;
         const vs0 = valueStr[0];
         const nl0 = valueStr.indexOf("\n");
         const hasNewline = nl0 !== -1;
-        const flow = ctx.inFlow ?? value.flow ?? value.items.length === 0;
-        if (hasNewline || !flow) {
+        const flow3 = ctx.inFlow ?? value.flow ?? value.items.length === 0;
+        if (hasNewline || !flow3) {
           let hasPropsLine = false;
           if (hasNewline && (vs0 === "&" || vs0 === "!")) {
             let sp0 = valueStr.indexOf(" ");
@@ -1792,8 +1796,8 @@ var require_addPairToJSMap = __commonJS({
       if (identity.isNode(key) && ctx?.doc) {
         const strCtx = stringify.createStringifyContext(ctx.doc, {});
         strCtx.anchors = /* @__PURE__ */ new Set();
-        for (const node of ctx.anchors.keys())
-          strCtx.anchors.add(node.anchor);
+        for (const node2 of ctx.anchors.keys())
+          strCtx.anchors.add(node2.anchor);
         strCtx.inFlow = true;
         strCtx.inStringifyKey = true;
         const strKey = key.toString(strCtx);
@@ -1860,8 +1864,8 @@ var require_stringifyCollection = __commonJS({
     var stringify = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyCollection(collection, ctx, options) {
-      const flow = ctx.inFlow ?? collection.flow;
-      const stringify2 = flow ? stringifyFlowCollection : stringifyBlockCollection;
+      const flow3 = ctx.inFlow ?? collection.flow;
+      const stringify2 = flow3 ? stringifyFlowCollection : stringifyBlockCollection;
       return stringify2(collection, ctx, options);
     }
     function stringifyBlockCollection({ comment, items }, ctx, { blockItemPrefix, flowChars, itemIndent, onChompKeep, onComment }) {
@@ -2102,8 +2106,8 @@ var require_YAMLMap = __commonJS({
       }
       get(key, keepScalar) {
         const it = findPair(this.items, key);
-        const node = it?.value;
-        return (!keepScalar && identity.isScalar(node) ? node.value : node) ?? void 0;
+        const node2 = it?.value;
+        return (!keepScalar && identity.isScalar(node2) ? node2.value : node2) ?? void 0;
       }
       has(key) {
         return !!findPair(this.items, key);
@@ -2312,7 +2316,7 @@ var require_string = __commonJS({
   "node_modules/yaml/dist/schema/common/string.js"(exports) {
     "use strict";
     var stringifyString = require_stringifyString();
-    var string = {
+    var string3 = {
       identify: (value) => typeof value === "string",
       default: true,
       tag: "tag:yaml.org,2002:str",
@@ -2322,7 +2326,7 @@ var require_string = __commonJS({
         return stringifyString.stringifyString(item, ctx, onComment, onChompKeep);
       }
     };
-    exports.string = string;
+    exports.string = string3;
   }
 });
 
@@ -2416,9 +2420,9 @@ var require_float = __commonJS({
       format: "EXP",
       test: /^[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)[eE][-+]?[0-9]+$/,
       resolve: (str) => parseFloat(str),
-      stringify(node) {
-        const num = Number(node.value);
-        return isFinite(num) ? num.toExponential() : stringifyNumber.stringifyNumber(node);
+      stringify(node2) {
+        const num = Number(node2.value);
+        return isFinite(num) ? num.toExponential() : stringifyNumber.stringifyNumber(node2);
       }
     };
     var float = {
@@ -2427,11 +2431,11 @@ var require_float = __commonJS({
       tag: "tag:yaml.org,2002:float",
       test: /^[-+]?(?:\.[0-9]+|[0-9]+\.[0-9]*)$/,
       resolve(str) {
-        const node = new Scalar.Scalar(parseFloat(str));
+        const node2 = new Scalar.Scalar(parseFloat(str));
         const dot = str.indexOf(".");
         if (dot !== -1 && str[str.length - 1] === "0")
-          node.minFractionDigits = str.length - dot - 1;
-        return node;
+          node2.minFractionDigits = str.length - dot - 1;
+        return node2;
       },
       stringify: stringifyNumber.stringifyNumber
     };
@@ -2448,11 +2452,11 @@ var require_int = __commonJS({
     var stringifyNumber = require_stringifyNumber();
     var intIdentify = (value) => typeof value === "bigint" || Number.isInteger(value);
     var intResolve = (str, offset, radix, { intAsBigInt }) => intAsBigInt ? BigInt(str) : parseInt(str.substring(offset), radix);
-    function intStringify(node, radix, prefix) {
-      const { value } = node;
+    function intStringify(node2, radix, prefix) {
+      const { value } = node2;
       if (intIdentify(value) && value >= 0)
         return prefix + value.toString(radix);
-      return stringifyNumber.stringifyNumber(node);
+      return stringifyNumber.stringifyNumber(node2);
     }
     var intOct = {
       identify: (value) => intIdentify(value) && value >= 0,
@@ -2461,7 +2465,7 @@ var require_int = __commonJS({
       format: "OCT",
       test: /^0o[0-7]+$/,
       resolve: (str, _onError, opt) => intResolve(str, 2, 8, opt),
-      stringify: (node) => intStringify(node, 8, "0o")
+      stringify: (node2) => intStringify(node2, 8, "0o")
     };
     var int = {
       identify: intIdentify,
@@ -2478,7 +2482,7 @@ var require_int = __commonJS({
       format: "HEX",
       test: /^0x[0-9a-fA-F]+$/,
       resolve: (str, _onError, opt) => intResolve(str, 2, 16, opt),
-      stringify: (node) => intStringify(node, 16, "0x")
+      stringify: (node2) => intStringify(node2, 16, "0x")
     };
     exports.int = int;
     exports.intHex = intHex;
@@ -2493,14 +2497,14 @@ var require_schema = __commonJS({
     var map = require_map();
     var _null = require_null();
     var seq = require_seq();
-    var string = require_string();
+    var string3 = require_string();
     var bool = require_bool();
     var float = require_float();
     var int = require_int();
     var schema = [
       map.map,
       seq.seq,
-      string.string,
+      string3.string,
       _null.nullTag,
       bool.boolTag,
       int.intOct,
@@ -2856,9 +2860,9 @@ var require_float2 = __commonJS({
       format: "EXP",
       test: /^[-+]?(?:[0-9][0-9_]*)?(?:\.[0-9_]*)?[eE][-+]?[0-9]+$/,
       resolve: (str) => parseFloat(str.replace(/_/g, "")),
-      stringify(node) {
-        const num = Number(node.value);
-        return isFinite(num) ? num.toExponential() : stringifyNumber.stringifyNumber(node);
+      stringify(node2) {
+        const num = Number(node2.value);
+        return isFinite(num) ? num.toExponential() : stringifyNumber.stringifyNumber(node2);
       }
     };
     var float = {
@@ -2867,14 +2871,14 @@ var require_float2 = __commonJS({
       tag: "tag:yaml.org,2002:float",
       test: /^[-+]?(?:[0-9][0-9_]*)?\.[0-9_]*$/,
       resolve(str) {
-        const node = new Scalar.Scalar(parseFloat(str.replace(/_/g, "")));
+        const node2 = new Scalar.Scalar(parseFloat(str.replace(/_/g, "")));
         const dot = str.indexOf(".");
         if (dot !== -1) {
           const f = str.substring(dot + 1).replace(/_/g, "");
           if (f[f.length - 1] === "0")
-            node.minFractionDigits = f.length;
+            node2.minFractionDigits = f.length;
         }
-        return node;
+        return node2;
       },
       stringify: stringifyNumber.stringifyNumber
     };
@@ -2913,13 +2917,13 @@ var require_int2 = __commonJS({
       const n = parseInt(str, radix);
       return sign === "-" ? -1 * n : n;
     }
-    function intStringify(node, radix, prefix) {
-      const { value } = node;
+    function intStringify(node2, radix, prefix) {
+      const { value } = node2;
       if (intIdentify(value)) {
         const str = value.toString(radix);
         return value < 0 ? "-" + prefix + str.substr(1) : prefix + str;
       }
-      return stringifyNumber.stringifyNumber(node);
+      return stringifyNumber.stringifyNumber(node2);
     }
     var intBin = {
       identify: intIdentify,
@@ -2928,7 +2932,7 @@ var require_int2 = __commonJS({
       format: "BIN",
       test: /^[-+]?0b[0-1_]+$/,
       resolve: (str, _onError, opt) => intResolve(str, 2, 2, opt),
-      stringify: (node) => intStringify(node, 2, "0b")
+      stringify: (node2) => intStringify(node2, 2, "0b")
     };
     var intOct = {
       identify: intIdentify,
@@ -2937,7 +2941,7 @@ var require_int2 = __commonJS({
       format: "OCT",
       test: /^[-+]?0[0-7_]+$/,
       resolve: (str, _onError, opt) => intResolve(str, 1, 8, opt),
-      stringify: (node) => intStringify(node, 8, "0")
+      stringify: (node2) => intStringify(node2, 8, "0")
     };
     var int = {
       identify: intIdentify,
@@ -2954,7 +2958,7 @@ var require_int2 = __commonJS({
       format: "HEX",
       test: /^[-+]?0x[0-9a-fA-F_]+$/,
       resolve: (str, _onError, opt) => intResolve(str, 2, 16, opt),
-      stringify: (node) => intStringify(node, 16, "0x")
+      stringify: (node2) => intStringify(node2, 16, "0x")
     };
     exports.int = int;
     exports.intBin = intBin;
@@ -3064,13 +3068,13 @@ var require_timestamp = __commonJS({
       const res = parts.replace(/_/g, "").split(":").reduce((res2, p) => res2 * num(60) + num(p), num(0));
       return sign === "-" ? num(-1) * res : res;
     }
-    function stringifySexagesimal(node) {
-      let { value } = node;
+    function stringifySexagesimal(node2) {
+      let { value } = node2;
       let num = (n) => n;
       if (typeof value === "bigint")
         num = (n) => BigInt(n);
       else if (isNaN(value) || !isFinite(value))
-        return stringifyNumber.stringifyNumber(node);
+        return stringifyNumber.stringifyNumber(node2);
       let sign = "";
       if (value < 0) {
         sign = "-";
@@ -3147,7 +3151,7 @@ var require_schema3 = __commonJS({
     var map = require_map();
     var _null = require_null();
     var seq = require_seq();
-    var string = require_string();
+    var string3 = require_string();
     var binary = require_binary();
     var bool = require_bool2();
     var float = require_float2();
@@ -3160,7 +3164,7 @@ var require_schema3 = __commonJS({
     var schema = [
       map.map,
       seq.seq,
-      string.string,
+      string3.string,
       _null.nullTag,
       bool.trueTag,
       bool.falseTag,
@@ -3191,7 +3195,7 @@ var require_tags = __commonJS({
     var map = require_map();
     var _null = require_null();
     var seq = require_seq();
-    var string = require_string();
+    var string3 = require_string();
     var bool = require_bool();
     var float = require_float();
     var int = require_int();
@@ -3206,7 +3210,7 @@ var require_tags = __commonJS({
     var timestamp = require_timestamp();
     var schemas = /* @__PURE__ */ new Map([
       ["core", schema.schema],
-      ["failsafe", [map.map, seq.seq, string.string]],
+      ["failsafe", [map.map, seq.seq, string3.string]],
       ["json", schema$1.schema],
       ["yaml11", schema$2.schema],
       ["yaml-1.1", schema$2.schema]
@@ -3285,7 +3289,7 @@ var require_Schema = __commonJS({
     var identity = require_identity();
     var map = require_map();
     var seq = require_seq();
-    var string = require_string();
+    var string3 = require_string();
     var tags = require_tags();
     var sortMapEntriesByKey = (a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
     var Schema = class _Schema {
@@ -3296,7 +3300,7 @@ var require_Schema = __commonJS({
         this.tags = tags.getTags(customTags, this.name, merge);
         this.toStringOptions = toStringDefaults ?? null;
         Object.defineProperty(this, identity.MAP, { value: map.map });
-        Object.defineProperty(this, identity.SCALAR, { value: string.string });
+        Object.defineProperty(this, identity.SCALAR, { value: string3.string });
         Object.defineProperty(this, identity.SEQ, { value: seq.seq });
         this.sortMapEntries = typeof sortMapEntries === "function" ? sortMapEntries : sortMapEntries === true ? sortMapEntriesByKey : null;
       }
@@ -3481,13 +3485,13 @@ var require_Document = __commonJS({
        * `name` will be used as a prefix for a new unique anchor.
        * If `name` is undefined, the generated anchor will use 'a' as a prefix.
        */
-      createAlias(node, name) {
-        if (!node.anchor) {
+      createAlias(node2, name) {
+        if (!node2.anchor) {
           const prev = anchors.anchorNames(this);
-          node.anchor = // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+          node2.anchor = // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
           !name || prev.has(name) ? anchors.findNewAnchor(name || "a", prev) : name;
         }
-        return new Alias.Alias(node.anchor);
+        return new Alias.Alias(node2.anchor);
       }
       createNode(value, replacer, options) {
         let _replacer = void 0;
@@ -3504,7 +3508,7 @@ var require_Document = __commonJS({
           options = replacer;
           replacer = void 0;
         }
-        const { aliasDuplicateObjects, anchorPrefix, flow, keepUndefined, onTagObj, tag } = options ?? {};
+        const { aliasDuplicateObjects, anchorPrefix, flow: flow3, keepUndefined, onTagObj, tag } = options ?? {};
         const { onAnchor, setAnchors, sourceObjects } = anchors.createNodeAnchors(
           this,
           // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
@@ -3519,11 +3523,11 @@ var require_Document = __commonJS({
           schema: this.schema,
           sourceObjects
         };
-        const node = createNode.createNode(value, tag, ctx);
-        if (flow && identity.isCollection(node))
-          node.flow = true;
+        const node2 = createNode.createNode(value, tag, ctx);
+        if (flow3 && identity.isCollection(node2))
+          node2.flow = true;
         setAnchors();
-        return node;
+        return node2;
       }
       /**
        * Convert a key and a value into a `Pair` using the current schema,
@@ -3768,7 +3772,7 @@ ${pointer}
 var require_resolve_props = __commonJS({
   "node_modules/yaml/dist/compose/resolve-props.js"(exports) {
     "use strict";
-    function resolveProps(tokens, { flow, indicator, next, offset, onError, parentIndent, startOnNewline }) {
+    function resolveProps(tokens, { flow: flow3, indicator, next, offset, onError, parentIndent, startOnNewline }) {
       let spaceBefore = false;
       let atNewline = startOnNewline;
       let hasSpace = startOnNewline;
@@ -3797,7 +3801,7 @@ var require_resolve_props = __commonJS({
         }
         switch (token.type) {
           case "space":
-            if (!flow && (indicator !== "doc-start" || next?.type !== "flow-collection") && token.source.includes("	")) {
+            if (!flow3 && (indicator !== "doc-start" || next?.type !== "flow-collection") && token.source.includes("	")) {
               tab = token;
             }
             hasSpace = true;
@@ -3853,15 +3857,15 @@ var require_resolve_props = __commonJS({
             if (anchor || tag)
               onError(token, "BAD_PROP_ORDER", `Anchors and tags must be after the ${token.source} indicator`);
             if (found)
-              onError(token, "UNEXPECTED_TOKEN", `Unexpected ${token.source} in ${flow ?? "collection"}`);
+              onError(token, "UNEXPECTED_TOKEN", `Unexpected ${token.source} in ${flow3 ?? "collection"}`);
             found = token;
             atNewline = indicator === "seq-item-ind" || indicator === "explicit-key-ind";
             hasSpace = false;
             break;
           case "comma":
-            if (flow) {
+            if (flow3) {
               if (comma)
-                onError(token, "UNEXPECTED_TOKEN", `Unexpected , in ${flow}`);
+                onError(token, "UNEXPECTED_TOKEN", `Unexpected , in ${flow3}`);
               comma = token;
               atNewline = false;
               hasSpace = false;
@@ -3963,12 +3967,12 @@ var require_util_map_includes = __commonJS({
   "node_modules/yaml/dist/compose/util-map-includes.js"(exports) {
     "use strict";
     var identity = require_identity();
-    function mapIncludes(ctx, items, search) {
+    function mapIncludes(ctx, items, search2) {
       const { uniqueKeys } = ctx.options;
       if (uniqueKeys === false)
         return false;
       const isEqual = typeof uniqueKeys === "function" ? uniqueKeys : (a, b) => a === b || identity.isScalar(a) && identity.isScalar(b) && a.value === b.value;
-      return items.some((pair) => isEqual(pair.key, search));
+      return items.some((pair) => isEqual(pair.key, search2));
     }
     exports.mapIncludes = mapIncludes;
   }
@@ -3993,10 +3997,10 @@ var require_resolve_block_map = __commonJS({
       let offset = bm.offset;
       let commentEnd = null;
       for (const collItem of bm.items) {
-        const { start, key, sep: sep6, value } = collItem;
+        const { start, key, sep: sep11, value } = collItem;
         const keyProps = resolveProps.resolveProps(start, {
           indicator: "explicit-key-ind",
-          next: key ?? sep6?.[0],
+          next: key ?? sep11?.[0],
           offset,
           onError,
           parentIndent: bm.indent,
@@ -4010,7 +4014,7 @@ var require_resolve_block_map = __commonJS({
             else if ("indent" in key && key.indent !== bm.indent)
               onError(offset, "BAD_INDENT", startColMsg);
           }
-          if (!keyProps.anchor && !keyProps.tag && !sep6) {
+          if (!keyProps.anchor && !keyProps.tag && !sep11) {
             commentEnd = keyProps.end;
             if (keyProps.comment) {
               if (map.comment)
@@ -4034,7 +4038,7 @@ var require_resolve_block_map = __commonJS({
         ctx.atKey = false;
         if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
           onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
-        const valueProps = resolveProps.resolveProps(sep6 ?? [], {
+        const valueProps = resolveProps.resolveProps(sep11 ?? [], {
           indicator: "map-value-ind",
           next: value,
           offset: keyNode.range[2],
@@ -4050,7 +4054,7 @@ var require_resolve_block_map = __commonJS({
             if (ctx.options.strict && keyProps.start < valueProps.found.offset - 1024)
               onError(keyNode.range, "KEY_OVER_1024_CHARS", "The : indicator must be at most 1024 chars after the start of an implicit block mapping key");
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep6, null, valueProps, onError);
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep11, null, valueProps, onError);
           if (ctx.schema.compat)
             utilFlowIndentCheck.flowIndentCheck(bm.indent, value, onError);
           offset = valueNode.range[2];
@@ -4120,11 +4124,11 @@ var require_resolve_block_seq = __commonJS({
             continue;
           }
         }
-        const node = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, start, null, props, onError);
+        const node2 = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, start, null, props, onError);
         if (ctx.schema.compat)
           utilFlowIndentCheck.flowIndentCheck(bs.indent, value, onError);
-        offset = node.range[2];
-        seq.items.push(node);
+        offset = node2.range[2];
+        seq.items.push(node2);
       }
       seq.range = [bs.offset, offset, commentEnd ?? offset];
       return seq;
@@ -4141,7 +4145,7 @@ var require_resolve_end = __commonJS({
       let comment = "";
       if (end) {
         let hasSpace = false;
-        let sep6 = "";
+        let sep11 = "";
         for (const token of end) {
           const { source, type } = token;
           switch (type) {
@@ -4155,13 +4159,13 @@ var require_resolve_end = __commonJS({
               if (!comment)
                 comment = cb;
               else
-                comment += sep6 + cb;
-              sep6 = "";
+                comment += sep11 + cb;
+              sep11 = "";
               break;
             }
             case "newline":
               if (comment)
-                sep6 += source;
+                sep11 += source;
               hasSpace = true;
               break;
             default:
@@ -4204,18 +4208,18 @@ var require_resolve_flow_collection = __commonJS({
       let offset = fc.offset + fc.start.source.length;
       for (let i = 0; i < fc.items.length; ++i) {
         const collItem = fc.items[i];
-        const { start, key, sep: sep6, value } = collItem;
+        const { start, key, sep: sep11, value } = collItem;
         const props = resolveProps.resolveProps(start, {
           flow: fcName,
           indicator: "explicit-key-ind",
-          next: key ?? sep6?.[0],
+          next: key ?? sep11?.[0],
           offset,
           onError,
           parentIndent: fc.indent,
           startOnNewline: false
         });
         if (!props.found) {
-          if (!props.anchor && !props.tag && !sep6 && !value) {
+          if (!props.anchor && !props.tag && !sep11 && !value) {
             if (i === 0 && props.comma)
               onError(props.comma, "UNEXPECTED_TOKEN", `Unexpected , in ${fcName}`);
             else if (i < fc.items.length - 1)
@@ -4269,8 +4273,8 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap2 && !sep6 && !props.found) {
-          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep6, null, props, onError);
+        if (!isMap2 && !sep11 && !props.found) {
+          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep11, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
           if (isBlock(value))
@@ -4282,7 +4286,7 @@ var require_resolve_flow_collection = __commonJS({
           if (isBlock(key))
             onError(keyNode.range, "BLOCK_IN_FLOW", blockMsg);
           ctx.atKey = false;
-          const valueProps = resolveProps.resolveProps(sep6 ?? [], {
+          const valueProps = resolveProps.resolveProps(sep11 ?? [], {
             flow: fcName,
             indicator: "map-value-ind",
             next: value,
@@ -4293,8 +4297,8 @@ var require_resolve_flow_collection = __commonJS({
           });
           if (valueProps.found) {
             if (!isMap2 && !props.found && ctx.options.strict) {
-              if (sep6)
-                for (const st of sep6) {
+              if (sep11)
+                for (const st of sep11) {
                   if (st === valueProps.found)
                     break;
                   if (st.type === "newline") {
@@ -4311,7 +4315,7 @@ var require_resolve_flow_collection = __commonJS({
             else
               onError(valueProps.start, "MISSING_CHAR", `Missing , or : between ${fcName} items`);
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep6, null, valueProps, onError) : null;
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep11, null, valueProps, onError) : null;
           if (valueNode) {
             if (isBlock(value))
               onError(valueNode.range, "BLOCK_IN_FLOW", blockMsg);
@@ -4424,12 +4428,12 @@ var require_compose_collection = __commonJS({
       }
       const coll = resolveCollection(CN, ctx, token, onError, tagName, tag);
       const res = tag.resolve?.(coll, (msg) => onError(tagToken, "TAG_RESOLVE_FAILED", msg), ctx.options) ?? coll;
-      const node = identity.isNode(res) ? res : new Scalar.Scalar(res);
-      node.range = coll.range;
-      node.tag = tagName;
+      const node2 = identity.isNode(res) ? res : new Scalar.Scalar(res);
+      node2.range = coll.range;
+      node2.tag = tagName;
       if (tag?.format)
-        node.format = tag.format;
-      return node;
+        node2.format = tag.format;
+      return node2;
     }
     exports.composeCollection = composeCollection;
   }
@@ -4449,8 +4453,8 @@ var require_resolve_block_scalar = __commonJS({
       const lines = scalar.source ? splitLines(scalar.source) : [];
       let chompStart = lines.length;
       for (let i = lines.length - 1; i >= 0; --i) {
-        const content = lines[i][1];
-        if (content === "" || content === "\r")
+        const content3 = lines[i][1];
+        if (content3 === "" || content3 === "\r")
           chompStart = i;
         else
           break;
@@ -4466,8 +4470,8 @@ var require_resolve_block_scalar = __commonJS({
       let offset = scalar.offset + header.length;
       let contentStart = 0;
       for (let i = 0; i < chompStart; ++i) {
-        const [indent, content] = lines[i];
-        if (content === "" || content === "\r") {
+        const [indent, content3] = lines[i];
+        if (content3 === "" || content3 === "\r") {
           if (header.indent === 0 && indent.length > trimIndent)
             trimIndent = indent.length;
         } else {
@@ -4484,48 +4488,48 @@ var require_resolve_block_scalar = __commonJS({
           }
           break;
         }
-        offset += indent.length + content.length + 1;
+        offset += indent.length + content3.length + 1;
       }
       for (let i = lines.length - 1; i >= chompStart; --i) {
         if (lines[i][0].length > trimIndent)
           chompStart = i + 1;
       }
       let value = "";
-      let sep6 = "";
+      let sep11 = "";
       let prevMoreIndented = false;
       for (let i = 0; i < contentStart; ++i)
         value += lines[i][0].slice(trimIndent) + "\n";
       for (let i = contentStart; i < chompStart; ++i) {
-        let [indent, content] = lines[i];
-        offset += indent.length + content.length + 1;
-        const crlf = content[content.length - 1] === "\r";
+        let [indent, content3] = lines[i];
+        offset += indent.length + content3.length + 1;
+        const crlf = content3[content3.length - 1] === "\r";
         if (crlf)
-          content = content.slice(0, -1);
-        if (content && indent.length < trimIndent) {
+          content3 = content3.slice(0, -1);
+        if (content3 && indent.length < trimIndent) {
           const src = header.indent ? "explicit indentation indicator" : "first line";
           const message = `Block scalar lines must not be less indented than their ${src}`;
-          onError(offset - content.length - (crlf ? 2 : 1), "BAD_INDENT", message);
+          onError(offset - content3.length - (crlf ? 2 : 1), "BAD_INDENT", message);
           indent = "";
         }
         if (type === Scalar.Scalar.BLOCK_LITERAL) {
-          value += sep6 + indent.slice(trimIndent) + content;
-          sep6 = "\n";
-        } else if (indent.length > trimIndent || content[0] === "	") {
-          if (sep6 === " ")
-            sep6 = "\n";
-          else if (!prevMoreIndented && sep6 === "\n")
-            sep6 = "\n\n";
-          value += sep6 + indent.slice(trimIndent) + content;
-          sep6 = "\n";
+          value += sep11 + indent.slice(trimIndent) + content3;
+          sep11 = "\n";
+        } else if (indent.length > trimIndent || content3[0] === "	") {
+          if (sep11 === " ")
+            sep11 = "\n";
+          else if (!prevMoreIndented && sep11 === "\n")
+            sep11 = "\n\n";
+          value += sep11 + indent.slice(trimIndent) + content3;
+          sep11 = "\n";
           prevMoreIndented = true;
-        } else if (content === "") {
-          if (sep6 === "\n")
+        } else if (content3 === "") {
+          if (sep11 === "\n")
             value += "\n";
           else
-            sep6 = "\n";
+            sep11 = "\n";
         } else {
-          value += sep6 + content;
-          sep6 = " ";
+          value += sep11 + content3;
+          sep11 = " ";
           prevMoreIndented = false;
         }
       }
@@ -4707,25 +4711,25 @@ var require_resolve_flow_scalar = __commonJS({
       if (!match)
         return source;
       let res = match[1];
-      let sep6 = " ";
+      let sep11 = " ";
       let pos = first.lastIndex;
       line.lastIndex = pos;
       while (match = line.exec(source)) {
         if (match[1] === "") {
-          if (sep6 === "\n")
-            res += sep6;
+          if (sep11 === "\n")
+            res += sep11;
           else
-            sep6 = "\n";
+            sep11 = "\n";
         } else {
-          res += sep6 + match[1];
-          sep6 = " ";
+          res += sep11 + match[1];
+          sep11 = " ";
         }
         pos = line.lastIndex;
       }
       const last = /[ \t]*(.*)/sy;
       last.lastIndex = pos;
       match = last.exec(source);
-      return res + sep6 + (match?.[1] ?? "");
+      return res + sep11 + (match?.[1] ?? "");
     }
     function doubleQuotedValue(source, onError) {
       let res = "";
@@ -4963,11 +4967,11 @@ var require_compose_node = __commonJS({
     function composeNode(ctx, token, props, onError) {
       const atKey = ctx.atKey;
       const { spaceBefore, comment, anchor, tag } = props;
-      let node;
+      let node2;
       let isSrcToken = true;
       switch (token.type) {
         case "alias":
-          node = composeAlias(ctx, token, onError);
+          node2 = composeAlias(ctx, token, onError);
           if (anchor || tag)
             onError(token, "ALIAS_PROPS", "An alias node must not specify any properties");
           break;
@@ -4975,17 +4979,17 @@ var require_compose_node = __commonJS({
         case "single-quoted-scalar":
         case "double-quoted-scalar":
         case "block-scalar":
-          node = composeScalar.composeScalar(ctx, token, tag, onError);
+          node2 = composeScalar.composeScalar(ctx, token, tag, onError);
           if (anchor)
-            node.anchor = anchor.source.substring(1);
+            node2.anchor = anchor.source.substring(1);
           break;
         case "block-map":
         case "block-seq":
         case "flow-collection":
           try {
-            node = composeCollection.composeCollection(CN, ctx, token, props, onError);
+            node2 = composeCollection.composeCollection(CN, ctx, token, props, onError);
             if (anchor)
-              node.anchor = anchor.source.substring(1);
+              node2.anchor = anchor.source.substring(1);
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             onError(token, "RESOURCE_EXHAUSTION", message);
@@ -4997,24 +5001,24 @@ var require_compose_node = __commonJS({
           isSrcToken = false;
         }
       }
-      node ?? (node = composeEmptyNode(ctx, token.offset, void 0, null, props, onError));
-      if (anchor && node.anchor === "")
+      node2 ?? (node2 = composeEmptyNode(ctx, token.offset, void 0, null, props, onError));
+      if (anchor && node2.anchor === "")
         onError(anchor, "BAD_ALIAS", "Anchor cannot be an empty string");
-      if (atKey && ctx.options.stringKeys && (!identity.isScalar(node) || typeof node.value !== "string" || node.tag && node.tag !== "tag:yaml.org,2002:str")) {
+      if (atKey && ctx.options.stringKeys && (!identity.isScalar(node2) || typeof node2.value !== "string" || node2.tag && node2.tag !== "tag:yaml.org,2002:str")) {
         const msg = "With stringKeys, all keys must be strings";
         onError(tag ?? token, "NON_STRING_KEY", msg);
       }
       if (spaceBefore)
-        node.spaceBefore = true;
+        node2.spaceBefore = true;
       if (comment) {
         if (token.type === "scalar" && token.source === "")
-          node.comment = comment;
+          node2.comment = comment;
         else
-          node.commentBefore = comment;
+          node2.commentBefore = comment;
       }
       if (ctx.options.keepSourceTokens && isSrcToken)
-        node.srcToken = token;
-      return node;
+        node2.srcToken = token;
+      return node2;
     }
     function composeEmptyNode(ctx, offset, before, pos, { spaceBefore, comment, anchor, tag, end }, onError) {
       const token = {
@@ -5023,19 +5027,19 @@ var require_compose_node = __commonJS({
         indent: -1,
         source: ""
       };
-      const node = composeScalar.composeScalar(ctx, token, tag, onError);
+      const node2 = composeScalar.composeScalar(ctx, token, tag, onError);
       if (anchor) {
-        node.anchor = anchor.source.substring(1);
-        if (node.anchor === "")
+        node2.anchor = anchor.source.substring(1);
+        if (node2.anchor === "")
           onError(anchor, "BAD_ALIAS", "Anchor cannot be an empty string");
       }
       if (spaceBefore)
-        node.spaceBefore = true;
+        node2.spaceBefore = true;
       if (comment) {
-        node.comment = comment;
-        node.range[2] = end;
+        node2.comment = comment;
+        node2.range[2] = end;
       }
-      return node;
+      return node2;
     }
     function composeAlias({ options }, { offset, source, end }, onError) {
       const alias = new Alias.Alias(source.substring(1));
@@ -5535,14 +5539,14 @@ var require_cst_stringify = __commonJS({
         }
       }
     }
-    function stringifyItem({ start, key, sep: sep6, value }) {
+    function stringifyItem({ start, key, sep: sep11, value }) {
       let res = "";
       for (const st of start)
         res += st.source;
       if (key)
         res += stringifyToken(key);
-      if (sep6)
-        for (const st of sep6)
+      if (sep11)
+        for (const st of sep11)
           res += st.source;
       if (value)
         res += stringifyToken(value);
@@ -5569,10 +5573,10 @@ var require_cst_visit = __commonJS({
     visit.REMOVE = REMOVE;
     visit.itemAtPath = (cst, path) => {
       let item = cst;
-      for (const [field, index] of path) {
+      for (const [field, index2] of path) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
-          item = tok.items[index];
+          item = tok.items[index2];
         } else
           return void 0;
       }
@@ -6343,15 +6347,15 @@ var require_parser = __commonJS({
     var node_process = __require("process");
     var cst = require_cst();
     var lexer = require_lexer();
-    function includesToken(list, type) {
-      for (let i = 0; i < list.length; ++i)
-        if (list[i].type === type)
+    function includesToken(list2, type) {
+      for (let i = 0; i < list2.length; ++i)
+        if (list2[i].type === type)
           return true;
       return false;
     }
-    function findNonEmptyIndex(list) {
-      for (let i = 0; i < list.length; ++i) {
-        switch (list[i].type) {
+    function findNonEmptyIndex(list2) {
+      for (let i = 0; i < list2.length; ++i) {
+        switch (list2[i].type) {
           case "space":
           case "comment":
           case "newline":
@@ -6709,18 +6713,18 @@ var require_parser = __commonJS({
         if (this.type === "map-value-ind") {
           const prev = getPrevProps(this.peek(2));
           const start = getFirstKeyStartProps(prev);
-          let sep6;
+          let sep11;
           if (scalar.end) {
-            sep6 = scalar.end;
-            sep6.push(this.sourceToken);
+            sep11 = scalar.end;
+            sep11.push(this.sourceToken);
             delete scalar.end;
           } else
-            sep6 = [this.sourceToken];
+            sep11 = [this.sourceToken];
           const map = {
             type: "block-map",
             offset: scalar.offset,
             indent: scalar.indent,
-            items: [{ start, key: scalar, sep: sep6 }]
+            items: [{ start, key: scalar, sep: sep11 }]
           };
           this.onKeyLine = true;
           this.stack[this.stack.length - 1] = map;
@@ -6873,15 +6877,15 @@ var require_parser = __commonJS({
                 } else if (isFlowToken(it.key) && !includesToken(it.sep, "newline")) {
                   const start2 = getFirstKeyStartProps(it.start);
                   const key = it.key;
-                  const sep6 = it.sep;
-                  sep6.push(this.sourceToken);
+                  const sep11 = it.sep;
+                  sep11.push(this.sourceToken);
                   delete it.key;
                   delete it.sep;
                   this.stack.push({
                     type: "block-map",
                     offset: this.offset,
                     indent: this.indent,
-                    items: [{ start: start2, key, sep: sep6 }]
+                    items: [{ start: start2, key, sep: sep11 }]
                   });
                 } else if (start.length > 0) {
                   it.sep = it.sep.concat(start, this.sourceToken);
@@ -7075,13 +7079,13 @@ var require_parser = __commonJS({
             const prev = getPrevProps(parent);
             const start = getFirstKeyStartProps(prev);
             fixFlowSeqItems(fc);
-            const sep6 = fc.end.splice(1, fc.end.length);
-            sep6.push(this.sourceToken);
+            const sep11 = fc.end.splice(1, fc.end.length);
+            sep11.push(this.sourceToken);
             const map = {
               type: "block-map",
               offset: fc.offset,
               indent: fc.indent,
-              items: [{ start, key: fc, sep: sep6 }]
+              items: [{ start, key: fc, sep: sep11 }]
             };
             this.onKeyLine = true;
             this.stack[this.stack.length - 1] = map;
@@ -7240,7 +7244,7 @@ var require_public_api = __commonJS({
         return docs;
       return Object.assign([], { empty: true }, composer$1.streamInfo());
     }
-    function parseDocument2(source, options = {}) {
+    function parseDocument3(source, options = {}) {
       const { lineCounter: lineCounter2, prettyErrors } = parseOptions(options);
       const parser$1 = new parser.Parser(lineCounter2?.addNewLine);
       const composer$1 = new composer.Composer(options);
@@ -7259,14 +7263,14 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse(src, reviver, options) {
+    function parse2(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
       } else if (options === void 0 && reviver && typeof reviver === "object") {
         options = reviver;
       }
-      const doc = parseDocument2(src, options);
+      const doc = parseDocument3(src, options);
       if (!doc)
         return null;
       doc.warnings.forEach((warning) => log.warn(doc.options.logLevel, warning));
@@ -7300,9 +7304,9 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports.parse = parse;
+    exports.parse = parse2;
     exports.parseAllDocuments = parseAllDocuments;
-    exports.parseDocument = parseDocument2;
+    exports.parseDocument = parseDocument3;
     exports.stringify = stringify;
   }
 });
@@ -8166,8 +8170,8 @@ var require_codegen = __commonJS({
       endIf() {
         return this._endBlockNode(If, Else);
       }
-      _for(node, forBody) {
-        this._blockNode(node);
+      _for(node2, forBody) {
+        this._blockNode(node2);
         if (forBody)
           this.code(forBody).endFor();
         return this;
@@ -8216,10 +8220,10 @@ var require_codegen = __commonJS({
       }
       // `return` statement
       return(value) {
-        const node = new Return();
-        this._blockNode(node);
+        const node2 = new Return();
+        this._blockNode(node2);
         this.code(value);
-        if (node.nodes.length !== 1)
+        if (node2.nodes.length !== 1)
           throw new Error('CodeGen: "return" should have one node');
         return this._endBlockNode(Return);
       }
@@ -8227,16 +8231,16 @@ var require_codegen = __commonJS({
       try(tryBody, catchCode, finallyCode) {
         if (!catchCode && !finallyCode)
           throw new Error('CodeGen: "try" without "catch" and "finally"');
-        const node = new Try();
-        this._blockNode(node);
+        const node2 = new Try();
+        this._blockNode(node2);
         this.code(tryBody);
         if (catchCode) {
           const error = this.name("e");
-          this._currNode = node.catch = new Catch(error);
+          this._currNode = node2.catch = new Catch(error);
           catchCode(error);
         }
         if (finallyCode) {
-          this._currNode = node.finally = new Finally();
+          this._currNode = node2.finally = new Finally();
           this.code(finallyCode);
         }
         return this._endBlockNode(Catch, Finally);
@@ -8281,13 +8285,13 @@ var require_codegen = __commonJS({
           this._root.optimizeNames(this._root.names, this._constants);
         }
       }
-      _leafNode(node) {
-        this._currNode.nodes.push(node);
+      _leafNode(node2) {
+        this._currNode.nodes.push(node2);
         return this;
       }
-      _blockNode(node) {
-        this._currNode.nodes.push(node);
-        this._nodes.push(node);
+      _blockNode(node2) {
+        this._currNode.nodes.push(node2);
+        this._nodes.push(node2);
       }
       _endBlockNode(N1, N2) {
         const n = this._currNode;
@@ -8297,12 +8301,12 @@ var require_codegen = __commonJS({
         }
         throw new Error(`CodeGen: not in block "${N2 ? `${N1.kind}/${N2.kind}` : N1.kind}"`);
       }
-      _elseNode(node) {
+      _elseNode(node2) {
         const n = this._currNode;
         if (!(n instanceof If)) {
           throw new Error('CodeGen: "else" without "if"');
         }
-        this._currNode = n.else = node;
+        this._currNode = n.else = node2;
         return this;
       }
       get _root() {
@@ -8312,9 +8316,9 @@ var require_codegen = __commonJS({
         const ns = this._nodes;
         return ns[ns.length - 1];
       }
-      set _currNode(node) {
+      set _currNode(node2) {
         const ns = this._nodes;
-        ns[ns.length - 1] = node;
+        ns[ns.length - 1] = node2;
       }
     };
     exports.CodeGen = CodeGen;
@@ -8387,10 +8391,10 @@ var require_util = __commonJS({
     var codegen_1 = require_codegen();
     var code_1 = require_code();
     function toHash(arr) {
-      const hash = {};
+      const hash4 = {};
       for (const item of arr)
-        hash[item] = true;
-      return hash;
+        hash4[item] = true;
+      return hash4;
     }
     exports.toHash = toHash;
     function alwaysValidSchema(it, schema) {
@@ -9561,15 +9565,15 @@ var require_resolve = __commonJS({
       }
       return count;
     }
-    function getFullPath(resolver, id = "", normalize2) {
+    function getFullPath(resolver2, id = "", normalize2) {
       if (normalize2 !== false)
         id = normalizeId(id);
-      const p = resolver.parse(id);
-      return _getFullPath(resolver, p);
+      const p = resolver2.parse(id);
+      return _getFullPath(resolver2, p);
     }
     exports.getFullPath = getFullPath;
-    function _getFullPath(resolver, p) {
-      const serialized = resolver.serialize(p);
+    function _getFullPath(resolver2, p) {
+      const serialized = resolver2.serialize(p);
       return serialized.split("#")[0] + "#";
     }
     exports._getFullPath = _getFullPath;
@@ -9578,9 +9582,9 @@ var require_resolve = __commonJS({
       return id ? id.replace(TRAILING_SLASH_HASH, "") : "";
     }
     exports.normalizeId = normalizeId;
-    function resolveUrl(resolver, baseId, id) {
+    function resolveUrl(resolver2, baseId, id) {
       id = normalizeId(id);
-      return resolver.resolve(baseId, id);
+      return resolver2.resolve(baseId, id);
     }
     exports.resolveUrl = resolveUrl;
     var ANCHOR = /^[a-z_][-a-z0-9._]*$/i;
@@ -10176,10 +10180,10 @@ var require_ref_error = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     var resolve_1 = require_resolve();
     var MissingRefError = class extends Error {
-      constructor(resolver, baseId, ref, msg) {
+      constructor(resolver2, baseId, ref, msg) {
         super(msg || `can't resolve reference ${ref} from id ${baseId}`);
-        this.missingRef = (0, resolve_1.resolveUrl)(resolver, baseId, ref);
-        this.missingSchema = (0, resolve_1.normalizeId)((0, resolve_1.getFullPath)(resolver, this.missingRef));
+        this.missingRef = (0, resolve_1.resolveUrl)(resolver2, baseId, ref);
+        this.missingSchema = (0, resolve_1.normalizeId)((0, resolve_1.getFullPath)(resolver2, this.missingRef));
       }
     };
     exports.default = MissingRefError;
@@ -10310,7 +10314,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve5.call(this, root, ref);
+      let _sch = resolve9.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a = root.localRefs) === null || _a === void 0 ? void 0 : _a[ref];
         const { schemaId } = this.opts;
@@ -10337,7 +10341,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve5(root, ref) {
+    function resolve9(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -10964,11 +10968,11 @@ var require_fast_uri = __commonJS({
         normalizeString(uri, options);
       } else if (typeof uri === "object") {
         uri = /** @type {T} */
-        parse(serialize(uri, options), options);
+        parse2(serialize(uri, options), options);
       }
       return uri;
     }
-    function resolve5(baseURI, relativeURI, options) {
+    function resolve9(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const { parsed: baseParsed, malformedAuthorityOrPort: baseMalformed } = parseWithStatus(baseURI, schemelessOptions);
       const { parsed: relativeParsed, malformedAuthorityOrPort: relativeMalformed } = parseWithStatus(relativeURI, schemelessOptions);
@@ -10979,49 +10983,49 @@ var require_fast_uri = __commonJS({
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative6, options, skipNormalization) {
+    function resolveComponent(base, relative11, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
-        base = parse(serialize(base, options), options);
-        relative6 = parse(serialize(relative6, options), options);
+        base = parse2(serialize(base, options), options);
+        relative11 = parse2(serialize(relative11, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative6.scheme) {
-        target.scheme = relative6.scheme;
-        target.userinfo = relative6.userinfo;
-        target.host = relative6.host;
-        target.port = relative6.port;
-        target.path = removeDotSegments(relative6.path || "");
-        target.query = relative6.query;
+      if (!options.tolerant && relative11.scheme) {
+        target.scheme = relative11.scheme;
+        target.userinfo = relative11.userinfo;
+        target.host = relative11.host;
+        target.port = relative11.port;
+        target.path = removeDotSegments(relative11.path || "");
+        target.query = relative11.query;
       } else {
-        if (relative6.userinfo !== void 0 || relative6.host !== void 0 || relative6.port !== void 0) {
-          target.userinfo = relative6.userinfo;
-          target.host = relative6.host;
-          target.port = relative6.port;
-          target.path = removeDotSegments(relative6.path || "");
-          target.query = relative6.query;
+        if (relative11.userinfo !== void 0 || relative11.host !== void 0 || relative11.port !== void 0) {
+          target.userinfo = relative11.userinfo;
+          target.host = relative11.host;
+          target.port = relative11.port;
+          target.path = removeDotSegments(relative11.path || "");
+          target.query = relative11.query;
         } else {
-          if (!relative6.path) {
+          if (!relative11.path) {
             target.path = base.path;
-            if (relative6.query !== void 0) {
-              target.query = relative6.query;
+            if (relative11.query !== void 0) {
+              target.query = relative11.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative6.path[0] === "/") {
-              target.path = removeDotSegments(relative6.path);
+            if (relative11.path[0] === "/") {
+              target.path = removeDotSegments(relative11.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative6.path;
+                target.path = "/" + relative11.path;
               } else if (!base.path) {
-                target.path = relative6.path;
+                target.path = relative11.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative6.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative11.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative6.query;
+            target.query = relative11.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -11029,7 +11033,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative6.fragment;
+      target.fragment = relative11.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -11227,7 +11231,7 @@ var require_fast_uri = __commonJS({
       }
       return { parsed, malformedAuthorityOrPort };
     }
-    function parse(uri, opts) {
+    function parse2(uri, opts) {
       return parseWithStatus(uri, opts).parsed;
     }
     function normalizeString(uri, opts) {
@@ -11252,11 +11256,11 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve5,
+      resolve: resolve9,
       resolveComponent,
       equal,
       serialize,
-      parse
+      parse: parse2
     };
     module.exports = fastUri;
     module.exports.default = fastUri;
@@ -11633,12 +11637,12 @@ var require_core = __commonJS({
           return this;
         }
         keywordMetaschema.call(this, def);
-        const definition = {
+        const definition2 = {
           ...def,
           type: (0, dataType_1.getJSONTypes)(def.type),
           schemaType: (0, dataType_1.getJSONTypes)(def.schemaType)
         };
-        (0, util_1.eachItem)(keyword, definition.type.length === 0 ? (k) => addRule.call(this, k, definition) : (k) => definition.type.forEach((t) => addRule.call(this, k, definition, t)));
+        (0, util_1.eachItem)(keyword, definition2.type.length === 0 ? (k) => addRule.call(this, k, definition2) : (k) => definition2.type.forEach((t) => addRule.call(this, k, definition2, t)));
         return this;
       }
       getKeyword(keyword) {
@@ -11667,7 +11671,7 @@ var require_core = __commonJS({
       errorsText(errors = this.errors, { separator = ", ", dataVar = "data" } = {}) {
         if (!errors || errors.length === 0)
           return "No errors";
-        return errors.map((e) => `${dataVar}${e.instancePath} ${e.message}`).reduce((text, msg) => text + separator + msg);
+        return errors.map((e) => `${dataVar}${e.instancePath} ${e.message}`).reduce((text4, msg) => text4 + separator + msg);
       }
       $dataMetaSchema(metaSchema, keywordsJsonPointers) {
         const rules = this.RULES.all;
@@ -11831,9 +11835,9 @@ var require_core = __commonJS({
         throw new Error('$data keyword must have "code" or "validate" function');
       }
     }
-    function addRule(keyword, definition, dataType) {
+    function addRule(keyword, definition2, dataType) {
       var _a;
-      const post = definition === null || definition === void 0 ? void 0 : definition.post;
+      const post = definition2 === null || definition2 === void 0 ? void 0 : definition2.post;
       if (dataType && post)
         throw new Error('keyword with "post" flag cannot have "type"');
       const { RULES } = this;
@@ -11843,22 +11847,22 @@ var require_core = __commonJS({
         RULES.rules.push(ruleGroup);
       }
       RULES.keywords[keyword] = true;
-      if (!definition)
+      if (!definition2)
         return;
       const rule = {
         keyword,
         definition: {
-          ...definition,
-          type: (0, dataType_1.getJSONTypes)(definition.type),
-          schemaType: (0, dataType_1.getJSONTypes)(definition.schemaType)
+          ...definition2,
+          type: (0, dataType_1.getJSONTypes)(definition2.type),
+          schemaType: (0, dataType_1.getJSONTypes)(definition2.schemaType)
         }
       };
-      if (definition.before)
-        addBeforeRule.call(this, ruleGroup, rule, definition.before);
+      if (definition2.before)
+        addBeforeRule.call(this, ruleGroup, rule, definition2.before);
       else
         ruleGroup.rules.push(rule);
       RULES.all[keyword] = rule;
-      (_a = definition.implements) === null || _a === void 0 ? void 0 : _a.forEach((kwd) => this.addKeyword(kwd));
+      (_a = definition2.implements) === null || _a === void 0 ? void 0 : _a.forEach((kwd) => this.addKeyword(kwd));
     }
     function addBeforeRule(ruleGroup, rule, before) {
       const i = ruleGroup.rules.findIndex((_rule) => _rule.keyword === before);
@@ -14395,7 +14399,7 @@ var require_json_schema_2020_12 = __commonJS({
     var metaSchema = require_schema4();
     var applicator = require_applicator2();
     var unevaluated = require_unevaluated2();
-    var content = require_content();
+    var content3 = require_content();
     var core = require_core3();
     var format = require_format_annotation();
     var metadata = require_meta_data();
@@ -14407,7 +14411,7 @@ var require_json_schema_2020_12 = __commonJS({
         metaSchema,
         applicator,
         unevaluated,
-        content,
+        content3,
         core,
         with$data(this, format),
         metadata,
@@ -15039,8 +15043,8 @@ var require_dist2 = __commonJS({
         return ajv2;
       }
       const [formats, exportName] = opts.mode === "fast" ? [formats_1.fastFormats, fastName] : [formats_1.fullFormats, fullName];
-      const list = opts.formats || formats_1.formatNames;
-      addFormats2(ajv2, list, formats, exportName);
+      const list2 = opts.formats || formats_1.formatNames;
+      addFormats2(ajv2, list2, formats, exportName);
       if (opts.keywords)
         (0, limit_1.default)(ajv2);
       return ajv2;
@@ -15052,11 +15056,11 @@ var require_dist2 = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats2(ajv2, list, fs, exportName) {
+    function addFormats2(ajv2, list2, fs, exportName) {
       var _a;
       var _b;
       (_a = (_b = ajv2.opts.code).formats) !== null && _a !== void 0 ? _a : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
-      for (const f of list)
+      for (const f of list2)
         ajv2.addFormat(f, fs[f]);
     }
     module.exports = exports = formatsPlugin;
@@ -15066,9 +15070,9 @@ var require_dist2 = __commonJS({
 });
 
 // scripts/bin/project-lifecycle-source.mjs
-import { createHash as createHash3 } from "node:crypto";
-import { open as open3, readFile as readFile5, realpath as realpath6, stat } from "node:fs/promises";
-import { basename as basename3, dirname as dirname4, isAbsolute as isAbsolute6, relative as relative5, resolve as resolve4, sep as sep5 } from "node:path";
+import { createHash as createHash6 } from "node:crypto";
+import { open as open5, readFile as readFile10, realpath as realpath11, stat as stat2 } from "node:fs/promises";
+import { basename as basename3, dirname as dirname7, isAbsolute as isAbsolute12, relative as relative10, resolve as resolve8, sep as sep10 } from "node:path";
 
 // scripts/lib/atomic-write.mjs
 import { open, readFile, rename, unlink } from "node:fs/promises";
@@ -15172,7 +15176,7 @@ function attachCleanupError(primaryError, cleanupError) {
     return combinedError;
   }
 }
-async function atomicWriteValidated({ root, target, content, validate }) {
+async function atomicWriteValidated({ root, target, content: content3, validate }) {
   const targetPath = await resolveInside(root, target);
   const temporaryPath = join2(
     dirname2(targetPath),
@@ -15183,7 +15187,7 @@ async function atomicWriteValidated({ root, target, content, validate }) {
   try {
     temporaryHandle = await open(temporaryPath, "wx", 384);
     ownsTemporaryPath = true;
-    await temporaryHandle.writeFile(content);
+    await temporaryHandle.writeFile(content3);
     await temporaryHandle.sync();
     await temporaryHandle.close();
     temporaryHandle = void 0;
@@ -15235,8 +15239,8 @@ var compareCodePoints = (left, right) => {
   const leftPoints = [...left].map((character) => character.codePointAt(0));
   const rightPoints = [...right].map((character) => character.codePointAt(0));
   const length = Math.min(leftPoints.length, rightPoints.length);
-  for (let index = 0; index < length; index += 1) {
-    if (leftPoints[index] !== rightPoints[index]) return leftPoints[index] - rightPoints[index];
+  for (let index2 = 0; index2 < length; index2 += 1) {
+    if (leftPoints[index2] !== rightPoints[index2]) return leftPoints[index2] - rightPoints[index2];
   }
   return leftPoints.length - rightPoints.length;
 };
@@ -15246,11 +15250,11 @@ var codePointOrderErrors = (items, {
   valueAt = (item) => item
 }) => {
   const errors = [];
-  for (let index = 1; index < items.length; index += 1) {
-    if (compareCodePoints(valueAt(items[index - 1]), valueAt(items[index])) > 0) {
+  for (let index2 = 1; index2 < items.length; index2 += 1) {
+    if (compareCodePoints(valueAt(items[index2 - 1]), valueAt(items[index2])) > 0) {
       errors.push(createError(
         code,
-        pathAt(index),
+        pathAt(index2),
         "Language-neutral IDs must use Unicode code-point lexical order."
       ));
     }
@@ -15645,8 +15649,9 @@ var delivery_frontmatter_schema_default = {
     "obligations"
   ],
   properties: {
-    schema_version: { const: 1 },
+    schema_version: { enum: [1, 2] },
     artifact_id: { $ref: "#/$defs/id" },
+    owner_artifact_id: { $ref: "#/$defs/id" },
     artifact_kind: {
       enum: ["feedback", "prd", "architecture", "guidance", "batch", "test-report", "closure-summary", "non-prd-delivery"]
     },
@@ -15685,6 +15690,34 @@ var delivery_frontmatter_schema_default = {
     }
   },
   allOf: [
+    {
+      if: {
+        properties: { schema_version: { const: 1 } },
+        required: ["schema_version"]
+      },
+      then: {
+        not: {
+          properties: { owner_artifact_id: {} },
+          required: ["owner_artifact_id"]
+        }
+      },
+      else: {
+        if: {
+          properties: { artifact_kind: { const: "feedback" } },
+          required: ["artifact_kind"]
+        },
+        then: {
+          not: {
+            properties: { owner_artifact_id: {} },
+            required: ["owner_artifact_id"]
+          }
+        },
+        else: {
+          properties: { owner_artifact_id: {} },
+          required: ["owner_artifact_id"]
+        }
+      }
+    },
     {
       not: {
         type: "object",
@@ -15731,6 +15764,19 @@ var delivery_frontmatter_schema_default = {
       uniqueItems: true,
       items: { $ref: "#/$defs/ref" }
     }
+  }
+};
+
+// scripts/schemas/delivery-layout.schema.json
+var delivery_layout_schema_default = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "delivery-layout",
+  type: "object",
+  additionalProperties: false,
+  required: ["schema_version", "layout_version"],
+  properties: {
+    schema_version: { const: 1 },
+    layout_version: { const: 2 }
   }
 };
 
@@ -16561,7 +16607,8 @@ var schemaValidators = new Map(
     knowledge_diff_schema_default,
     archive_access_receipt_schema_default,
     obligation_instance_schema_default,
-    delivery_frontmatter_schema_default
+    delivery_frontmatter_schema_default,
+    delivery_layout_schema_default
   ].map((schema) => [schema.$id, ajv.compile(schema)])
 );
 var getSchemaValidator = (kind) => schemaValidators.get(kind);
@@ -16587,12 +16634,12 @@ var maskFencedMarkdown = (source) => {
     return maskedLine(line);
   }).join("");
 };
-var inspectNode = (node) => {
-  if (!node) return null;
-  if ((0, import_yaml.isAlias)(node)) return "YAML aliases are not allowed.";
-  if (node.tag && !node.tag.startsWith("tag:yaml.org,2002:")) return "Custom YAML tags are not allowed.";
-  if ((0, import_yaml.isMap)(node)) {
-    for (const item of node.items) {
+var inspectNode = (node2) => {
+  if (!node2) return null;
+  if ((0, import_yaml.isAlias)(node2)) return "YAML aliases are not allowed.";
+  if (node2.tag && !node2.tag.startsWith("tag:yaml.org,2002:")) return "Custom YAML tags are not allowed.";
+  if ((0, import_yaml.isMap)(node2)) {
+    for (const item of node2.items) {
       if (!(0, import_yaml.isPair)(item)) return "YAML mappings must contain key/value pairs.";
       if (item.key?.value === "<<") return "YAML merge keys are not allowed.";
       const keyError = inspectNode(item.key);
@@ -16600,8 +16647,8 @@ var inspectNode = (node) => {
       const valueError = inspectNode(item.value);
       if (valueError) return valueError;
     }
-  } else if ((0, import_yaml.isSeq)(node)) {
-    for (const item of node.items) {
+  } else if ((0, import_yaml.isSeq)(node2)) {
+    for (const item of node2.items) {
       const itemError = inspectNode(item);
       if (itemError) return itemError;
     }
@@ -16609,18 +16656,18 @@ var inspectNode = (node) => {
   return null;
 };
 var parseRestrictedYaml = (source, path) => {
-  const document = (0, import_yaml.parseDocument)(source, {
+  const document3 = (0, import_yaml.parseDocument)(source, {
     maxAliasCount: 0,
     prettyErrors: false,
     strict: true,
     uniqueKeys: true
   });
-  if (document.errors.length > 0) return malformed(path, "Malformed restricted YAML mapping.");
-  if (!(0, import_yaml.isMap)(document.contents)) return malformed(path, "Restricted YAML must be a mapping.");
-  const nodeError = inspectNode(document.contents);
+  if (document3.errors.length > 0) return malformed(path, "Malformed restricted YAML mapping.");
+  if (!(0, import_yaml.isMap)(document3.contents)) return malformed(path, "Restricted YAML must be a mapping.");
+  const nodeError = inspectNode(document3.contents);
   if (nodeError) return malformed(path, nodeError);
   try {
-    return ok(document.toJS({ maxAliasCount: 0 }));
+    return ok(document3.toJS({ maxAliasCount: 0 }));
   } catch {
     return malformed(path, "Malformed restricted YAML mapping.");
   }
@@ -16649,7 +16696,7 @@ var parseFrontmatter = (source) => {
   for (const field of ["implementation_refs", "verification_refs"]) {
     orderErrors.push(...codePointOrderErrors(parsed.value[field], {
       code: "FACT_BLOCK_MALFORMED",
-      pathAt: (index) => `/frontmatter/${field}/${index}`
+      pathAt: (index2) => `/frontmatter/${field}/${index2}`
     }));
   }
   if (orderErrors.length > 0) return fail(orderErrors);
@@ -16664,8 +16711,8 @@ var OPEN = "<!-- project-lifecycle:fact";
 var CLOSE = "<!-- /project-lifecycle:fact -->";
 var MACHINE_FIELDS = ["fact_id", "revision", "evidence_refs", "last_verified_baseline"];
 var malformed2 = (path, message) => createError("FACT_BLOCK_MALFORMED", path, message);
-var validateMachineFields = (value, index) => {
-  const path = `/facts/${index}`;
+var validateMachineFields = (value, index2) => {
+  const path = `/facts/${index2}`;
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return [malformed2(path, "Fact metadata must be a restricted YAML mapping.")];
   }
@@ -16697,8 +16744,8 @@ var validateMachineFields = (value, index) => {
   }
   return errors;
 };
-var parseHumanContent = (source, index) => {
-  const path = `/facts/${index}`;
+var parseHumanContent = (source, index2) => {
+  const path = `/facts/${index2}`;
   const limitsMatch = /^(#{1,6})[ \t]+(?:Known limits|已知限制)[ \t]*$/m.exec(
     maskFencedMarkdown(source)
   );
@@ -16724,8 +16771,8 @@ var parseFactBlocks = (source) => {
       break;
     }
     if (openIndex === -1) break;
-    const index = facts.length;
-    const path = `/facts/${index}`;
+    const index2 = facts.length;
+    const path = `/facts/${index2}`;
     const opensOnOwnLine = (openIndex === 0 || normalized[openIndex - 1] === "\n") && normalized.startsWith(`${OPEN}
 `, openIndex);
     if (!opensOnOwnLine) {
@@ -16765,8 +16812,8 @@ var parseFactBlocks = (source) => {
       cursor = closeIndex + CLOSE.length;
       continue;
     }
-    const machineErrors = validateMachineFields(parsed.value, index);
-    const human = parseHumanContent(normalized.slice(metadataTerminatorEnd + 1, closeIndex), index);
+    const machineErrors = validateMachineFields(parsed.value, index2);
+    const human = parseHumanContent(normalized.slice(metadataTerminatorEnd + 1, closeIndex), index2);
     errors.push(...machineErrors, ...human.errors);
     if (seen.has(parsed.value.fact_id)) {
       errors.push(createError("FACT_ID_DUPLICATE", `${path}/fact_id`, `Duplicate fact_id: ${parsed.value.fact_id}`));
@@ -16790,9 +16837,9 @@ var schemaErrors = (kind, errors) => errors.map((error) => {
   return createError(ERROR_CODES.SCHEMA_INVALID, path, `Invalid ${kind}: ${error.message}`);
 });
 var namedEntries = (value) => [
-  ...value.repositories.map((entry, index) => ({ ...entry, path: `/repositories/${index}` })),
-  ...value.constraints.map((entry, index) => ({ ...entry, path: `/constraints/${index}` })),
-  ...value.domains.map((entry, index) => ({ ...entry, path: `/domains/${index}` }))
+  ...value.repositories.map((entry2, index2) => ({ ...entry2, path: `/repositories/${index2}` })),
+  ...value.constraints.map((entry2, index2) => ({ ...entry2, path: `/constraints/${index2}` })),
+  ...value.domains.map((entry2, index2) => ({ ...entry2, path: `/domains/${index2}` }))
 ];
 var isStrictScope = (parent, child) => child.every((item) => parent.includes(item)) && child.length < parent.length;
 var isDescendant = (domainById, ancestorId, candidateId) => {
@@ -16815,15 +16862,15 @@ var validateProjectMap = (value) => {
   const lineagePredecessors = /* @__PURE__ */ new Set();
   const repositoryAssetOwners = /* @__PURE__ */ new Map();
   const domainRepositoryOwners = /* @__PURE__ */ new Map();
-  for (const entry of entries) {
-    if (entriesById.has(entry.id)) {
-      errors.push(createError(ERROR_CODES.ID_DUPLICATE, `${entry.path}/id`, `Duplicate ID: ${entry.id}`));
+  for (const entry2 of entries) {
+    if (entriesById.has(entry2.id)) {
+      errors.push(createError(ERROR_CODES.ID_DUPLICATE, `${entry2.path}/id`, `Duplicate ID: ${entry2.id}`));
     } else {
-      entriesById.set(entry.id, entry);
+      entriesById.set(entry2.id, entry2);
     }
   }
-  for (const [index, lineage] of value.identity_lineage.entries()) {
-    const path = `/identity_lineage/${index}`;
+  for (const [index2, lineage] of value.identity_lineage.entries()) {
+    const path = `/identity_lineage/${index2}`;
     if (lineagePredecessors.has(lineage.predecessor_project_id)) {
       errors.push(createError(ERROR_CODES.ID_DUPLICATE, `${path}/predecessor_project_id`, "Project identity predecessors must be unique."));
     }
@@ -16833,9 +16880,9 @@ var validateProjectMap = (value) => {
     }
   }
   const knownDomainIds = new Set(value.domains.map(({ id }) => id));
-  for (const [index, repository] of value.repositories.entries()) {
+  for (const [index2, repository] of value.repositories.entries()) {
     for (const [domainIndex, domainId] of repository.domain_ids.entries()) {
-      const path = `/repositories/${index}/domain_ids/${domainIndex}`;
+      const path = `/repositories/${index2}/domain_ids/${domainIndex}`;
       if (!knownDomainIds.has(domainId)) {
         errors.push(createError(ERROR_CODES.REFERENCE_MISSING, path, `Unknown repository domain ID: ${domainId}`));
       } else if (domainRepositoryOwners.has(domainId)) {
@@ -16845,7 +16892,7 @@ var validateProjectMap = (value) => {
       }
     }
     for (const [assetIndex, locator] of repository.knowledge_asset_locators.entries()) {
-      const path = `/repositories/${index}/knowledge_asset_locators/${assetIndex}`;
+      const path = `/repositories/${index2}/knowledge_asset_locators/${assetIndex}`;
       if (repositoryAssetOwners.has(locator)) {
         errors.push(createError(ERROR_CODES.ID_DUPLICATE, path, `Knowledge asset already belongs to: ${repositoryAssetOwners.get(locator)}`));
       } else {
@@ -16853,9 +16900,9 @@ var validateProjectMap = (value) => {
       }
     }
   }
-  for (const [index, domain] of value.domains.entries()) {
+  for (const [index2, domain] of value.domains.entries()) {
     if (!domainById.has(domain.id)) domainById.set(domain.id, domain);
-    const path = `/domains/${index}`;
+    const path = `/domains/${index2}`;
     if (domain.domain_state === "materialized") {
       if (!domain.paired_assets) {
         errors.push(createError(ERROR_CODES.STATE_REQUIREMENT_MISSING, `${path}/paired_assets`, "Materialized domains require paired_assets."));
@@ -16887,8 +16934,8 @@ var validateProjectMap = (value) => {
   for (const constraint of value.constraints) {
     if (!constraintById.has(constraint.id)) constraintById.set(constraint.id, constraint);
   }
-  for (const [index, domain] of value.domains.entries()) {
-    const path = `/domains/${index}`;
+  for (const [index2, domain] of value.domains.entries()) {
+    const path = `/domains/${index2}`;
     if (domain.parent_id) {
       const parent = domainById.get(domain.parent_id);
       if (!parent) {
@@ -16925,8 +16972,8 @@ var validateProjectMap = (value) => {
       }
     }
   }
-  for (const [index, constraint] of value.constraints.entries()) {
-    const path = `/constraints/${index}`;
+  for (const [index2, constraint] of value.constraints.entries()) {
+    const path = `/constraints/${index2}`;
     const owner = constraint.owner_id ? domainById.get(constraint.owner_id) : null;
     if (constraint.owner_id && !owner) {
       errors.push(createError(ERROR_CODES.REFERENCE_MISSING, `${path}/owner_id`, `Unknown constraint owner ID: ${constraint.owner_id}`));
@@ -16975,8 +17022,8 @@ var validateProjectMap = (value) => {
       }
     }
   }
-  for (const [index, marker] of (value.revalidation_required ?? []).entries()) {
-    const path = `/revalidation_required/${index}`;
+  for (const [index2, marker] of (value.revalidation_required ?? []).entries()) {
+    const path = `/revalidation_required/${index2}`;
     if (!domainById.has(marker.domain_id)) {
       errors.push(createError(ERROR_CODES.REFERENCE_MISSING, `${path}/domain_id`, `Unknown revalidation domain ID: ${marker.domain_id}`));
     }
@@ -16994,9 +17041,9 @@ var validateProjectMap = (value) => {
 var validateProjectExtensions = (value) => {
   const errors = [];
   const extensionId = new RegExp(`^PROJECT::${value.project_id}::[A-Z][A-Z0-9_]*_REQUIRED$`);
-  for (const [index, entry] of value.secondary_obligation_kinds.entries()) {
-    const path = `/secondary_obligation_kinds/${index}`;
-    if (!extensionId.test(entry)) {
+  for (const [index2, entry2] of value.secondary_obligation_kinds.entries()) {
+    const path = `/secondary_obligation_kinds/${index2}`;
+    if (!extensionId.test(entry2)) {
       errors.push(createError(ERROR_CODES.SCHEMA_INVALID, path, "Extension ID must use the current project namespace and REQUIRED suffix."));
     }
   }
@@ -17005,8 +17052,8 @@ var validateProjectExtensions = (value) => {
 var validateContextReceipt = (value) => {
   const errors = [];
   const selectedIds = /* @__PURE__ */ new Set();
-  for (const [index, selection] of value.selected_context.entries()) {
-    const path = `/selected_context/${index}/id`;
+  for (const [index2, selection] of value.selected_context.entries()) {
+    const path = `/selected_context/${index2}/id`;
     if (selectedIds.has(selection.id)) {
       errors.push(createError(ERROR_CODES.ID_DUPLICATE, path, `Duplicate selected context ID: ${selection.id}`));
     } else {
@@ -17019,11 +17066,11 @@ var validatePendingChanges = (value) => {
   const errors = [];
   const semanticTargets = /* @__PURE__ */ new Set();
   const changeIds = /* @__PURE__ */ new Set();
-  for (const [index, change] of value.changes.entries()) {
+  for (const [index2, change] of value.changes.entries()) {
     if (changeIds.has(change.change_id)) {
       errors.push(createError(
         ERROR_CODES.ID_DUPLICATE,
-        `/changes/${index}/change_id`,
+        `/changes/${index2}/change_id`,
         `Duplicate change ID: ${change.change_id}`
       ));
     }
@@ -17032,16 +17079,16 @@ var validatePendingChanges = (value) => {
     for (const [obligationIndex, obligation] of (change.obligations ?? []).entries()) {
       const validation = validateJson("obligation-instance", obligation);
       if (!validation.ok) {
-        errors.push(...validation.errors.map((entry) => createError(
-          entry.code,
-          `/changes/${index}/obligations/${obligationIndex}${entry.path === "/" ? "" : entry.path}`,
+        errors.push(...validation.errors.map((entry2) => createError(
+          entry2.code,
+          `/changes/${index2}/obligations/${obligationIndex}${entry2.path === "/" ? "" : entry2.path}`,
           "Invalid pending-change obligation instance."
         )));
       }
       if (obligationIds.has(obligation.obligation_id)) {
         errors.push(createError(
           ERROR_CODES.ID_DUPLICATE,
-          `/changes/${index}/obligations/${obligationIndex}/obligation_id`,
+          `/changes/${index2}/obligations/${obligationIndex}/obligation_id`,
           `Duplicate obligation ID: ${obligation.obligation_id}`
         ));
       }
@@ -17051,7 +17098,7 @@ var validatePendingChanges = (value) => {
     if (semanticTargets.has(change.semantic_target_key)) {
       errors.push(createError(
         ERROR_CODES.ID_DUPLICATE,
-        `/changes/${index}/semantic_target_key`,
+        `/changes/${index2}/semantic_target_key`,
         `Duplicate open semantic target: ${change.semantic_target_key}`
       ));
     }
@@ -17061,7 +17108,7 @@ var validatePendingChanges = (value) => {
       if (dispositionIds.has(disposition.domain_id)) {
         errors.push(createError(
           ERROR_CODES.ID_DUPLICATE,
-          `/changes/${index}/child_dispositions/${dispositionIndex}/domain_id`,
+          `/changes/${index2}/child_dispositions/${dispositionIndex}/domain_id`,
           `Duplicate child disposition ID: ${disposition.domain_id}`
         ));
       }
@@ -17072,7 +17119,7 @@ var validatePendingChanges = (value) => {
       if (commitmentIds.has(commitment.domain_id)) {
         errors.push(createError(
           ERROR_CODES.ID_DUPLICATE,
-          `/changes/${index}/knowledge_commitments/${commitmentIndex}/domain_id`,
+          `/changes/${index2}/knowledge_commitments/${commitmentIndex}/domain_id`,
           `Duplicate knowledge commitment domain ID: ${commitment.domain_id}`
         ));
       }
@@ -17082,7 +17129,7 @@ var validatePendingChanges = (value) => {
         if (factIds.has(fact.fact_id)) {
           errors.push(createError(
             ERROR_CODES.ID_DUPLICATE,
-            `/changes/${index}/knowledge_commitments/${commitmentIndex}/facts/${factIndex}/fact_id`,
+            `/changes/${index2}/knowledge_commitments/${commitmentIndex}/facts/${factIndex}/fact_id`,
             `Duplicate committed fact ID: ${fact.fact_id}`
           ));
         }
@@ -17095,7 +17142,7 @@ var validatePendingChanges = (value) => {
 var appendOrderErrors = (errors, items, basePath, field) => {
   errors.push(...codePointOrderErrors(items, {
     valueAt: field ? (item) => item[field] : (item) => item,
-    pathAt: (index) => `${basePath}/${index}${field ? `/${field}` : ""}`
+    pathAt: (index2) => `${basePath}/${index2}${field ? `/${field}` : ""}`
   }));
 };
 var validateDeterministicOrder = (kind, value) => {
@@ -17105,41 +17152,41 @@ var validateDeterministicOrder = (kind, value) => {
     appendOrderErrors(errors, value.repositories, "/repositories", "id");
     appendOrderErrors(errors, value.constraints, "/constraints", "id");
     appendOrderErrors(errors, value.domains, "/domains", "id");
-    for (const [index, constraint] of value.constraints.entries()) {
+    for (const [index2, constraint] of value.constraints.entries()) {
       if (constraint.selected_descendants) {
-        appendOrderErrors(errors, constraint.selected_descendants, `/constraints/${index}/selected_descendants`);
+        appendOrderErrors(errors, constraint.selected_descendants, `/constraints/${index2}/selected_descendants`);
       }
       if (constraint.successor_ids) {
-        appendOrderErrors(errors, constraint.successor_ids, `/constraints/${index}/successor_ids`);
+        appendOrderErrors(errors, constraint.successor_ids, `/constraints/${index2}/successor_ids`);
       }
       if (constraint.exceptions) {
-        appendOrderErrors(errors, constraint.exceptions, `/constraints/${index}/exceptions`, "domain_id");
+        appendOrderErrors(errors, constraint.exceptions, `/constraints/${index2}/exceptions`, "domain_id");
       }
     }
-    for (const [index, lineage] of value.identity_lineage.entries()) {
-      appendOrderErrors(errors, lineage.successor_project_ids, `/identity_lineage/${index}/successor_project_ids`);
+    for (const [index2, lineage] of value.identity_lineage.entries()) {
+      appendOrderErrors(errors, lineage.successor_project_ids, `/identity_lineage/${index2}/successor_project_ids`);
     }
-    for (const [index, repository] of value.repositories.entries()) {
-      appendOrderErrors(errors, repository.domain_ids, `/repositories/${index}/domain_ids`);
-      appendOrderErrors(errors, repository.knowledge_asset_locators, `/repositories/${index}/knowledge_asset_locators`);
+    for (const [index2, repository] of value.repositories.entries()) {
+      appendOrderErrors(errors, repository.domain_ids, `/repositories/${index2}/domain_ids`);
+      appendOrderErrors(errors, repository.knowledge_asset_locators, `/repositories/${index2}/knowledge_asset_locators`);
     }
     if (value.revalidation_required) {
       const markerKey = (marker) => `${marker.domain_id}\0${marker.fact_id}\0${marker.constraint_id ?? ""}`;
-      for (let index = 1; index < value.revalidation_required.length; index += 1) {
-        const previous = markerKey(value.revalidation_required[index - 1]);
-        const current = markerKey(value.revalidation_required[index]);
-        if (compareCodePoints(previous, current) >= 0) {
+      for (let index2 = 1; index2 < value.revalidation_required.length; index2 += 1) {
+        const previous2 = markerKey(value.revalidation_required[index2 - 1]);
+        const current = markerKey(value.revalidation_required[index2]);
+        if (compareCodePoints(previous2, current) >= 0) {
           errors.push(createError(
-            previous === current ? ERROR_CODES.ID_DUPLICATE : ERROR_CODES.SCHEMA_INVALID,
-            `/revalidation_required/${index}/fact_id`,
-            previous === current ? "Duplicate revalidation marker identity." : "Revalidation markers must use strict language-neutral identity order."
+            previous2 === current ? ERROR_CODES.ID_DUPLICATE : ERROR_CODES.SCHEMA_INVALID,
+            `/revalidation_required/${index2}/fact_id`,
+            previous2 === current ? "Duplicate revalidation marker identity." : "Revalidation markers must use strict language-neutral identity order."
           ));
         }
       }
     }
-    for (const [index, domain] of value.domains.entries()) {
-      appendOrderErrors(errors, domain.relationships, `/domains/${index}/relationships`, "target_id");
-      appendOrderErrors(errors, domain.evidence_refs, `/domains/${index}/evidence_refs`);
+    for (const [index2, domain] of value.domains.entries()) {
+      appendOrderErrors(errors, domain.relationships, `/domains/${index2}/relationships`, "target_id");
+      appendOrderErrors(errors, domain.evidence_refs, `/domains/${index2}/evidence_refs`);
     }
   } else if (kind === "project-extensions") {
     appendOrderErrors(errors, value.secondary_obligation_kinds, "/secondary_obligation_kinds");
@@ -17158,9 +17205,9 @@ var validateDeterministicOrder = (kind, value) => {
     appendOrderErrors(errors, value.relationships.legacy_artifact_refs, "/relationships/legacy_artifact_refs");
     appendOrderErrors(errors, value.reclassified_from_refs, "/reclassified_from_refs");
     appendOrderErrors(errors, value.obligations, "/obligations", "obligation_id");
-    for (const [index, obligation] of value.obligations.entries()) {
+    for (const [index2, obligation] of value.obligations.entries()) {
       for (const field of ["trigger_refs", "scope_refs", "responsible_refs", "evidence_refs"]) {
-        appendOrderErrors(errors, obligation[field], `/obligations/${index}/${field}`);
+        appendOrderErrors(errors, obligation[field], `/obligations/${index2}/${field}`);
       }
     }
   } else if (kind === "obligation-instance") {
@@ -17172,57 +17219,57 @@ var validateDeterministicOrder = (kind, value) => {
     appendOrderErrors(errors, value.domain_changes, "/domain_changes", "domain_id");
     appendOrderErrors(errors, value.entry_points, "/entry_points");
     appendOrderErrors(errors, value.evidence_refs, "/evidence_refs");
-    for (const [index, operation] of value.operations.entries()) {
-      appendOrderErrors(errors, operation.evidence_refs, `/operations/${index}/evidence_refs`);
+    for (const [index2, operation] of value.operations.entries()) {
+      appendOrderErrors(errors, operation.evidence_refs, `/operations/${index2}/evidence_refs`);
     }
-    for (const [index, change] of value.domain_changes.entries()) {
+    for (const [index2, change] of value.domain_changes.entries()) {
       if (change.relationship_refs) {
-        appendOrderErrors(errors, change.relationship_refs, `/domain_changes/${index}/relationship_refs`);
+        appendOrderErrors(errors, change.relationship_refs, `/domain_changes/${index2}/relationship_refs`);
       }
-      appendOrderErrors(errors, change.evidence_refs, `/domain_changes/${index}/evidence_refs`);
+      appendOrderErrors(errors, change.evidence_refs, `/domain_changes/${index2}/evidence_refs`);
     }
   } else if (kind === "pending-changes") {
     appendOrderErrors(errors, value.changes, "/changes", "change_id");
-    for (const [index, change] of value.changes.entries()) {
-      if (change.trigger_refs) appendOrderErrors(errors, change.trigger_refs, `/changes/${index}/trigger_refs`);
-      if (change.affected_refs) appendOrderErrors(errors, change.affected_refs, `/changes/${index}/affected_refs`);
-      if (change.source_refs) appendOrderErrors(errors, change.source_refs, `/changes/${index}/source_refs`);
+    for (const [index2, change] of value.changes.entries()) {
+      if (change.trigger_refs) appendOrderErrors(errors, change.trigger_refs, `/changes/${index2}/trigger_refs`);
+      if (change.affected_refs) appendOrderErrors(errors, change.affected_refs, `/changes/${index2}/affected_refs`);
+      if (change.source_refs) appendOrderErrors(errors, change.source_refs, `/changes/${index2}/source_refs`);
       if (change.proposed_patch) {
-        appendOrderErrors(errors, change.proposed_patch.changed_fields, `/changes/${index}/proposed_patch/changed_fields`);
-        appendOrderErrors(errors, change.proposed_patch.new_ids, `/changes/${index}/proposed_patch/new_ids`);
-        appendOrderErrors(errors, change.proposed_patch.successor_ids, `/changes/${index}/proposed_patch/successor_ids`);
+        appendOrderErrors(errors, change.proposed_patch.changed_fields, `/changes/${index2}/proposed_patch/changed_fields`);
+        appendOrderErrors(errors, change.proposed_patch.new_ids, `/changes/${index2}/proposed_patch/new_ids`);
+        appendOrderErrors(errors, change.proposed_patch.successor_ids, `/changes/${index2}/proposed_patch/successor_ids`);
       }
       if (change.child_dispositions) {
-        appendOrderErrors(errors, change.child_dispositions, `/changes/${index}/child_dispositions`, "domain_id");
+        appendOrderErrors(errors, change.child_dispositions, `/changes/${index2}/child_dispositions`, "domain_id");
         for (const [dispositionIndex, disposition] of change.child_dispositions.entries()) {
-          appendOrderErrors(errors, disposition.evidence_refs, `/changes/${index}/child_dispositions/${dispositionIndex}/evidence_refs`);
-          appendOrderErrors(errors, disposition.unresolved_fact_ids, `/changes/${index}/child_dispositions/${dispositionIndex}/unresolved_fact_ids`);
+          appendOrderErrors(errors, disposition.evidence_refs, `/changes/${index2}/child_dispositions/${dispositionIndex}/evidence_refs`);
+          appendOrderErrors(errors, disposition.unresolved_fact_ids, `/changes/${index2}/child_dispositions/${dispositionIndex}/unresolved_fact_ids`);
         }
       }
       if (change.knowledge_commitments) {
-        appendOrderErrors(errors, change.knowledge_commitments, `/changes/${index}/knowledge_commitments`, "domain_id");
+        appendOrderErrors(errors, change.knowledge_commitments, `/changes/${index2}/knowledge_commitments`, "domain_id");
         for (const [commitmentIndex, commitment] of change.knowledge_commitments.entries()) {
-          appendOrderErrors(errors, commitment.facts, `/changes/${index}/knowledge_commitments/${commitmentIndex}/facts`, "fact_id");
+          appendOrderErrors(errors, commitment.facts, `/changes/${index2}/knowledge_commitments/${commitmentIndex}/facts`, "fact_id");
         }
       }
       if (change.absorption_version === 1) {
-        appendOrderErrors(errors, change.operations, `/changes/${index}/operations`, "fact_id");
-        appendOrderErrors(errors, change.affected_domain_ids, `/changes/${index}/affected_domain_ids`);
-        appendOrderErrors(errors, change.affected_fact_ids, `/changes/${index}/affected_fact_ids`);
-        appendOrderErrors(errors, change.affected_owner_ids, `/changes/${index}/affected_owner_ids`);
-        appendOrderErrors(errors, change.constraint_refs, `/changes/${index}/constraint_refs`);
-        appendOrderErrors(errors, change.relationship_refs, `/changes/${index}/relationship_refs`);
-        appendOrderErrors(errors, change.topology_target_ids, `/changes/${index}/topology_target_ids`);
-        appendOrderErrors(errors, change.evidence_refs, `/changes/${index}/evidence_refs`);
+        appendOrderErrors(errors, change.operations, `/changes/${index2}/operations`, "fact_id");
+        appendOrderErrors(errors, change.affected_domain_ids, `/changes/${index2}/affected_domain_ids`);
+        appendOrderErrors(errors, change.affected_fact_ids, `/changes/${index2}/affected_fact_ids`);
+        appendOrderErrors(errors, change.affected_owner_ids, `/changes/${index2}/affected_owner_ids`);
+        appendOrderErrors(errors, change.constraint_refs, `/changes/${index2}/constraint_refs`);
+        appendOrderErrors(errors, change.relationship_refs, `/changes/${index2}/relationship_refs`);
+        appendOrderErrors(errors, change.topology_target_ids, `/changes/${index2}/topology_target_ids`);
+        appendOrderErrors(errors, change.evidence_refs, `/changes/${index2}/evidence_refs`);
         for (const [operationIndex, operation] of change.operations.entries()) {
-          appendOrderErrors(errors, operation.evidence_refs, `/changes/${index}/operations/${operationIndex}/evidence_refs`);
+          appendOrderErrors(errors, operation.evidence_refs, `/changes/${index2}/operations/${operationIndex}/evidence_refs`);
         }
       }
       if (change.obligations) {
-        appendOrderErrors(errors, change.obligations, `/changes/${index}/obligations`, "obligation_id");
+        appendOrderErrors(errors, change.obligations, `/changes/${index2}/obligations`, "obligation_id");
         for (const [obligationIndex, obligation] of change.obligations.entries()) {
           for (const field of ["trigger_refs", "scope_refs", "responsible_refs", "evidence_refs"]) {
-            appendOrderErrors(errors, obligation[field], `/changes/${index}/obligations/${obligationIndex}/${field}`);
+            appendOrderErrors(errors, obligation[field], `/changes/${index2}/obligations/${obligationIndex}/${field}`);
           }
         }
       }
@@ -17236,11 +17283,18 @@ var validateDeterministicOrder = (kind, value) => {
 var validateDeliveryFrontmatter = (value) => {
   const errors = [];
   const obligationIds = /* @__PURE__ */ new Set();
-  for (const [index, obligation] of value.obligations.entries()) {
+  if (value.schema_version === 2 && ["prd", "non-prd-delivery"].includes(value.artifact_kind) && value.owner_artifact_id !== value.artifact_id) {
+    errors.push(createError(
+      ERROR_CODES.STATE_REQUIREMENT_MISSING,
+      "/owner_artifact_id",
+      "A schema-v2 root delivery owner must own itself."
+    ));
+  }
+  for (const [index2, obligation] of value.obligations.entries()) {
     if (obligationIds.has(obligation.obligation_id)) {
       errors.push(createError(
         ERROR_CODES.ID_DUPLICATE,
-        `/obligations/${index}/obligation_id`,
+        `/obligations/${index2}/obligation_id`,
         `Duplicate obligation ID: ${obligation.obligation_id}`
       ));
     } else {
@@ -17396,16 +17450,16 @@ var validateOwnedConstraintSections = ({ domain, map, sources }) => {
       const path = `/constraints/${constraint.id}/knowledge_refs/${language}`;
       const expectedRef = `${domain.paired_assets[language]}#constraint-${constraint.id}`;
       const lines = maskFencedMarkdown(sources[language].replaceAll("\r\n", "\n")).split("\n");
-      const anchors = lines.flatMap((line, index) => line === anchor ? [index] : []);
-      const markers = lines.flatMap((line, index) => line === marker ? [index] : []);
+      const anchors = lines.flatMap((line, index2) => line === anchor ? [index2] : []);
+      const markers = lines.flatMap((line, index2) => line === marker ? [index2] : []);
       let valid = constraint.knowledge_refs[language] === expectedRef && anchors.length === 1 && markers.length === 1;
       if (valid) {
         const anchorIndex = anchors[0];
         const markerIndex = markers[0];
         valid = markerIndex === anchorIndex + 1;
         let closed = false;
-        for (let index = markerIndex + 1; valid && index < lines.length; index += 1) {
-          const line = lines[index];
+        for (let index2 = markerIndex + 1; valid && index2 < lines.length; index2 += 1) {
+          const line = lines[index2];
           if (line === close) {
             closed = true;
             break;
@@ -17482,22 +17536,22 @@ var validateBilingualPair = async (enPathValue, zhPathValue, map) => {
     errors.push(createError("PAIR_SECTION_MISMATCH", "/facts", "Bilingual fact-block counts differ."));
   }
   const pairedFactCount = Math.min(enFacts.value.length, zhFacts.value.length);
-  for (let index = 0; index < pairedFactCount; index += 1) {
+  for (let index2 = 0; index2 < pairedFactCount; index2 += 1) {
     for (const field of FACT_FIELDS) {
-      if (!same(enFacts.value[index][field], zhFacts.value[index][field])) {
-        errors.push(createError("PAIR_MACHINE_MISMATCH", `/facts/${index}/${field}`, `Bilingual fact field differs: ${field}`));
+      if (!same(enFacts.value[index2][field], zhFacts.value[index2][field])) {
+        errors.push(createError("PAIR_MACHINE_MISMATCH", `/facts/${index2}/${field}`, `Bilingual fact field differs: ${field}`));
       }
     }
     const isCurrent = enFrontmatter.value.data.knowledge_state === "current" || zhFrontmatter.value.data.knowledge_state === "current";
-    const evidenceMissing = enFacts.value[index].evidence_refs.length === 0 || zhFacts.value[index].evidence_refs.length === 0;
+    const evidenceMissing = enFacts.value[index2].evidence_refs.length === 0 || zhFacts.value[index2].evidence_refs.length === 0;
     if (isCurrent && evidenceMissing) {
-      errors.push(createError("CURRENT_EVIDENCE_MISSING", `/facts/${index}/evidence_refs`, "Current facts require evidence."));
+      errors.push(createError("CURRENT_EVIDENCE_MISSING", `/facts/${index2}/evidence_refs`, "Current facts require evidence."));
     }
-    const baselineMismatch = enFacts.value[index].last_verified_baseline !== enFrontmatter.value.data.last_verified_baseline || zhFacts.value[index].last_verified_baseline !== zhFrontmatter.value.data.last_verified_baseline;
+    const baselineMismatch = enFacts.value[index2].last_verified_baseline !== enFrontmatter.value.data.last_verified_baseline || zhFacts.value[index2].last_verified_baseline !== zhFrontmatter.value.data.last_verified_baseline;
     if (baselineMismatch) {
       errors.push(createError(
         "PAIR_MACHINE_MISMATCH",
-        `/facts/${index}/last_verified_baseline`,
+        `/facts/${index2}/last_verified_baseline`,
         "Fact baseline differs from its owning capability document."
       ));
     }
@@ -17632,20 +17686,20 @@ var safeStat = async (root, relativePath) => {
   let current = root;
   for (const segment of relativePath.split("/")) {
     current = join3(current, segment);
-    let stat2;
+    let stat3;
     try {
-      stat2 = await lstat2(current);
+      stat3 = await lstat2(current);
     } catch (error) {
       if (error.code === "ENOENT") return null;
       throw error;
     }
-    if (stat2.isSymbolicLink()) return null;
+    if (stat3.isSymbolicLink()) return null;
   }
   return lstat2(current);
 };
 var readBoundedFile = async (root, relativePath, maxFileBytes) => {
-  const stat2 = await safeStat(root, relativePath);
-  if (!stat2?.isFile()) return null;
+  const stat3 = await safeStat(root, relativePath);
+  if (!stat3?.isFile()) return null;
   const handle = await open2(join3(root, ...relativePath.split("/")), "r");
   try {
     const buffer = Buffer.alloc(maxFileBytes + 1);
@@ -17690,14 +17744,14 @@ var isRecognizedTopologyFile = (relativePath, name) => {
   return /^(?:app|application|main)\.(?:go|js|jsx|kt|kts|mjs|py|rs|swift|ts|tsx)$/iu.test(name);
 };
 var approvedDirectoryEntries = async (root, relativePath, scan) => {
-  const stat2 = await safeStat(root, relativePath);
-  if (!stat2?.isDirectory()) return [];
+  const stat3 = await safeStat(root, relativePath);
+  if (!stat3?.isDirectory()) return [];
   const entries = [];
   let directoryInspected = 0;
   const remainingGlobal = scan.limit - scan.inspected;
   const bufferSize = Math.max(1, Math.min(scan.limit, remainingGlobal) + 1);
   const directory = await opendir(join3(root, ...relativePath.split("/")), { bufferSize });
-  for await (const entry of directory) {
+  for await (const entry2 of directory) {
     directoryInspected += 1;
     scan.inspected += 1;
     if (directoryInspected > scan.limit || scan.inspected > scan.limit) {
@@ -17706,8 +17760,8 @@ var approvedDirectoryEntries = async (root, relativePath, scan) => {
         "Topology metadata scan limit exceeded."
       );
     }
-    if (!entry.isSymbolicLink() && !entry.name.startsWith(".") && !ignoredSegments.has(entry.name)) {
-      entries.push(entry);
+    if (!entry2.isSymbolicLink() && !entry2.name.startsWith(".") && !ignoredSegments.has(entry2.name)) {
+      entries.push(entry2);
     }
   }
   return entries.sort((left, right) => compareCodePoints(left.name, right.name));
@@ -17716,8 +17770,8 @@ var collectTopology = async (root, maxTopologyEntries) => {
   const candidates = [];
   const scan = { inspected: 0, limit: maxTopologyEntries };
   for (const topologyRoot of topologyRoots) {
-    const stat2 = await safeStat(root, topologyRoot);
-    if (!stat2?.isDirectory()) continue;
+    const stat3 = await safeStat(root, topologyRoot);
+    if (!stat3?.isDirectory()) continue;
     candidates.push(makeEntry("topology", portableLocator(topologyRoot), { entry_type: "directory" }));
     const children = await approvedDirectoryEntries(root, topologyRoot, scan);
     for (const child of children) {
@@ -17726,7 +17780,7 @@ var collectTopology = async (root, maxTopologyEntries) => {
         candidates.push(makeEntry("topology", portableLocator(childPath), { entry_type: "directory" }));
         if (topologyContainers.has(child.name)) {
           const modules = await approvedDirectoryEntries(root, childPath, scan);
-          for (const module of modules.filter((entry) => entry.isDirectory())) {
+          for (const module of modules.filter((entry2) => entry2.isDirectory())) {
             candidates.push(makeEntry(
               "topology",
               portableLocator(`${childPath}/${module.name}`),
@@ -17745,14 +17799,14 @@ var collectTopology = async (root, maxTopologyEntries) => {
 var parseRecentEvolution = (relativePath, observed, limit) => {
   if (!observed) return [];
   const matches = [...observed.content.matchAll(/^##\s+(.+?)\s*$/gmu)];
-  return matches.slice(0, limit).map((match, index) => {
-    const next = matches[index + 1];
-    const content = observed.content.slice(match.index + match[0].length, next?.index).trim();
+  return matches.slice(0, limit).map((match, index2) => {
+    const next = matches[index2 + 1];
+    const content3 = observed.content.slice(match.index + match[0].length, next?.index).trim();
     const heading = match[1].trim();
     return makeEntry(
       "recent_evolution",
       portableLocator(relativePath, `#${encodeURIComponent(heading)}`),
-      { heading, content }
+      { heading, content: content3 }
     );
   });
 };
@@ -17839,9 +17893,9 @@ var insideRoot = (root, candidate) => {
 var canonicalPath = (path) => {
   if (typeof path !== "string" || path.length === 0 || path.includes("\\")) return null;
   if (posix.isAbsolute(path) || /^[A-Za-z]:/.test(path)) return null;
-  const canonical = posix.normalize(path);
-  if (canonical === "." || canonical === ".." || canonical.startsWith("../")) return null;
-  return canonical;
+  const canonical2 = posix.normalize(path);
+  if (canonical2 === "." || canonical2 === ".." || canonical2.startsWith("../")) return null;
+  return canonical2;
 };
 var canonicalInputPath = (fixturePath, input) => {
   if (typeof input !== "string" || input.length === 0 || input.includes("\\")) return null;
@@ -17862,19 +17916,19 @@ var validateManifest = (manifest) => {
     if (!Array.isArray(manifest.auxiliary_roots)) {
       errors.push(manifestError("/auxiliary_roots"));
     } else {
-      for (const [index, value] of manifest.auxiliary_roots.entries()) {
-        const path = `/auxiliary_roots/${index}`;
-        const canonical = canonicalPath(value);
-        if (!canonical || canonical !== value || canonical.endsWith("/")) {
+      for (const [index2, value] of manifest.auxiliary_roots.entries()) {
+        const path = `/auxiliary_roots/${index2}`;
+        const canonical2 = canonicalPath(value);
+        if (!canonical2 || canonical2 !== value || canonical2.endsWith("/")) {
           errors.push(manifestError(path));
           continue;
         }
-        const previous = auxiliaryRoots.at(-1);
-        if (auxiliaryRoots.includes(canonical) || previous && compareCodePoints(previous, canonical) > 0 || auxiliaryRoots.some((root) => insidePortableRoot(root, canonical) || insidePortableRoot(canonical, root))) {
+        const previous2 = auxiliaryRoots.at(-1);
+        if (auxiliaryRoots.includes(canonical2) || previous2 && compareCodePoints(previous2, canonical2) > 0 || auxiliaryRoots.some((root) => insidePortableRoot(root, canonical2) || insidePortableRoot(canonical2, root))) {
           errors.push(manifestError(path));
           continue;
         }
-        auxiliaryRoots.push(canonical);
+        auxiliaryRoots.push(canonical2);
       }
     }
   }
@@ -17883,73 +17937,73 @@ var validateManifest = (manifest) => {
     return { errors: sortedManifestErrors(errors), fixtures: [], auxiliaryRoots };
   }
   const fixtures = [];
-  for (const [index, entry] of manifest.fixtures.entries()) {
-    const entryPath = `/fixtures/${index}`;
-    if (!isRecord(entry)) {
+  for (const [index2, entry2] of manifest.fixtures.entries()) {
+    const entryPath = `/fixtures/${index2}`;
+    if (!isRecord(entry2)) {
       errors.push(manifestError(entryPath));
       continue;
     }
     const entryErrors = [];
-    for (const field of Object.keys(entry)) {
+    for (const field of Object.keys(entry2)) {
       if (!ENTRY_FIELDS.includes(field)) entryErrors.push(manifestError(`${entryPath}/${field}`));
     }
-    const path = canonicalPath(entry.path);
+    const path = canonicalPath(entry2.path);
     if (!path) entryErrors.push(manifestError(`${entryPath}/path`));
     let validatorValid = false;
-    const pointerValidator = entry.validator === `${JSON_PREFIX}project-pointer`;
-    if (entry.validator === PAIR_VALIDATOR) {
+    const pointerValidator = entry2.validator === `${JSON_PREFIX}project-pointer`;
+    if (entry2.validator === PAIR_VALIDATOR) {
       validatorValid = true;
-    } else if (typeof entry.validator === "string" && entry.validator.startsWith(JSON_PREFIX)) {
-      const kind = entry.validator.slice(JSON_PREFIX.length);
+    } else if (typeof entry2.validator === "string" && entry2.validator.startsWith(JSON_PREFIX)) {
+      const kind = entry2.validator.slice(JSON_PREFIX.length);
       validatorValid = Boolean(kind && getSchemaValidator(kind));
     }
     if (!validatorValid) entryErrors.push(manifestError(`${entryPath}/validator`));
-    if (typeof entry.expected_code !== "string" || !EXPECTED_CODES.has(entry.expected_code)) {
+    if (typeof entry2.expected_code !== "string" || !EXPECTED_CODES.has(entry2.expected_code)) {
       entryErrors.push(manifestError(`${entryPath}/expected_code`));
     }
     let inputs;
-    if (entry.validator === PAIR_VALIDATOR) {
-      if (!isRecord(entry.inputs)) {
+    if (entry2.validator === PAIR_VALIDATOR) {
+      if (!isRecord(entry2.inputs)) {
         entryErrors.push(manifestError(`${entryPath}/inputs`));
       } else {
         inputs = {};
-        for (const field of Object.keys(entry.inputs)) {
+        for (const field of Object.keys(entry2.inputs)) {
           if (!PAIR_INPUTS.includes(field)) entryErrors.push(manifestError(`${entryPath}/inputs/${field}`));
         }
         for (const field of PAIR_INPUTS) {
-          const canonical = path ? canonicalInputPath(path, entry.inputs[field]) : null;
-          if (!canonical) entryErrors.push(manifestError(`${entryPath}/inputs/${field}`));
-          else inputs[field] = canonical;
+          const canonical2 = path ? canonicalInputPath(path, entry2.inputs[field]) : null;
+          if (!canonical2) entryErrors.push(manifestError(`${entryPath}/inputs/${field}`));
+          else inputs[field] = canonical2;
         }
       }
     } else if (pointerValidator) {
-      if (!isRecord(entry.inputs)) {
+      if (!isRecord(entry2.inputs)) {
         entryErrors.push(manifestError(`${entryPath}/inputs`));
       } else {
         inputs = {};
-        for (const field of Object.keys(entry.inputs)) {
+        for (const field of Object.keys(entry2.inputs)) {
           if (!POINTER_INPUTS.includes(field)) entryErrors.push(manifestError(`${entryPath}/inputs/${field}`));
         }
         for (const field of POINTER_INPUTS) {
-          const canonical = path ? canonicalInputPath(posix.dirname(path), entry.inputs[field]) : null;
-          if (!canonical) entryErrors.push(manifestError(`${entryPath}/inputs/${field}`));
-          else inputs[field] = canonical;
+          const canonical2 = path ? canonicalInputPath(posix.dirname(path), entry2.inputs[field]) : null;
+          if (!canonical2) entryErrors.push(manifestError(`${entryPath}/inputs/${field}`));
+          else inputs[field] = canonical2;
         }
       }
-    } else if ("inputs" in entry) {
+    } else if ("inputs" in entry2) {
       entryErrors.push(manifestError(`${entryPath}/inputs`));
     }
     errors.push(...entryErrors);
     if (entryErrors.length === 0) fixtures.push({
       path,
-      validator: entry.validator,
-      expected_code: entry.expected_code,
+      validator: entry2.validator,
+      expected_code: entry2.expected_code,
       ...inputs ? { inputs } : {}
     });
   }
-  for (const [index, root] of auxiliaryRoots.entries()) {
-    if (fixtures.some((entry) => declaredFiles(entry).some((path) => insidePortableRoot(root, path)))) {
-      errors.push(manifestError(`/auxiliary_roots/${index}`));
+  for (const [index2, root] of auxiliaryRoots.entries()) {
+    if (fixtures.some((entry2) => declaredFiles(entry2).some((path) => insidePortableRoot(root, path)))) {
+      errors.push(manifestError(`/auxiliary_roots/${index2}`));
     }
   }
   return { errors: sortedManifestErrors(errors), fixtures, auxiliaryRoots };
@@ -17966,57 +18020,57 @@ var resolveListedPath = async (root, path) => {
 };
 var listFixtureFiles = async (root, directory = root, auxiliaryRoots = /* @__PURE__ */ new Set()) => {
   const paths = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (entry.name === ".gitkeep") continue;
-    const absolute = resolve3(directory, entry.name);
+  for (const entry2 of await readdir(directory, { withFileTypes: true })) {
+    if (entry2.name === ".gitkeep") continue;
+    const absolute = resolve3(directory, entry2.name);
     const portable = posix.normalize(relative3(root, absolute).split(sep3).join("/"));
-    if (entry.isDirectory()) {
+    if (entry2.isDirectory()) {
       if (!auxiliaryRoots.has(portable)) {
         paths.push(...await listFixtureFiles(root, absolute, auxiliaryRoots));
       }
-    } else if ((entry.isFile() || entry.isSymbolicLink()) && absolute !== resolve3(root, "manifest.json")) {
+    } else if ((entry2.isFile() || entry2.isSymbolicLink()) && absolute !== resolve3(root, "manifest.json")) {
       paths.push(portable);
     }
   }
   return paths;
 };
-var declaredFiles = (entry) => entry.validator.startsWith(JSON_PREFIX) ? [entry.path, ...Object.values(entry.inputs ?? {})] : Object.values(entry.inputs);
+var declaredFiles = (entry2) => entry2.validator.startsWith(JSON_PREFIX) ? [entry2.path, ...Object.values(entry2.inputs ?? {})] : Object.values(entry2.inputs);
 var validateAuxiliaryRoots = async (root, auxiliaryRoots) => {
   const realRoot = await realpath4(root);
   const errors = [];
   for (const locator of auxiliaryRoots) {
     const candidate = resolve3(root, locator);
-    let stat2;
+    let stat3;
     let realCandidate;
     try {
-      stat2 = await lstat3(candidate);
+      stat3 = await lstat3(candidate);
       realCandidate = await realpath4(candidate);
     } catch {
       errors.push({ code: "FIXTURE_AUXILIARY_ROOT_INVALID", path: locator });
       continue;
     }
-    if (!insideRoot(root, candidate) || stat2.isSymbolicLink() || !stat2.isDirectory() || !insideRoot(realRoot, realCandidate)) {
+    if (!insideRoot(root, candidate) || stat3.isSymbolicLink() || !stat3.isDirectory() || !insideRoot(realRoot, realCandidate)) {
       errors.push({ code: "FIXTURE_AUXILIARY_ROOT_INVALID", path: locator });
     }
   }
   return errors;
 };
-var validateEntry = async (root, entry) => {
-  if (entry.validator.startsWith(JSON_PREFIX)) {
-    const path = await resolveListedPath(root, entry.path);
+var validateEntry = async (root, entry2) => {
+  if (entry2.validator.startsWith(JSON_PREFIX)) {
+    const path = await resolveListedPath(root, entry2.path);
     if (!path) return { ok: false, errors: [{ code: "FIXTURE_PATH_INVALID" }] };
     const value = JSON.parse(await readFile3(path, "utf8"));
-    if (entry.validator === `${JSON_PREFIX}project-pointer`) {
-      const mapPath2 = await resolveListedPath(root, entry.inputs.resolved_project_map);
+    if (entry2.validator === `${JSON_PREFIX}project-pointer`) {
+      const mapPath2 = await resolveListedPath(root, entry2.inputs.resolved_project_map);
       if (!mapPath2) return { ok: false, errors: [{ code: "FIXTURE_PATH_INVALID" }] };
       const resolvedProjectMap = JSON.parse(await readFile3(mapPath2, "utf8"));
       return validateJson("project-pointer", value, { resolvedProjectMap });
     }
-    return validateJson(entry.validator.slice(JSON_PREFIX.length), value);
+    return validateJson(entry2.validator.slice(JSON_PREFIX.length), value);
   }
-  const enPath = await resolveListedPath(root, entry.inputs.en);
-  const zhPath = await resolveListedPath(root, entry.inputs["zh-CN"]);
-  const mapPath = await resolveListedPath(root, entry.inputs.project_map);
+  const enPath = await resolveListedPath(root, entry2.inputs.en);
+  const zhPath = await resolveListedPath(root, entry2.inputs["zh-CN"]);
+  const mapPath = await resolveListedPath(root, entry2.inputs.project_map);
   if (!enPath || !zhPath || !mapPath) {
     return { ok: false, errors: [{ code: "FIXTURE_PATH_INVALID" }] };
   }
@@ -18046,12 +18100,12 @@ var validateFixturesUnchecked = async (rootValue) => {
   }
   const seen = /* @__PURE__ */ new Set();
   const duplicateErrors = [];
-  for (const entry of fixtures) {
-    if (seen.has(entry.path)) duplicateErrors.push({
+  for (const entry2 of fixtures) {
+    if (seen.has(entry2.path)) duplicateErrors.push({
       code: "FIXTURE_MANIFEST_DUPLICATE",
-      path: entry.path
+      path: entry2.path
     });
-    seen.add(entry.path);
+    seen.add(entry2.path);
   }
   if (duplicateErrors.length > 0) {
     duplicateErrors.sort((left, right) => compareCodePoints(left.path, right.path));
@@ -18061,20 +18115,20 @@ var validateFixturesUnchecked = async (rootValue) => {
   const actual = await listFixtureFiles(root, root, new Set(auxiliaryRoots));
   const errors = actual.filter((path) => !declared.has(path)).map((path) => ({ code: "FIXTURE_UNLISTED", path })).sort((left, right) => compareCodePoints(left.path, right.path));
   const results = [];
-  for (const entry of fixtures.toSorted((left, right) => compareCodePoints(left.path, right.path))) {
+  for (const entry2 of fixtures.toSorted((left, right) => compareCodePoints(left.path, right.path))) {
     let result;
     try {
-      result = await validateEntry(root, entry);
+      result = await validateEntry(root, entry2);
     } catch {
       result = { ok: false, errors: [{ code: "FIXTURE_READ_ERROR" }] };
     }
     const actualCode = result.ok ? "OK" : result.errors[0]?.code ?? "FIXTURE_VALIDATION_ERROR";
     results.push({
-      path: entry.path,
-      validator: entry.validator,
-      expected_code: entry.expected_code,
+      path: entry2.path,
+      validator: entry2.validator,
+      expected_code: entry2.expected_code,
       actual_code: actualCode,
-      matched: actualCode === entry.expected_code
+      matched: actualCode === entry2.expected_code
     });
   }
   return {
@@ -18092,20 +18146,490 @@ var validateFixtures = async (rootValue) => {
 };
 
 // scripts/delivery/alignment-marker.mjs
-import { isDeepStrictEqual } from "node:util";
+import { isDeepStrictEqual as isDeepStrictEqual2 } from "node:util";
 
 // scripts/lib/reference-safety.mjs
+import { isAbsolute as isAbsolute5, posix as posix2 } from "node:path";
 var credentialBearingUrl = /[a-z][a-z0-9+.-]*:\/\/[^/\s]*@/iu;
 var isSafeReference = (value) => typeof value === "string" && value.length > 0 && value.length <= 500 && !/[\p{Cc}\p{Cf}\p{Z}`<>\\]/u.test(value) && !value.includes("--") && !credentialBearingUrl.test(value);
+var isSafeLocator = (value) => typeof value === "string" && isSafeReference(value) && !isAbsolute5(value) && !/^[A-Za-z]:[\\/]/u.test(value) && !value.includes("://") && !/[#()]/u.test(value) && !value.split("/").includes("..") && posix2.normalize(value) === value;
+
+// scripts/delivery/closure-gates.mjs
+var issue = (code, path, message) => fail([createError(code, path, message)]);
+var qualifiedId = (ownerId, obligation) => `${ownerId}#${obligation.obligation_id}`;
+var terminalOutcome = (id, obligation) => ({
+  qualified_id: id,
+  status: obligation.status,
+  evidence_refs: obligation.evidence_refs,
+  ...obligation.resolution_ref ? { resolution_ref: obligation.resolution_ref } : {},
+  ...obligation.human_approval_ref ? { human_approval_ref: obligation.human_approval_ref } : {}
+});
+var evaluateClosureGate = ({ gate, owner_artifact_id: ownerId, obligations, qualified_obligations: external } = {}) => {
+  if (typeof gate !== "string" || gate.length === 0 || typeof ownerId !== "string" || !Array.isArray(obligations) || !Array.isArray(external)) {
+    return issue("CLOSURE_GATE_INPUT_INVALID", "/", "Gate, owner, and obligation lists are required.");
+  }
+  const entries = [
+    ...obligations.map((obligation) => ({ owner_artifact_id: ownerId, obligation })),
+    ...external
+  ];
+  const byId = /* @__PURE__ */ new Map();
+  for (const [index2, entry2] of entries.entries()) {
+    if (!entry2 || typeof entry2.owner_artifact_id !== "string") {
+      return issue("OBLIGATION_OWNER_INVALID", `/qualified_obligations/${index2}`, "Qualified obligation owner is invalid.");
+    }
+    const validation = validateJson("obligation-instance", entry2.obligation);
+    if (!validation.ok) return validation;
+    const id = qualifiedId(entry2.owner_artifact_id, entry2.obligation);
+    if (byId.has(id)) return issue("OBLIGATION_QUALIFIED_ID_DUPLICATE", "/", `Duplicate qualified obligation: ${id}`);
+    byId.set(id, entry2.obligation);
+  }
+  const blocking = /* @__PURE__ */ new Set();
+  const outcomes = /* @__PURE__ */ new Map();
+  const visit = (id, stack = /* @__PURE__ */ new Set()) => {
+    if (stack.has(id)) return issue("OBLIGATION_SUCCESSOR_CYCLE", "/successor_obligation_ref", "Obligation successor chain contains a cycle.");
+    const obligation = byId.get(id);
+    if (!obligation) return issue("OBLIGATION_SUCCESSOR_MISSING", "/successor_obligation_ref", "Qualified successor obligation does not exist.");
+    if (obligation.status === "SUPERSEDED") {
+      const nextStack = new Set(stack);
+      nextStack.add(id);
+      return visit(obligation.successor_obligation_ref, nextStack);
+    }
+    if (obligation.status === "OPEN") {
+      if (obligation.required_before === gate) blocking.add(id);
+      return ok(null);
+    }
+    outcomes.set(id, terminalOutcome(id, obligation));
+    return ok(null);
+  };
+  for (const obligation of obligations) {
+    const result = visit(qualifiedId(ownerId, obligation));
+    if (!result.ok) return result;
+  }
+  const value = {
+    blocking_obligation_refs: [...blocking].sort(compareCodePoints),
+    compact_outcomes: [...outcomes.values()].sort((left, right) => compareCodePoints(left.qualified_id, right.qualified_id))
+  };
+  if (value.blocking_obligation_refs.length > 0) {
+    return {
+      ok: false,
+      value,
+      errors: [createError("CLOSURE_GATE_BLOCKED", "/obligations", "Open obligations block this closure gate.")]
+    };
+  }
+  return ok(value);
+};
+
+// scripts/delivery/impact-declaration.mjs
+var CLASSES = /* @__PURE__ */ new Set([
+  "COMPOSABLE_SEAM",
+  "DEPENDENCY",
+  "DISJOINT_FACTS",
+  "INFORMATIONAL_OVERLAP",
+  "SAME_FACT_CONFLICT",
+  "STALE_REPLAYABLE",
+  "STALE_UNREPLAYABLE"
+]);
+var OWNER_KINDS = /* @__PURE__ */ new Set(["prd", "non-prd-delivery"]);
+var RELATIONSHIP_KINDS = /* @__PURE__ */ new Set(["coordinates_with", "depends_on", "governed_by"]);
+var ID = /^[a-z][a-z0-9-]*$/u;
+var TOP_LEVEL = /* @__PURE__ */ new Set([
+  "affected_domain_ids",
+  "consumed_contracts",
+  "current_knowledge_baseline",
+  "intended_fact_ids",
+  "knowledge_baseline",
+  "overlap",
+  "owner_artifact_id",
+  "owner_kind",
+  "primary_domain_id",
+  "provided_contracts",
+  "relationships",
+  "repository_ids"
+]);
+var OVERLAP_FIELDS = /* @__PURE__ */ new Set([
+  "baseline_replay_ref",
+  "class",
+  "conflict_ref",
+  "evidence_refs",
+  "joint_acceptance_seam_ref",
+  "peer_fact_ids",
+  "peer_owner_ref",
+  "shared_domain_ids",
+  "shared_fact_ids"
+]);
+var issue2 = (code, path, message) => fail([createError(code, path, message)]);
+var isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var sorted = (values) => [...values].sort(compareCodePoints);
+var hasOnly = (value, fields) => isObject(value) && Object.keys(value).every((key) => fields.has(key));
+var validIdList = (value, { nonEmpty = false } = {}) => Array.isArray(value) && (!nonEmpty || value.length > 0) && new Set(value).size === value.length && value.every((entry2) => typeof entry2 === "string" && ID.test(entry2));
+var validRefList = (value, { nonEmpty = false } = {}) => Array.isArray(value) && (!nonEmpty || value.length > 0) && new Set(value).size === value.length && value.every(isSafeReference);
+var validateContracts = (contracts, path) => {
+  if (!Array.isArray(contracts)) return issue2("IMPACT_CONTRACT_INVALID", path, "Contracts must be an array.");
+  const ids = /* @__PURE__ */ new Set();
+  for (const [index2, contract] of contracts.entries()) {
+    if (!hasOnly(contract, /* @__PURE__ */ new Set(["contract_id", "revision_ref"])) || !ID.test(contract.contract_id ?? "") || !isSafeReference(contract.revision_ref)) {
+      return issue2("IMPACT_REFERENCE_INVALID", `${path}/${index2}`, "Contract ID and revision reference must be safe.");
+    }
+    if (ids.has(contract.contract_id)) return issue2("IMPACT_CONTRACT_DUPLICATE", `${path}/${index2}/contract_id`, "Contract IDs must be unique.");
+    ids.add(contract.contract_id);
+  }
+  return null;
+};
+var validateImpactDeclaration = (value) => {
+  if (!hasOnly(value, TOP_LEVEL)) return issue2("IMPACT_DECLARATION_INVALID", "/", "Impact declaration has an invalid shape.");
+  if (!ID.test(value.owner_artifact_id ?? "") || !OWNER_KINDS.has(value.owner_kind)) {
+    return issue2("IMPACT_OWNER_INVALID", "/owner_artifact_id", "Impact declaration requires a supported owner.");
+  }
+  for (const [field, nonEmpty] of [["repository_ids", true], ["affected_domain_ids", true], ["intended_fact_ids", false]]) {
+    if (!validIdList(value[field], { nonEmpty })) return issue2("IMPACT_ID_INVALID", `/${field}`, "Impact IDs must be unique safe IDs.");
+  }
+  if (!ID.test(value.primary_domain_id ?? "") || !value.affected_domain_ids.includes(value.primary_domain_id)) {
+    return issue2("IMPACT_PRIMARY_DOMAIN_INVALID", "/primary_domain_id", "Primary domain must be affected.");
+  }
+  if (!isSafeReference(value.knowledge_baseline) || !isSafeReference(value.current_knowledge_baseline)) {
+    return issue2("IMPACT_REFERENCE_INVALID", "/knowledge_baseline", "Knowledge baselines must be safe references.");
+  }
+  const contractError = validateContracts(value.provided_contracts, "/provided_contracts") ?? validateContracts(value.consumed_contracts, "/consumed_contracts");
+  if (contractError) return contractError;
+  if (!Array.isArray(value.relationships)) return issue2("IMPACT_RELATIONSHIP_INVALID", "/relationships", "Relationships must be an array.");
+  for (const [index2, relationship] of value.relationships.entries()) {
+    if (!hasOnly(relationship, /* @__PURE__ */ new Set(["evidence_refs", "kind", "target_owner_ref"])) || !RELATIONSHIP_KINDS.has(relationship.kind) || !isSafeReference(relationship.target_owner_ref) || !validRefList(relationship.evidence_refs, { nonEmpty: true })) {
+      return issue2("IMPACT_REFERENCE_INVALID", `/relationships/${index2}`, "Relationship evidence and target must be safe.");
+    }
+  }
+  if (!hasOnly(value.overlap, OVERLAP_FIELDS)) return issue2("IMPACT_OVERLAP_INVALID", "/overlap", "Overlap has an invalid shape.");
+  const overlap = value.overlap;
+  if (!overlap.class) return issue2("IMPACT_CLASS_MISSING", "/overlap/class", "Agent must supply an overlap class.");
+  if (!CLASSES.has(overlap.class)) return issue2("IMPACT_CLASS_INVALID", "/overlap/class", "Unsupported overlap class.");
+  if (!isSafeReference(overlap.peer_owner_ref) || !validRefList(overlap.evidence_refs, { nonEmpty: true })) {
+    return issue2("IMPACT_REFERENCE_INVALID", "/overlap", "Overlap owner and evidence references must be safe.");
+  }
+  for (const field of ["shared_domain_ids", "shared_fact_ids", "peer_fact_ids"]) {
+    if (!validIdList(overlap[field])) return issue2("IMPACT_ID_INVALID", `/overlap/${field}`, "Overlap IDs must be unique safe IDs.");
+  }
+  for (const field of ["baseline_replay_ref", "conflict_ref", "joint_acceptance_seam_ref"]) {
+    if (overlap[field] !== void 0 && !isSafeReference(overlap[field])) {
+      return issue2("IMPACT_REFERENCE_INVALID", `/overlap/${field}`, "Overlap references must be safe.");
+    }
+  }
+  const relationshipRequired = overlap.class === "DEPENDENCY" ? "depends_on" : overlap.class === "COMPOSABLE_SEAM" ? "coordinates_with" : null;
+  if (relationshipRequired && !value.relationships.some((entry2) => entry2.kind === relationshipRequired && entry2.target_owner_ref === overlap.peer_owner_ref)) return issue2("IMPACT_RELATIONSHIP_MISSING", "/relationships", "Declared overlap class requires an evidenced peer relationship.");
+  if (overlap.class === "COMPOSABLE_SEAM" && !overlap.joint_acceptance_seam_ref) {
+    return issue2("JOINT_ACCEPTANCE_SEAM_MISSING", "/overlap/joint_acceptance_seam_ref", "Composable work requires a joint acceptance seam.");
+  }
+  if (overlap.class === "SAME_FACT_CONFLICT") {
+    if (overlap.shared_fact_ids.length === 0 || overlap.shared_fact_ids.some((id) => !value.intended_fact_ids.includes(id))) {
+      return issue2("SHARED_FACT_MISSING", "/overlap/shared_fact_ids", "Same-fact conflict requires a shared intended fact.");
+    }
+    if (!overlap.conflict_ref) return issue2("IMPACT_REFERENCE_INVALID", "/overlap/conflict_ref", "Same-fact conflict requires a conflict reference.");
+  }
+  if (overlap.class === "DISJOINT_FACTS" && value.intended_fact_ids.some((id) => overlap.peer_fact_ids.includes(id))) {
+    return issue2("DISJOINT_FACT_CONFLICT", "/overlap/peer_fact_ids", "Disjoint facts cannot overlap.");
+  }
+  const stale = value.knowledge_baseline !== value.current_knowledge_baseline;
+  const staleClass = overlap.class === "STALE_REPLAYABLE" || overlap.class === "STALE_UNREPLAYABLE";
+  if (staleClass && !stale) return issue2("BASELINE_NOT_STALE", "/knowledge_baseline", "Stale overlap class requires baseline drift.");
+  if (stale && !staleClass) return issue2("STALE_CLASS_REQUIRED", "/overlap/class", "Baseline drift requires an explicit stale overlap class.");
+  if (overlap.class === "STALE_REPLAYABLE" && !overlap.baseline_replay_ref) {
+    return issue2("BASELINE_REPLAY_MISSING", "/overlap/baseline_replay_ref", "Replayable baseline drift requires replay evidence.");
+  }
+  if (overlap.class === "STALE_UNREPLAYABLE" && !overlap.conflict_ref) {
+    return issue2("IMPACT_REFERENCE_INVALID", "/overlap/conflict_ref", "Unreplayable baseline drift requires a conflict reference.");
+  }
+  return ok({
+    ...structuredClone(value),
+    repository_ids: sorted(value.repository_ids),
+    affected_domain_ids: sorted(value.affected_domain_ids),
+    intended_fact_ids: sorted(value.intended_fact_ids),
+    required_obligation_kinds: []
+  });
+};
+
+// scripts/delivery/delivery-layout.mjs
+import { lstat as lstat4, opendir as opendir2, readFile as readFile4, realpath as realpath5 } from "node:fs/promises";
+import { isAbsolute as isAbsolute6, join as join4, relative as relative4, resolve as resolve4, sep as sep4 } from "node:path";
+import { isDeepStrictEqual } from "node:util";
+var DELIVERY_LAYOUT = Object.freeze({ schema_version: 1, layout_version: 2 });
+var ID2 = /^[a-z][a-z0-9-]*$/u;
+var ROOT_KINDS = /* @__PURE__ */ new Set(["prd", "non-prd-delivery"]);
+var CHILD_DIRECTORIES = Object.freeze({
+  architecture: "architecture",
+  guidance: "guidance",
+  batch: "batches",
+  "test-report": "test-reports",
+  "closure-summary": "closure"
+});
+var V2_DIRECTORIES = /* @__PURE__ */ new Set(["feedback", "non-prd", "prds", "views"]);
+var V2_ROOT_FILES = /* @__PURE__ */ new Set(["INDEX-en.md", "INDEX.md", "layout.json"]);
+var ARCHIVE_DIRECTORIES = /* @__PURE__ */ new Set(["feedback", "non-prd", "prds"]);
+var MAX_ROOT_ENTRIES = 1e3;
+var failure = (code, path, message) => fail([createError(code, path, message)]);
+var inside2 = (root, candidate) => {
+  const fromRoot = relative4(root, candidate);
+  return fromRoot === "" || fromRoot !== ".." && !fromRoot.startsWith(`..${sep4}`) && !isAbsolute6(fromRoot);
+};
+var languagePair = (directory, artifactId) => ({
+  en: `${directory}/${artifactId}-en.md`,
+  "zh-CN": `${directory}/${artifactId}.md`
+});
+var ownerRoot = (ownerKind, ownerId) => {
+  if (ownerKind === "prd") return `delivery/prds/${ownerId}`;
+  if (ownerKind === "non-prd-delivery") return `delivery/non-prd/${ownerId}`;
+  throw Object.assign(new Error("Invalid physical owner kind."), { code: "DELIVERY_OWNER_MISMATCH" });
+};
+var activeDirectory = (frontmatter, ownerKind) => {
+  if (frontmatter.artifact_kind === "feedback") return "delivery/feedback";
+  const root = ownerRoot(ownerKind, frontmatter.owner_artifact_id);
+  const child = CHILD_DIRECTORIES[frontmatter.artifact_kind];
+  return child ? `${root}/${child}` : root;
+};
+var regularDirectory = async (path, parentReal = null) => {
+  const state = await lstat4(path);
+  if (!state.isDirectory() || state.isSymbolicLink()) throw new Error("Regular directory required.");
+  const physical = await realpath5(path);
+  if (parentReal !== null && !inside2(parentReal, physical)) throw new Error("Directory escapes parent.");
+  return physical;
+};
+var existingDirectory = async (path, parentReal) => {
+  try {
+    return await regularDirectory(path, parentReal);
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+};
+var boundedEntries = async (directory) => {
+  const entries = [];
+  for await (const entry2 of await opendir2(directory)) {
+    entries.push(entry2);
+    if (entries.length > MAX_ROOT_ENTRIES) throw new Error("Delivery root is unbounded.");
+  }
+  entries.sort((left, right) => compareCodePoints(left.name, right.name));
+  return entries;
+};
+var ownerFrontmatter = async (path, ownerRootReal) => {
+  const state = await lstat4(path);
+  const physical = await realpath5(path);
+  if (!state.isFile() || state.isSymbolicLink() || !inside2(ownerRootReal, physical)) throw new Error("Unsafe owner document.");
+  const source = (await readFile4(physical, "utf8")).replaceAll("\r\n", "\n");
+  const closing = source.indexOf("\n---\n", 4);
+  if (!source.startsWith("---\n") || closing === -1) throw new Error("Owner Frontmatter is missing.");
+  const parsed = parseRestrictedYaml(source.slice(4, closing), "/frontmatter");
+  if (!parsed.ok || !validateJson("delivery-frontmatter", parsed.value).ok || parsed.value.schema_version !== 2) throw new Error("Owner Frontmatter is invalid.");
+  return parsed.value;
+};
+var resolveDeliveryRoot = async (root, { allowMissing = false } = {}) => {
+  if (typeof root !== "string" || !isAbsolute6(root)) throw new Error("Absolute project root required.");
+  const projectRoot = await regularDirectory(resolve4(root));
+  const docsRoot = await regularDirectory(join4(projectRoot, "docs"), projectRoot);
+  const lifecycleRoot = await regularDirectory(join4(docsRoot, "project-lifecycle"), docsRoot);
+  const deliveryRoot = await existingDirectory(join4(lifecycleRoot, "delivery"), lifecycleRoot);
+  if (deliveryRoot === null && !allowMissing) throw new Error("Delivery root required.");
+  return { lifecycleRoot, deliveryRoot };
+};
+var deliveryLayoutContent = () => `${JSON.stringify(DELIVERY_LAYOUT, null, 2)}
+`;
+var validatePhysicalOwner = (frontmatter) => {
+  if (!frontmatter || typeof frontmatter !== "object" || Array.isArray(frontmatter) || !ID2.test(frontmatter.artifact_id ?? "") || typeof frontmatter.artifact_kind !== "string") {
+    return failure("DELIVERY_OWNER_INVALID", "/", "A bounded delivery artifact identity is required.");
+  }
+  if (frontmatter.artifact_kind === "feedback") {
+    return Object.hasOwn(frontmatter, "owner_artifact_id") ? failure("DELIVERY_OWNER_FORBIDDEN", "/owner_artifact_id", "Feedback has no physical delivery owner.") : ok(frontmatter);
+  }
+  if (!ID2.test(frontmatter.owner_artifact_id ?? "")) {
+    return failure("DELIVERY_OWNER_REQUIRED", "/owner_artifact_id", "A physical delivery owner is required.");
+  }
+  if (ROOT_KINDS.has(frontmatter.artifact_kind) && frontmatter.owner_artifact_id !== frontmatter.artifact_id) {
+    return failure("DELIVERY_OWNER_MISMATCH", "/owner_artifact_id", "A root delivery owner must own itself.");
+  }
+  return ok(frontmatter);
+};
+var activeDeliveryPair = (frontmatter, { ownerKind = null } = {}) => languagePair(
+  activeDirectory(frontmatter, ownerKind),
+  frontmatter.artifact_id
+);
+var archivedDeliveryPair = (frontmatter, { ownerKind = null } = {}) => {
+  const active = activeDirectory(frontmatter, ownerKind);
+  return languagePair(active.replace(/^delivery\//u, "archive/delivery/"), frontmatter.artifact_id);
+};
+var alignmentReviewPair = () => languagePair("delivery/views", "alignment-review");
+var resolvePhysicalOwner = async ({ lifecycleRoot, frontmatter } = {}) => {
+  const ownership = validatePhysicalOwner(frontmatter);
+  if (!ownership.ok) return ownership;
+  if (frontmatter.artifact_kind === "feedback") return ok({ artifact_kind: null, artifact_id: null });
+  if (ROOT_KINDS.has(frontmatter.artifact_kind)) {
+    return ok({ artifact_kind: frontmatter.artifact_kind, artifact_id: frontmatter.artifact_id });
+  }
+  try {
+    const root = await regularDirectory(lifecycleRoot);
+    const delivery = await regularDirectory(join4(root, "delivery"), root);
+    const candidates = [];
+    for (const [kind, directory] of [["prd", "prds"], ["non-prd-delivery", "non-prd"]]) {
+      const owner = await existingDirectory(
+        join4(delivery, directory, frontmatter.owner_artifact_id),
+        delivery
+      );
+      if (owner !== null) {
+        const base = join4(owner, frontmatter.owner_artifact_id);
+        const [en, zh] = await Promise.all([
+          ownerFrontmatter(`${base}-en.md`, owner),
+          ownerFrontmatter(`${base}.md`, owner)
+        ]);
+        if (!isDeepStrictEqual(en, zh) || en.artifact_id !== frontmatter.owner_artifact_id || en.artifact_kind !== kind || en.owner_artifact_id !== en.artifact_id || en.retention_tier !== "active") throw new Error("Physical owner pair is invalid.");
+        candidates.push({ artifact_kind: kind, artifact_id: frontmatter.owner_artifact_id });
+      }
+    }
+    return candidates.length === 1 ? ok(candidates[0]) : failure("DELIVERY_OWNER_MISMATCH", "/owner_artifact_id", "Exactly one physical delivery owner must exist.");
+  } catch {
+    return failure("DELIVERY_OWNER_MISMATCH", "/owner_artifact_id", "The physical delivery owner could not be resolved safely.");
+  }
+};
+var detectDeliveryLayout = async ({ root } = {}) => {
+  let lifecycleRoot;
+  let deliveryRoot;
+  try {
+    ({ lifecycleRoot, deliveryRoot } = await resolveDeliveryRoot(root, { allowMissing: true }));
+  } catch {
+    return failure("DELIVERY_LAYOUT_PATH_INVALID", "/root", "Delivery layout inspection requires a bounded regular project root.");
+  }
+  if (deliveryRoot === null) return ok({ kind: "EMPTY", marker: null, evidence_locators: [] });
+  try {
+    const entries = await boundedEntries(deliveryRoot);
+    const archiveRoot = await existingDirectory(join4(lifecycleRoot, "archive/delivery"), lifecycleRoot);
+    const archiveEntries = archiveRoot === null ? [] : await boundedEntries(archiveRoot);
+    const evidenceLocators = entries.map(({ name }) => `delivery/${name}`).sort(compareCodePoints);
+    if (entries.some((entry2) => entry2.isSymbolicLink()) || archiveEntries.some((entry2) => entry2.isSymbolicLink())) {
+      return failure("DELIVERY_LAYOUT_PATH_INVALID", "/delivery", "Managed delivery entries cannot be symbolic links.");
+    }
+    const markerEntry = entries.find(({ name }) => name === "layout.json");
+    let marker = null;
+    if (markerEntry) {
+      if (!markerEntry.isFile()) {
+        return failure("DELIVERY_LAYOUT_MARKER_INVALID", "/delivery/layout.json", "Delivery layout marker must be a regular file.");
+      }
+      try {
+        marker = JSON.parse(await readFile4(join4(deliveryRoot, "layout.json"), "utf8"));
+      } catch {
+        return failure("DELIVERY_LAYOUT_MARKER_INVALID", "/delivery/layout.json", "Delivery layout marker must be valid JSON.");
+      }
+      if (!validateJson("delivery-layout", marker).ok) {
+        return failure("DELIVERY_LAYOUT_MARKER_INVALID", "/delivery/layout.json", "Delivery layout marker is invalid.");
+      }
+    }
+    const flatMarkdown = entries.filter(({ name }) => name.endsWith(".md") && !["INDEX-en.md", "INDEX.md"].includes(name));
+    const hierarchy = entries.filter((entry2) => entry2.isDirectory() && V2_DIRECTORIES.has(entry2.name));
+    const unknown = entries.filter((entry2) => entry2.isDirectory() ? !V2_DIRECTORIES.has(entry2.name) : !V2_ROOT_FILES.has(entry2.name));
+    const archiveInvalid = archiveEntries.some((entry2) => !entry2.isDirectory() || !ARCHIVE_DIRECTORIES.has(entry2.name));
+    if (marker !== null) {
+      return ok({
+        kind: flatMarkdown.length > 0 || unknown.length > 0 || archiveInvalid ? "INVALID_MIXED" : "V2",
+        marker,
+        evidence_locators: evidenceLocators
+      });
+    }
+    if (hierarchy.length > 0 || unknown.some((entry2) => !entry2.name.endsWith(".md"))) {
+      return ok({ kind: "INVALID_MIXED", marker: null, evidence_locators: evidenceLocators });
+    }
+    return ok({
+      kind: flatMarkdown.length > 0 ? "LEGACY_FLAT" : "EMPTY",
+      marker: null,
+      evidence_locators: evidenceLocators
+    });
+  } catch {
+    return failure("DELIVERY_LAYOUT_PATH_INVALID", "/delivery", "Delivery layout could not be inspected safely.");
+  }
+};
+
+// scripts/delivery/retention.mjs
+var HASH = /^sha256:[0-9a-f]{64}$/u;
+var ID3 = /^[a-z][a-z0-9-]*$/u;
+var failure2 = (code, path, message) => fail([createError(code, path, message)]);
+var record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var exactKeys = (value, allowed) => record(value) && Object.keys(value).every((key) => allowed.has(key));
+var artifactKeys = /* @__PURE__ */ new Set([
+  "artifact_id",
+  "artifact_kind",
+  "owner_artifact_id",
+  "owner_artifact_kind",
+  "body_hashes",
+  "evidence_refs",
+  "locators"
+]);
+var createRetentionPlan = ({ summary, artifacts, delete_evidence_refs: deletionRefs } = {}) => {
+  if (!record(summary) || !ID3.test(summary.artifact_id ?? "") || !isSafeReference(summary.closure_ref)) {
+    return failure2("RETENTION_SUMMARY_INVALID", "/summary", "Retention requires one compact durable summary identity.");
+  }
+  if (!Array.isArray(deletionRefs) || deletionRefs.length > 0) {
+    return failure2("EVIDENCE_DELETE_FORBIDDEN", "/delete_evidence_refs", "Unique delivery evidence is never automatically deleted.");
+  }
+  if (!Array.isArray(artifacts) || artifacts.length === 0) {
+    return failure2("RETENTION_ARTIFACTS_MISSING", "/artifacts", "At least one detailed owner artifact is required.");
+  }
+  const ids = /* @__PURE__ */ new Set();
+  const evidence = /* @__PURE__ */ new Set();
+  const transitions = [];
+  for (const [index2, artifact] of artifacts.entries()) {
+    if (!exactKeys(artifact, artifactKeys) || !ID3.test(artifact.artifact_id ?? "") || typeof artifact.artifact_kind !== "string" || artifact.artifact_kind.length === 0 || !ID3.test(artifact.owner_artifact_id ?? "") || !["prd", "non-prd-delivery"].includes(artifact.owner_artifact_kind) || !record(artifact.locators) || !record(artifact.body_hashes) || Object.keys(artifact.locators).sort().join(",") !== "en,zh-CN" || !isSafeLocator(artifact.locators.en) || !isSafeLocator(artifact.locators["zh-CN"]) || !artifact.locators.en.startsWith("delivery/") || !artifact.locators["zh-CN"].startsWith("delivery/") || !HASH.test(artifact.body_hashes.en ?? "") || !HASH.test(artifact.body_hashes["zh-CN"] ?? "") || !Array.isArray(artifact.evidence_refs) || !artifact.evidence_refs.every(isSafeReference)) {
+      return failure2("RETENTION_ARTIFACT_INVALID", `/artifacts/${index2}`, "Detailed artifacts require safe paired locators, body hashes, and evidence references.");
+    }
+    if (ids.has(artifact.artifact_id)) return failure2("RETENTION_ARTIFACT_DUPLICATE", `/artifacts/${index2}/artifact_id`, "Detailed artifact IDs must be unique.");
+    const ownership = {
+      artifact_id: artifact.artifact_id,
+      artifact_kind: artifact.artifact_kind,
+      owner_artifact_id: artifact.owner_artifact_id
+    };
+    const expectedActive = activeDeliveryPair(ownership, { ownerKind: artifact.owner_artifact_kind });
+    if (expectedActive.en !== artifact.locators.en || expectedActive["zh-CN"] !== artifact.locators["zh-CN"]) {
+      return failure2("RETENTION_OWNER_MISMATCH", `/artifacts/${index2}/locators`, "Detailed artifact locators must match their declared physical owner.");
+    }
+    ids.add(artifact.artifact_id);
+    artifact.evidence_refs.forEach((ref) => evidence.add(ref));
+    transitions.push({
+      artifact_id: artifact.artifact_id,
+      artifact_kind: artifact.artifact_kind,
+      from: structuredClone(artifact.locators),
+      to: archivedDeliveryPair(ownership, { ownerKind: artifact.owner_artifact_kind }),
+      body_hashes: structuredClone(artifact.body_hashes),
+      retention_tier: "archive"
+    });
+  }
+  transitions.sort((left, right) => compareCodePoints(left.artifact_id, right.artifact_id));
+  return ok({
+    active_summary: { artifact_id: summary.artifact_id, retention_tier: "closed-summary" },
+    archive_transitions: transitions,
+    retained_unique_evidence_refs: [...evidence].sort(compareCodePoints),
+    writable_closed_body_regions: ["feedback:marking", "feedback:coverage"]
+  });
+};
 
 // scripts/delivery/close-delivery.mjs
-var ID = /^[a-z][a-z0-9-]*$/u;
+var ID4 = /^[a-z][a-z0-9-]*$/u;
 var OUTCOMES = /* @__PURE__ */ new Set(["ABANDONED", "ACCEPTED", "CANCELLED", "REJECTED"]);
 var VERIFICATION = /* @__PURE__ */ new Set(["FAILED", "NOT_RUN", "PASSED"]);
-var failure = (code, path, message) => fail([createError(code, path, message)]);
-var record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var failure3 = (code, path, message) => fail([createError(code, path, message)]);
+var record2 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 var safeRefs = (values, { nonEmpty = false } = {}) => Array.isArray(values) && (!nonEmpty || values.length > 0) && new Set(values).size === values.length && values.every(isSafeReference);
-var exactKeys = (value, required, optional = []) => record(value) && required.every((key) => Object.hasOwn(value, key)) && Object.keys(value).every((key) => required.includes(key) || optional.includes(key));
+var exactKeys2 = (value, required, optional = []) => record2(value) && required.every((key) => Object.hasOwn(value, key)) && Object.keys(value).every((key) => required.includes(key) || optional.includes(key));
+var freeze = (value) => {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) freeze(child);
+  }
+  return value;
+};
+var sortedRecords = (values, field) => [...values].sort((left, right) => compareCodePoints(left[field], right[field]));
+var normalizeUnit = ({ unit_id, status, evidence_refs }) => ({
+  unit_id,
+  status,
+  evidence_refs: [...evidence_refs]
+});
+var normalizeCoverage = ({ feedback_id, status, covering_prd_ids, evidence_refs, remaining_criteria }) => ({
+  feedback_id,
+  status,
+  covering_prd_ids: [...covering_prd_ids],
+  evidence_refs: [...evidence_refs],
+  remaining_criteria: [...remaining_criteria]
+});
 var validCoveringOwnerId = (value, ownerId) => value === ownerId || /^prd-[a-z0-9-]+$/u.test(value);
 var validateClosureSummary = (summary) => {
   const topLevel = [
@@ -18122,39 +18646,199 @@ var validateClosureSummary = (summary) => {
     "evidence_refs",
     "closure_ref"
   ];
-  if (!exactKeys(summary, topLevel) || !ID.test(summary.owner_artifact_id ?? "") || summary.artifact_id !== `closure-${summary.owner_artifact_id}` || !exactKeys(summary.outcome, ["status", "ref", "residual_risk_refs"]) || !OUTCOMES.has(summary.outcome.status) || !isSafeReference(summary.outcome.ref) || !safeRefs(summary.outcome.residual_risk_refs) || !exactKeys(summary.verification, ["status", "ref"]) || !VERIFICATION.has(summary.verification.status) || !isSafeReference(summary.verification.ref) || !exactKeys(summary.acceptance, ["claimed", "units"]) || typeof summary.acceptance.claimed !== "boolean" || !Array.isArray(summary.acceptance.units) || !Array.isArray(summary.feedback_coverage) || !Array.isArray(summary.obligation_outcomes) || !exactKeys(summary.conflict_disposition, ["status", "ref"]) || !["NOT_APPLICABLE", "RESOLVED"].includes(summary.conflict_disposition.status) || !isSafeReference(summary.conflict_disposition.ref) || !exactKeys(summary.baseline, ["starting", "current"], ["reconciliation_ref"]) || !isSafeReference(summary.baseline.starting) || !isSafeReference(summary.baseline.current) || summary.baseline.starting !== summary.baseline.current && !isSafeReference(summary.baseline.reconciliation_ref) || !exactKeys(summary.knowledge_handoff, ["diff_id", "outcome", "owner", "apply_authority"]) || !ID.test(summary.knowledge_handoff.diff_id ?? "") || !["CHANGE", "NO_CHANGE"].includes(summary.knowledge_handoff.outcome) || summary.knowledge_handoff.owner !== "run-prd-lifecycle" || summary.knowledge_handoff.apply_authority !== "maintain-project-knowledge" || !safeRefs(summary.evidence_refs, { nonEmpty: true }) || summary.closure_ref !== summary.outcome.ref) {
-    return failure("CLOSURE_SUMMARY_INVALID", "/", "Closure summary must satisfy the compact closed contract.");
+  if (!exactKeys2(summary, topLevel) || !ID4.test(summary.owner_artifact_id ?? "") || summary.artifact_id !== `closure-${summary.owner_artifact_id}` || !exactKeys2(summary.outcome, ["status", "ref", "residual_risk_refs"]) || !OUTCOMES.has(summary.outcome.status) || !isSafeReference(summary.outcome.ref) || !safeRefs(summary.outcome.residual_risk_refs) || !exactKeys2(summary.verification, ["status", "ref"]) || !VERIFICATION.has(summary.verification.status) || !isSafeReference(summary.verification.ref) || !exactKeys2(summary.acceptance, ["claimed", "units"]) || typeof summary.acceptance.claimed !== "boolean" || !Array.isArray(summary.acceptance.units) || !Array.isArray(summary.feedback_coverage) || !Array.isArray(summary.obligation_outcomes) || !exactKeys2(summary.conflict_disposition, ["status", "ref"]) || !["NOT_APPLICABLE", "RESOLVED"].includes(summary.conflict_disposition.status) || !isSafeReference(summary.conflict_disposition.ref) || !exactKeys2(summary.baseline, ["starting", "current"], ["reconciliation_ref"]) || !isSafeReference(summary.baseline.starting) || !isSafeReference(summary.baseline.current) || summary.baseline.starting !== summary.baseline.current && !isSafeReference(summary.baseline.reconciliation_ref) || !exactKeys2(summary.knowledge_handoff, ["diff_id", "outcome", "owner", "apply_authority"]) || !ID4.test(summary.knowledge_handoff.diff_id ?? "") || !["CHANGE", "NO_CHANGE"].includes(summary.knowledge_handoff.outcome) || summary.knowledge_handoff.owner !== "run-prd-lifecycle" || summary.knowledge_handoff.apply_authority !== "maintain-project-knowledge" || !safeRefs(summary.evidence_refs, { nonEmpty: true }) || summary.closure_ref !== summary.outcome.ref) {
+    return failure3("CLOSURE_SUMMARY_INVALID", "/", "Closure summary must satisfy the compact closed contract.");
   }
   for (const unit of summary.acceptance.units) {
-    if (!exactKeys(unit, ["unit_id", "status", "evidence_refs"]) || !ID.test(unit.unit_id ?? "") || !["ACCEPTED", "OPEN", "REJECTED"].includes(unit.status) || !safeRefs(unit.evidence_refs)) {
-      return failure("CLOSURE_SUMMARY_INVALID", "/acceptance/units", "Closure acceptance units are malformed.");
+    if (!exactKeys2(unit, ["unit_id", "status", "evidence_refs"]) || !ID4.test(unit.unit_id ?? "") || !["ACCEPTED", "OPEN", "REJECTED"].includes(unit.status) || !safeRefs(unit.evidence_refs)) {
+      return failure3("CLOSURE_SUMMARY_INVALID", "/acceptance/units", "Closure acceptance units are malformed.");
     }
   }
   for (const coverage of summary.feedback_coverage) {
-    if (!exactKeys(coverage, [
+    if (!exactKeys2(coverage, [
       "feedback_id",
       "status",
       "covering_prd_ids",
       "evidence_refs",
       "remaining_criteria"
     ]) || !/^feedback-[a-z0-9-]+$/u.test(coverage.feedback_id ?? "") || !["COVERED", "NOT_COVERED", "PARTIAL"].includes(coverage.status) || !Array.isArray(coverage.covering_prd_ids) || new Set(coverage.covering_prd_ids).size !== coverage.covering_prd_ids.length || !coverage.covering_prd_ids.every((id) => validCoveringOwnerId(id, summary.owner_artifact_id)) || !safeRefs(coverage.evidence_refs) || !Array.isArray(coverage.remaining_criteria) || !coverage.remaining_criteria.every((value) => typeof value === "string" && value.length > 0 && value.length <= 1e3)) {
-      return failure("CLOSURE_SUMMARY_INVALID", "/feedback_coverage", "Closure Feedback coverage is malformed.");
+      return failure3("CLOSURE_SUMMARY_INVALID", "/feedback_coverage", "Closure Feedback coverage is malformed.");
     }
   }
   for (const outcome of summary.obligation_outcomes) {
-    if (!exactKeys(outcome, ["qualified_id", "status", "evidence_refs"], ["resolution_ref", "human_approval_ref"]) || !/^[a-z][a-z0-9-]*#[a-z][a-z0-9-]*$/u.test(outcome.qualified_id ?? "") || !["RESOLVED", "WAIVED"].includes(outcome.status) || !safeRefs(outcome.evidence_refs, { nonEmpty: true }) || outcome.status === "RESOLVED" && !isSafeReference(outcome.resolution_ref) || outcome.status === "WAIVED" && !isSafeReference(outcome.human_approval_ref)) {
-      return failure("CLOSURE_SUMMARY_INVALID", "/obligation_outcomes", "Closure obligation outcomes are malformed.");
+    if (!exactKeys2(outcome, ["qualified_id", "status", "evidence_refs"], ["resolution_ref", "human_approval_ref"]) || !/^[a-z][a-z0-9-]*#[a-z][a-z0-9-]*$/u.test(outcome.qualified_id ?? "") || !["RESOLVED", "WAIVED"].includes(outcome.status) || !safeRefs(outcome.evidence_refs, { nonEmpty: true }) || outcome.status === "RESOLVED" && !isSafeReference(outcome.resolution_ref) || outcome.status === "WAIVED" && !isSafeReference(outcome.human_approval_ref)) {
+      return failure3("CLOSURE_SUMMARY_INVALID", "/obligation_outcomes", "Closure obligation outcomes are malformed.");
     }
   }
   const accepted = summary.outcome.status === "ACCEPTED";
   if (summary.acceptance.claimed !== accepted || accepted && (summary.verification.status !== "PASSED" || summary.acceptance.units.length === 0 || summary.acceptance.units.some((unit) => unit.status !== "ACCEPTED" || unit.evidence_refs.length === 0) || summary.feedback_coverage.some((coverage) => coverage.status !== "COVERED" || coverage.covering_prd_ids.length === 0 || !coverage.covering_prd_ids.includes(summary.owner_artifact_id) || coverage.evidence_refs.length === 0 || coverage.remaining_criteria.length > 0))) {
-    return failure("CLOSURE_SUMMARY_INVALID", "/", "Closure summary acceptance claims are incomplete.");
+    return failure3("CLOSURE_SUMMARY_INVALID", "/", "Closure summary acceptance claims are incomplete.");
   }
   return ok(summary);
 };
+var validateFeedbackCoverage = (owner, coverage, accepted) => {
+  if (!Array.isArray(coverage)) return failure3("FEEDBACK_COVERAGE_INVALID", "/feedback_coverage", "Feedback coverage must be explicit.");
+  const byId = /* @__PURE__ */ new Map();
+  for (const [index2, entry2] of coverage.entries()) {
+    if (!record2(entry2) || !/^feedback-[a-z0-9-]+$/u.test(entry2.feedback_id ?? "") || !["COVERED", "NOT_COVERED", "PARTIAL"].includes(entry2.status) || !Array.isArray(entry2.covering_prd_ids) || new Set(entry2.covering_prd_ids).size !== entry2.covering_prd_ids.length || !entry2.covering_prd_ids.every((id) => validCoveringOwnerId(id, owner.artifact_id)) || !safeRefs(entry2.evidence_refs) || !Array.isArray(entry2.remaining_criteria) || !entry2.remaining_criteria.every((value) => typeof value === "string" && value.length > 0 && value.length <= 1e3)) {
+      return failure3("FEEDBACK_COVERAGE_INVALID", `/feedback_coverage/${index2}`, "Feedback coverage is malformed.");
+    }
+    if (byId.has(entry2.feedback_id)) return failure3("FEEDBACK_COVERAGE_INVALID", `/feedback_coverage/${index2}/feedback_id`, "Feedback coverage IDs must be unique.");
+    if (entry2.status === "COVERED" && (!entry2.covering_prd_ids.includes(owner.artifact_id) || entry2.evidence_refs.length === 0 || entry2.remaining_criteria.length > 0)) {
+      return failure3("FEEDBACK_COVERAGE_INVALID", `/feedback_coverage/${index2}`, "Covered Feedback requires owners and evidence with no remaining criteria.");
+    }
+    if (entry2.status !== "COVERED" && entry2.remaining_criteria.length === 0) {
+      return failure3("FEEDBACK_COVERAGE_INVALID", `/feedback_coverage/${index2}/remaining_criteria`, "Partial outcomes must preserve remaining criteria.");
+    }
+    byId.set(entry2.feedback_id, entry2);
+  }
+  const expected = owner.relationships.feedback_ids;
+  if (expected.some((id) => !byId.has(id)) || [...byId.keys()].some((id) => !expected.includes(id))) {
+    return failure3("FEEDBACK_COVERAGE_INVALID", "/feedback_coverage", "Coverage must exactly match the owner Feedback relationships.");
+  }
+  if (accepted && [...byId.values()].some(({ status }) => status !== "COVERED")) {
+    return failure3("FEEDBACK_COVERAGE_INCOMPLETE", "/feedback_coverage", "Accepted delivery requires complete Feedback coverage.");
+  }
+  return ok(sortedRecords(coverage, "feedback_id"));
+};
+var closeDelivery = (input = {}) => {
+  if (!record2(input)) return failure3("CLOSURE_INPUT_INVALID", "/", "Closure input must be structured.");
+  if (Object.hasOwn(input, "current_knowledge_write")) {
+    return failure3("CURRENT_KNOWLEDGE_WRITE_FORBIDDEN", "/current_knowledge_write", "Delivery closure cannot write current capability knowledge.");
+  }
+  const ownerValidation = validateJson("delivery-frontmatter", input.owner);
+  if (!ownerValidation.ok || input.owner.retention_tier !== "active") {
+    return failure3("CLOSURE_OWNER_INVALID", "/owner", "Closure requires one active valid delivery owner.");
+  }
+  if (!record2(input.outcome) || !OUTCOMES.has(input.outcome.status) || !isSafeReference(input.outcome.ref) || !safeRefs(input.outcome.residual_risk_refs)) {
+    return failure3("CLOSURE_OUTCOME_INVALID", "/outcome", "A durable bounded owner outcome is required.");
+  }
+  if (!record2(input.verification) || !VERIFICATION.has(input.verification.status) || !isSafeReference(input.verification.ref)) {
+    return failure3("VERIFICATION_REQUIRED", "/verification", "Closure requires a durable verification result.");
+  }
+  const accepted = input.outcome.status === "ACCEPTED";
+  if (accepted && input.verification.status !== "PASSED") {
+    return failure3("VERIFICATION_REQUIRED", "/verification/status", "Accepted delivery requires passed verification.");
+  }
+  const gate = evaluateClosureGate({
+    gate: "closure",
+    owner_artifact_id: input.owner.artifact_id,
+    obligations: input.obligations,
+    qualified_obligations: input.qualified_obligations
+  });
+  if (!gate.ok) return gate;
+  if (!record2(input.conflict_disposition) || !["NOT_APPLICABLE", "RESOLVED"].includes(input.conflict_disposition.status) || !isSafeReference(input.conflict_disposition.ref)) {
+    return failure3("CONFLICT_DISPOSITION_REQUIRED", "/conflict_disposition", "Closure requires an explicit conflict disposition.");
+  }
+  if (input.impact?.overlap?.class === "SAME_FACT_CONFLICT" && input.conflict_disposition.status !== "RESOLVED") {
+    return failure3("CONFLICT_DISPOSITION_REQUIRED", "/conflict_disposition/status", "Same-fact conflict must be resolved before closure.");
+  }
+  if (!Array.isArray(input.acceptance_units)) return failure3("ACCEPTANCE_INCOMPLETE", "/acceptance_units", "Acceptance units must be explicit.");
+  for (const [index2, unit] of input.acceptance_units.entries()) {
+    if (!record2(unit) || !ID4.test(unit.unit_id ?? "") || !["ACCEPTED", "OPEN", "REJECTED"].includes(unit.status) || !safeRefs(unit.evidence_refs)) {
+      return failure3("ACCEPTANCE_INCOMPLETE", `/acceptance_units/${index2}`, "Acceptance unit is malformed.");
+    }
+  }
+  if (accepted && (input.acceptance_units.length === 0 || input.acceptance_units.some(({ status, evidence_refs: evidence }) => status !== "ACCEPTED" || evidence.length === 0))) {
+    return failure3("ACCEPTANCE_INCOMPLETE", "/acceptance_units", "Every accepted delivery unit requires acceptance evidence.");
+  }
+  if (!record2(input.baseline) || !isSafeReference(input.baseline.starting) || !isSafeReference(input.baseline.current)) {
+    return failure3("BASELINE_INVALID", "/baseline", "Starting and current baselines are required.");
+  }
+  if (input.baseline.starting !== input.baseline.current && !isSafeReference(input.baseline.reconciliation_ref)) {
+    return failure3("BASELINE_RECONCILIATION_REQUIRED", "/baseline/reconciliation_ref", "Stale baseline must be reconciled before closure.");
+  }
+  const impact = validateImpactDeclaration(input.impact);
+  if (!impact.ok) return failure3("IMPACT_DECLARATION_INVALID", "/impact", "Closure requires one validated impact declaration.");
+  if (input.impact.owner_artifact_id !== input.owner.artifact_id || input.impact.owner_kind !== input.owner.artifact_kind || input.impact.knowledge_baseline !== input.baseline.starting || input.impact.current_knowledge_baseline !== input.baseline.current) {
+    return failure3("IMPACT_DECLARATION_MISMATCH", "/impact", "Impact owner and baselines must match the closing delivery.");
+  }
+  const coverage = validateFeedbackCoverage(input.owner, input.feedback_coverage, accepted);
+  if (!coverage.ok) return coverage;
+  if (!record2(input.knowledge_handoff) || input.knowledge_handoff.candidate_owner !== "run-prd-lifecycle" || input.knowledge_handoff.apply_authority !== "maintain-project-knowledge" || input.knowledge_handoff.current_knowledge_written !== false || !record2(input.knowledge_handoff.diff)) {
+    return failure3("KNOWLEDGE_HANDOFF_REQUIRED", "/knowledge_handoff", "Closure requires one bounded Knowledge Diff or NO_CHANGE candidate.");
+  }
+  const diff = validateJson("knowledge-diff", input.knowledge_handoff.diff);
+  if (!diff.ok || input.knowledge_handoff.diff.owner_delivery_id !== input.owner.artifact_id || input.knowledge_handoff.diff.knowledge_baseline !== input.baseline.starting) {
+    return failure3("KNOWLEDGE_HANDOFF_REQUIRED", "/knowledge_handoff/diff", "Knowledge handoff must bind the closing owner and starting baseline.");
+  }
+  if (!safeRefs(input.evidence_refs, { nonEmpty: true })) {
+    return failure3("CLOSURE_EVIDENCE_REQUIRED", "/evidence_refs", "Closure requires bounded durable evidence references.");
+  }
+  const acceptedEvidence = new Set(input.evidence_refs);
+  const diffEvidence = [
+    ...input.knowledge_handoff.diff.evidence_refs,
+    ...input.knowledge_handoff.diff.operations.flatMap((operation) => operation.evidence_refs),
+    ...input.knowledge_handoff.diff.domain_changes.flatMap((change) => change.evidence_refs)
+  ];
+  if (diffEvidence.some((reference) => !acceptedEvidence.has(reference))) {
+    return failure3("KNOWLEDGE_EVIDENCE_UNACCEPTED", "/knowledge_handoff/diff/evidence_refs", "Knowledge Diff evidence must be accepted closure evidence.");
+  }
+  const closureId = `closure-${input.owner.artifact_id}`;
+  const summary = freeze({
+    artifact_id: closureId,
+    owner_artifact_id: input.owner.artifact_id,
+    outcome: {
+      status: input.outcome.status,
+      ref: input.outcome.ref,
+      residual_risk_refs: [...input.outcome.residual_risk_refs]
+    },
+    verification: { status: input.verification.status, ref: input.verification.ref },
+    acceptance: {
+      claimed: accepted,
+      units: sortedRecords(input.acceptance_units.map(normalizeUnit), "unit_id")
+    },
+    feedback_coverage: coverage.value.map(normalizeCoverage),
+    obligation_outcomes: gate.value.compact_outcomes,
+    conflict_disposition: {
+      status: input.conflict_disposition.status,
+      ref: input.conflict_disposition.ref
+    },
+    baseline: {
+      starting: input.baseline.starting,
+      current: input.baseline.current,
+      ...input.baseline.reconciliation_ref ? { reconciliation_ref: input.baseline.reconciliation_ref } : {}
+    },
+    knowledge_handoff: {
+      diff_id: input.knowledge_handoff.diff.diff_id,
+      outcome: input.knowledge_handoff.diff.outcome,
+      owner: input.knowledge_handoff.candidate_owner,
+      apply_authority: input.knowledge_handoff.apply_authority
+    },
+    evidence_refs: [...input.evidence_refs].sort(compareCodePoints),
+    closure_ref: input.outcome.ref
+  });
+  const retention = createRetentionPlan({
+    summary,
+    artifacts: input.detailed_artifacts,
+    delete_evidence_refs: []
+  });
+  if (!retention.ok) return retention;
+  const cleanupStatus = {
+    ACCEPTED: "CLOSED",
+    REJECTED: "REJECTED",
+    CANCELLED: "CANCELLED",
+    ABANDONED: "WITHDRAWN"
+  }[input.outcome.status];
+  return ok({
+    summary,
+    retention: retention.value,
+    cleanup_authorization: {
+      owner_status: cleanupStatus,
+      closure_ref: input.outcome.ref,
+      verification_result_ref: input.verification.ref,
+      knowledge_handoff: {
+        kind: input.knowledge_handoff.diff.outcome === "NO_CHANGE" ? "NO_CHANGE" : "KNOWLEDGE_DIFF",
+        ref: `knowledge-diff:${input.knowledge_handoff.diff.diff_id}`
+      },
+      conflict_disposition_ref: input.conflict_disposition.ref
+    }
+  });
+};
 
 // scripts/delivery/alignment-marker.mjs
-var failure2 = (code, path, message) => fail([createError(code, path, message)]);
+var failure4 = (code, path, message) => fail([createError(code, path, message)]);
+var record3 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 var MARKER = /<!-- project-lifecycle:alignment\n([\s\S]*?)\n-->/gu;
 var FEEDBACK_SECTIONS = ["original_problem", "scenario", "expectation", "marking", "coverage"];
 var sectionPattern = (id) => new RegExp(
@@ -18173,23 +18857,23 @@ var splitDeliveryDocument = (source) => {
 };
 var extractAlignmentMarker = (marking, path = "/marking") => {
   if (typeof marking !== "string") {
-    return failure2("ALIGNMENT_MARKER_INVALID", path, "Alignment marking must be bounded text.");
+    return failure4("ALIGNMENT_MARKER_INVALID", path, "Alignment marking must be bounded text.");
   }
   const visible = maskFencedMarkdown(marking);
   const matches = [...visible.matchAll(MARKER)];
   if (matches.length === 0) return ok(null);
   if (matches.length !== 1) {
-    return failure2("ALIGNMENT_MARKER_DUPLICATE", path, "Feedback may contain at most one alignment marker.");
+    return failure4("ALIGNMENT_MARKER_DUPLICATE", path, "Feedback may contain at most one alignment marker.");
   }
   const parsed = parseRestrictedYaml(matches[0][1], path);
   if (!parsed.ok || !validateJson("alignment-marker", parsed.value).ok) {
-    return failure2("ALIGNMENT_MARKER_INVALID", path, "Alignment marker must satisfy the closed contract.");
+    return failure4("ALIGNMENT_MARKER_INVALID", path, "Alignment marker must satisfy the closed contract.");
   }
   return ok(parsed.value);
 };
 var extractBody = (body, language) => {
   if (typeof body !== "string") {
-    return failure2("ALIGNMENT_MARKER_INVALID", `/body/${language}`, "Feedback body must be text.");
+    return failure4("ALIGNMENT_MARKER_INVALID", `/body/${language}`, "Feedback body must be text.");
   }
   const normalized = body.replaceAll("\r\n", "\n").replace(/^\n/u, "");
   const visible = maskFencedMarkdown(normalized);
@@ -18197,7 +18881,7 @@ var extractBody = (body, language) => {
   for (const id of FEEDBACK_SECTIONS) {
     const matches = [...visible.matchAll(sectionPattern(id))];
     if (matches.length !== 1 || matches[0][1].trim().length === 0) {
-      return failure2("ALIGNMENT_MARKER_INVALID", `/body/${language}/${id}`, "Feedback requires one complete bounded section set.");
+      return failure4("ALIGNMENT_MARKER_INVALID", `/body/${language}/${id}`, "Feedback requires one complete bounded section set.");
     }
     sections[id] = matches[0][1];
   }
@@ -18205,12 +18889,12 @@ var extractBody = (body, language) => {
   if (!marker.ok) return marker;
   const activeMarkers = [...visible.matchAll(MARKER)];
   if (activeMarkers.length !== (marker.value === null ? 0 : 1)) {
-    return failure2("ALIGNMENT_MARKER_INVALID", `/body/${language}/marking`, "The sole active alignment marker must remain inside Marking.");
+    return failure4("ALIGNMENT_MARKER_INVALID", `/body/${language}/marking`, "The sole active alignment marker must remain inside Marking.");
   }
   const documentTitles = [...visible.matchAll(/^#[ \t]+(.+)$/gmu)];
   const title = documentTitles[0]?.[1]?.trim() ?? null;
   if (marker.value && (documentTitles.length !== 1 || documentTitles[0]?.index !== 0 || !title || title.length > 200 || /[\p{Cc}\p{Cf}]/u.test(title))) {
-    return failure2("ALIGNMENT_MARKER_INVALID", `/body/${language}/title`, "Feedback requires one safe bounded H1 title.");
+    return failure4("ALIGNMENT_MARKER_INVALID", `/body/${language}/title`, "Feedback requires one safe bounded H1 title.");
   }
   return ok({
     marker: marker.value,
@@ -18220,20 +18904,20 @@ var extractBody = (body, language) => {
 };
 var validateAlignmentFeedbackPair = ({ frontmatter, bodies } = {}) => {
   if (frontmatter?.artifact_kind !== "feedback" || !Array.isArray(frontmatter.domain_ids) || typeof bodies?.en !== "string" || typeof bodies?.["zh-CN"] !== "string") {
-    return failure2("ALIGNMENT_MARKER_INVALID", "/", "Alignment validation requires one bilingual Feedback pair.");
+    return failure4("ALIGNMENT_MARKER_INVALID", "/", "Alignment validation requires one bilingual Feedback pair.");
   }
   const en = extractBody(bodies.en, "en");
   if (!en.ok) return en;
   const zh = extractBody(bodies["zh-CN"], "zh-CN");
   if (!zh.ok) return zh;
-  if (!isDeepStrictEqual(en.value.marker, zh.value.marker)) {
-    return failure2("ALIGNMENT_PAIR_MISMATCH", "/body", "Localized Feedback must share one alignment marker.");
+  if (!isDeepStrictEqual2(en.value.marker, zh.value.marker)) {
+    return failure4("ALIGNMENT_PAIR_MISMATCH", "/body", "Localized Feedback must share one alignment marker.");
   }
-  if (!isDeepStrictEqual(en.value.heading_levels, zh.value.heading_levels)) {
-    return failure2("ALIGNMENT_PAIR_MISMATCH", "/body", "Localized Feedback requires matching heading structure.");
+  if (!isDeepStrictEqual2(en.value.heading_levels, zh.value.heading_levels)) {
+    return failure4("ALIGNMENT_PAIR_MISMATCH", "/body", "Localized Feedback requires matching heading structure.");
   }
   if (en.value.marker && !frontmatter.domain_ids.includes(en.value.marker.primary_domain_id)) {
-    return failure2("ALIGNMENT_DOMAIN_INVALID", "/body", "Alignment primary domain must belong to Feedback domain_ids.");
+    return failure4("ALIGNMENT_DOMAIN_INVALID", "/body", "Alignment primary domain must belong to Feedback domain_ids.");
   }
   return ok({
     marker: en.value.marker,
@@ -18242,11 +18926,11 @@ var validateAlignmentFeedbackPair = ({ frontmatter, bodies } = {}) => {
 };
 var validateAlignmentFeedbackDocuments = ({ documents, projectMap } = {}) => {
   const map = validateJson("project-map", projectMap);
-  if (!map.ok) return failure2("ALIGNMENT_PROJECT_MAP_INVALID", "/project_map", "Alignment validation requires a valid project map.");
+  if (!map.ok) return failure4("ALIGNMENT_PROJECT_MAP_INVALID", "/project_map", "Alignment validation requires a valid project map.");
   const en = splitDeliveryDocument(documents?.en);
   const zh = splitDeliveryDocument(documents?.["zh-CN"]);
-  if (!en || !zh || !isDeepStrictEqual(en.frontmatter, zh.frontmatter)) {
-    return failure2("ALIGNMENT_PAIR_MISMATCH", "/documents", "Alignment Feedback documents require identical valid Frontmatter.");
+  if (!en || !zh || !isDeepStrictEqual2(en.frontmatter, zh.frontmatter)) {
+    return failure4("ALIGNMENT_PAIR_MISMATCH", "/documents", "Alignment Feedback documents require identical valid Frontmatter.");
   }
   const pair = validateAlignmentFeedbackPair({
     frontmatter: en.frontmatter,
@@ -18254,11 +18938,11 @@ var validateAlignmentFeedbackDocuments = ({ documents, projectMap } = {}) => {
   });
   if (!pair.ok) return pair;
   if (!pair.value.marker) {
-    return failure2("ALIGNMENT_MARKER_REQUIRED", "/documents", "Alignment validation requires one active marker.");
+    return failure4("ALIGNMENT_MARKER_REQUIRED", "/documents", "Alignment validation requires one active marker.");
   }
   const domain = projectMap.domains.find(({ id }) => id === pair.value.marker.primary_domain_id);
   if (!domain || !["confirmed", "materialized"].includes(domain.domain_state) || en.frontmatter.current_project_id !== projectMap.project_id) {
-    return failure2("ALIGNMENT_DOMAIN_INVALID", "/documents", "Alignment marker must reference one current routable project domain.");
+    return failure4("ALIGNMENT_DOMAIN_INVALID", "/documents", "Alignment marker must reference one current routable project domain.");
   }
   return ok({
     feedback_id: en.frontmatter.artifact_id,
@@ -18271,22 +18955,134 @@ var validateAlignmentFeedbackDocuments = ({ documents, projectMap } = {}) => {
     }
   });
 };
+var sameSorted = (left, right) => isDeepStrictEqual2(
+  [...left].sort(compareCodePoints),
+  [...right].sort(compareCodePoints)
+);
+var terminalClosure = (closure) => ["ABANDONED", "CANCELLED", "REJECTED"].includes(closure?.outcome?.status);
+var closureCoversFeedback = (closure, feedbackId) => Array.isArray(closure?.feedback_coverage) && closure.feedback_coverage.some((entry2) => entry2?.feedback_id === feedbackId);
+var validateAlignmentExit = ({
+  feedbackId,
+  feedbackProjectId,
+  resolution,
+  owners = [],
+  closures = [],
+  knowledgeResults = [],
+  ownerInventoryComplete = false
+} = {}) => {
+  if (resolution === void 0 || resolution === null) {
+    return failure4("ALIGNMENT_RESOLUTION_REQUIRED", "/alignment_resolution", "Active alignment removal requires a resolution envelope.");
+  }
+  if (!/^[a-z][a-z0-9-]*$/u.test(feedbackProjectId ?? "")) {
+    return failure4("ALIGNMENT_RESOLUTION_INVALID", "/alignment_owners", "Marker exit requires the Feedback project identity.");
+  }
+  if (!validateJson("alignment-resolution", resolution).ok || resolution.feedback_id !== feedbackId || resolution.human_approval_ref !== void 0 && !isSafeReference(resolution.human_approval_ref)) {
+    return failure4("ALIGNMENT_RESOLUTION_INVALID", "/alignment_resolution", "Alignment resolution must satisfy the closed safe contract.");
+  }
+  if (!Array.isArray(owners) || !Array.isArray(closures)) {
+    return failure4("ALIGNMENT_RESOLUTION_INVALID", "/alignment_resolution", "Alignment resolution requires bounded owner and closure inputs.");
+  }
+  if (ownerInventoryComplete !== true) {
+    return failure4("ALIGNMENT_OWNER_INVENTORY_INCOMPLETE", "/alignment_owners", "Marker exit requires a complete owner inventory derived from authoritative delivery assets.");
+  }
+  if (!Array.isArray(knowledgeResults) || knowledgeResults.length === 0 || knowledgeResults.length > 20) {
+    return failure4("ALIGNMENT_KNOWLEDGE_RESULT_INVALID", "/alignment_knowledge_results", "Marker exit requires bounded externally verified knowledge results.");
+  }
+  const knowledgeResultByRef = /* @__PURE__ */ new Map();
+  for (const result of knowledgeResults) {
+    const allowed = result?.diff_id === void 0 ? ["ref", "verified", "feedback_id", "status"] : ["ref", "verified", "feedback_id", "status", "diff_id"];
+    if (!record3(result) || Object.keys(result).length !== allowed.length || Object.keys(result).some((key) => !allowed.includes(key)) || !/^knowledge-resolution:[a-z][a-z0-9-]*$/u.test(result.ref ?? "") || result.verified !== true || result.feedback_id !== feedbackId || !["APPLIED", "NO_CHANGE", "RESIDUAL_DIVERGENCE_ACCEPTED"].includes(result.status) || result.diff_id !== void 0 && (!/^[a-z][a-z0-9-]*$/u.test(result.diff_id) || result.ref !== `knowledge-resolution:${result.diff_id}`) || knowledgeResultByRef.has(result.ref)) {
+      return failure4("ALIGNMENT_KNOWLEDGE_RESULT_INVALID", "/alignment_knowledge_results", "Knowledge results require unique exact externally verified bindings.");
+    }
+    knowledgeResultByRef.set(result.ref, result);
+  }
+  if (!sameSorted([...knowledgeResultByRef.keys()], resolution.knowledge_resolution_refs)) {
+    return failure4("ALIGNMENT_KNOWLEDGE_RESULT_INVALID", "/alignment_knowledge_results", "Verified knowledge results must exactly match the resolution references.");
+  }
+  const closureByOwner = /* @__PURE__ */ new Map();
+  for (const closure of closures) {
+    if (!validateClosureSummary(closure).ok || closureByOwner.has(closure.owner_artifact_id)) {
+      return failure4("ALIGNMENT_RESOLUTION_INVALID", "/alignment_closures", "Closure summaries require unique validated owner references.");
+    }
+    closureByOwner.set(closure.owner_artifact_id, closure);
+  }
+  const linkedOwners = owners.filter((owner) => owner?.relationships?.feedback_ids?.includes(feedbackId));
+  for (const owner of linkedOwners) {
+    const ownerProjectId = owner.current_project_id ?? owner.project_id_at_creation;
+    if (ownerProjectId !== feedbackProjectId) {
+      return failure4("ALIGNMENT_RESOLUTION_INVALID", "/alignment_owners", "Linked alignment owners must belong to the Feedback project.");
+    }
+    const ownerId = owner.artifact_id;
+    const closure = closureByOwner.get(ownerId);
+    if (closure && closure.baseline.starting !== owner.knowledge_baseline) {
+      return failure4("ALIGNMENT_RESOLUTION_INVALID", "/alignment_closures", "Owner closure must match its starting knowledge baseline.");
+    }
+    if (terminalClosure(closure) && !closureCoversFeedback(closure, feedbackId)) {
+      return failure4("ALIGNMENT_RESOLUTION_INVALID", "/alignment_closures", "Terminal owner closure must explicitly cover its linked Feedback.");
+    }
+  }
+  const requiredOwnerRefs = linkedOwners.filter(({ artifact_id: artifactId }) => !terminalClosure(closureByOwner.get(artifactId))).map(({ artifact_id: artifactId }) => artifactId);
+  if (new Set(requiredOwnerRefs).size !== requiredOwnerRefs.length || requiredOwnerRefs.some((ownerId) => !/^[a-z][a-z0-9-]*$/u.test(ownerId))) {
+    return failure4("ALIGNMENT_RESOLUTION_INVALID", "/alignment_owners", "Alignment owners require unique safe identities.");
+  }
+  if (resolution.disposition === "NO_REMEDIATION_ACCEPTED") {
+    const acceptedKnowledge = [...knowledgeResultByRef.values()].every(({ status }) => ["NO_CHANGE", "RESIDUAL_DIVERGENCE_ACCEPTED"].includes(status));
+    return requiredOwnerRefs.length === 0 && acceptedKnowledge ? ok(resolution) : failure4("ALIGNMENT_RESOLUTION_INCOMPLETE", "/alignment_resolution/owner_refs", "No-remediation exit cannot omit linked delivery owners.");
+  }
+  if (!sameSorted(resolution.owner_refs, requiredOwnerRefs)) {
+    return failure4("ALIGNMENT_RESOLUTION_INCOMPLETE", "/alignment_resolution/owner_refs", "Resolution must cover every linked delivery owner.");
+  }
+  const requiredClosureRefs = [];
+  for (const ownerId of requiredOwnerRefs) {
+    const closure = closureByOwner.get(ownerId);
+    if (!validateClosureSummary(closure).ok || closure.owner_artifact_id !== ownerId || closure.outcome.status !== "ACCEPTED" || !closure.feedback_coverage?.some((entry2) => entry2?.feedback_id === feedbackId && entry2.status === "COVERED")) {
+      return failure4("ALIGNMENT_RESOLUTION_INCOMPLETE", "/alignment_closures", "Every linked owner requires accepted closure and Feedback coverage.");
+    }
+    requiredClosureRefs.push(closure.artifact_id);
+  }
+  const requiredKnowledgeResolutionRefs = requiredOwnerRefs.map((ownerId) => `knowledge-resolution:${closureByOwner.get(ownerId).knowledge_handoff.diff_id}`);
+  if (!sameSorted(resolution.closure_refs, requiredClosureRefs) || !sameSorted(resolution.knowledge_resolution_refs, requiredKnowledgeResolutionRefs) || requiredOwnerRefs.some((ownerId) => {
+    const handoff = closureByOwner.get(ownerId).knowledge_handoff;
+    const result = knowledgeResultByRef.get(`knowledge-resolution:${handoff.diff_id}`);
+    return result?.diff_id !== handoff.diff_id || result.status !== (handoff.outcome === "CHANGE" ? "APPLIED" : "NO_CHANGE");
+  })) {
+    return failure4("ALIGNMENT_RESOLUTION_INCOMPLETE", "/alignment_resolution", "Every accepted owner requires closure and knowledge resolution.");
+  }
+  return ok(resolution);
+};
 
 // scripts/delivery/alignment-review.mjs
-import { lstat as lstat4, readFile as readFile4, readdir as readdir2, realpath as realpath5, unlink as unlink2 } from "node:fs/promises";
-import { isAbsolute as isAbsolute5, join as join4, relative as relative4, sep as sep4 } from "node:path";
-import { isDeepStrictEqual as isDeepStrictEqual2 } from "node:util";
+import { lstat as lstat6, mkdir, readFile as readFile6, realpath as realpath7, unlink as unlink2 } from "node:fs/promises";
+import { isAbsolute as isAbsolute8, join as join6, relative as relative6, sep as sep6 } from "node:path";
+import { isDeepStrictEqual as isDeepStrictEqual4 } from "node:util";
 
 // scripts/lib/closure-summary.mjs
 import { createHash as createHash2 } from "node:crypto";
 var CLOSURE_SUMMARY_MARKER = /^<!-- project-lifecycle:closure-summary sha256=([0-9a-f]{64}) -->\n?/u;
-var record2 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var record4 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 var canonicalize = (value) => {
   if (Array.isArray(value)) return value.map(canonicalize);
-  if (!record2(value)) return value;
+  if (!record4(value)) return value;
   return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]));
 };
 var closureSummaryHash = (summary) => createHash2("sha256").update(JSON.stringify(canonicalize(summary))).digest("hex");
+var closureSummaryMarker = (digest) => `<!-- project-lifecycle:closure-summary sha256=${digest} -->`;
+var withoutManagedClosureSummaryHash = (body) => {
+  const normalized = body.replaceAll("\r\n", "\n").replace(/^\n/u, "");
+  if (CLOSURE_SUMMARY_MARKER.test(normalized)) return normalized.replace(CLOSURE_SUMMARY_MARKER, "");
+  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(normalized);
+  if (!title) return normalized;
+  const rest = normalized.slice(title[0].length);
+  return CLOSURE_SUMMARY_MARKER.test(rest) ? `${title[0]}${rest.replace(CLOSURE_SUMMARY_MARKER, "")}` : normalized;
+};
+var addClosureSummaryHash = (body, digest) => {
+  const withoutMarker = withoutManagedClosureSummaryHash(body);
+  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(withoutMarker);
+  if (!title) return `${closureSummaryMarker(digest)}
+${withoutMarker}`;
+  return `${title[0]}${closureSummaryMarker(digest)}
+${withoutMarker.slice(title[0].length)}`;
+};
 var extractClosureSummaryHash = (body) => {
   const normalized = body.replaceAll("\r\n", "\n").replace(/^\n/u, "");
   const direct = CLOSURE_SUMMARY_MARKER.exec(normalized);
@@ -18295,85 +19091,373 @@ var extractClosureSummaryHash = (body) => {
   return title ? CLOSURE_SUMMARY_MARKER.exec(normalized.slice(title[0].length))?.[1] ?? null : null;
 };
 
+// scripts/delivery/delivery-inventory.mjs
+import { lstat as lstat5, open as open3, opendir as opendir3, readFile as readFile5, realpath as realpath6 } from "node:fs/promises";
+import { isAbsolute as isAbsolute7, join as join5, relative as relative5, resolve as resolve5, sep as sep5 } from "node:path";
+import { isDeepStrictEqual as isDeepStrictEqual3 } from "node:util";
+var MAX_ENTRIES = 2e3;
+var MAX_DEPTH = 4;
+var MAX_FRONTMATTER_BYTES = 65536;
+var GENERATED_NOTICE = "<!-- Generated by Project Lifecycle from validated active alignment state; do not edit. -->\n";
+var INDEX_NOTICE = "<!-- Generated by Project Lifecycle from validated delivery Frontmatter; do not edit. -->\n";
+var PHASE_KINDS = Object.freeze({
+  architecture: "architecture",
+  batches: "batch",
+  closure: "closure-summary",
+  guidance: "guidance",
+  "test-reports": "test-report"
+});
+var failure5 = (code, path, message) => fail([createError(code, path, message)]);
+var inside3 = (root, candidate) => {
+  const fromRoot = relative5(root, candidate);
+  return fromRoot === "" || fromRoot !== ".." && !fromRoot.startsWith(`..${sep5}`) && !isAbsolute7(fromRoot);
+};
+var languageOf = (name) => name.endsWith("-en.md") ? "en" : "zh-CN";
+var artifactIdOf = (name) => name.replace(/-en\.md$/u, "").replace(/\.md$/u, "");
+var canonicalDirectory = (locator) => /^(?:delivery|archive\/delivery)\/(?:feedback|prds|non-prd)(?:\/[a-z][a-z0-9-]*(?:\/(?:architecture|batches|closure|guidance|test-reports))?)?$/u.test(locator) || locator === "delivery/views";
+var canonicalIndex = (locator) => /^delivery\/(?:INDEX(?:-en)?\.md|(?:prds|non-prd)\/[a-z][a-z0-9-]*\/INDEX(?:-en)?\.md)$/u.test(locator);
+var readPrefix = async (path) => {
+  const handle = await open3(path, "r");
+  try {
+    const buffer = Buffer.alloc(MAX_FRONTMATTER_BYTES + 1);
+    let total = 0;
+    while (total < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, total, buffer.length - total, total);
+      if (bytesRead === 0) break;
+      total += bytesRead;
+      const source = buffer.subarray(0, total).toString("utf8").replaceAll("\r\n", "\n");
+      const closing = source.indexOf("\n---\n", 4);
+      if (source.startsWith("---\n") && closing !== -1 && Buffer.byteLength(source.slice(0, closing + 5)) <= MAX_FRONTMATTER_BYTES) {
+        return source.slice(0, closing + 5);
+      }
+    }
+    throw new Error("Frontmatter is missing or unbounded.");
+  } finally {
+    await handle.close();
+  }
+};
+var parseFrontmatter2 = (source) => {
+  const normalized = source.replaceAll("\r\n", "\n");
+  const closing = normalized.indexOf("\n---\n", 4);
+  if (!normalized.startsWith("---\n") || closing === -1) return null;
+  const parsed = parseRestrictedYaml(normalized.slice(4, closing), "/frontmatter");
+  if (!parsed.ok || !validateJson("delivery-frontmatter", parsed.value).ok || parsed.value.schema_version !== 2) return null;
+  return parsed.value;
+};
+var classify = (locator) => {
+  const archived = locator.startsWith("archive/delivery/");
+  const prefix = archived ? "archive/delivery/" : "delivery/";
+  const rest = locator.slice(prefix.length);
+  const feedback = /^feedback\/([a-z][a-z0-9-]*\.md)$/u.exec(rest);
+  if (feedback) return { archived, artifactId: artifactIdOf(feedback[1]), ownerKind: null, ownerId: null, expectedKind: "feedback" };
+  const owner = /^(prds|non-prd)\/([a-z][a-z0-9-]*)\/(?:([a-z-]+)\/)?([a-z][a-z0-9-]*\.md)$/u.exec(rest);
+  if (!owner) return null;
+  const ownerKind = owner[1] === "prds" ? "prd" : "non-prd-delivery";
+  const phase = owner[3] ?? null;
+  return {
+    archived,
+    artifactId: artifactIdOf(owner[4]),
+    ownerKind,
+    ownerId: owner[2],
+    expectedKind: phase === null ? ownerKind : PHASE_KINDS[phase] ?? null
+  };
+};
+var itemFromPair = (pair) => ({
+  artifact_id: pair.en.frontmatter.artifact_id,
+  artifact_kind: pair.en.frontmatter.artifact_kind,
+  ...pair.en.frontmatter.owner_artifact_id ? { owner_artifact_id: pair.en.frontmatter.owner_artifact_id } : {},
+  retention_tier: pair.en.frontmatter.retention_tier,
+  frontmatter: pair.en.frontmatter,
+  locators: { en: pair.en.locator, "zh-CN": pair["zh-CN"].locator }
+});
+var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} } = {}) => {
+  if (typeof rootValue !== "string" || !isAbsolute7(rootValue) || overlays === null || typeof overlays !== "object" || Array.isArray(overlays)) {
+    return failure5("DELIVERY_INVENTORY_INVALID", "/", "A bounded lifecycle root and overlay map are required.");
+  }
+  let lifecycleRoot;
+  try {
+    const state = await lstat5(resolve5(rootValue));
+    lifecycleRoot = await realpath6(resolve5(rootValue));
+    if (!state.isDirectory() || state.isSymbolicLink()) throw new Error("Regular lifecycle root required.");
+  } catch {
+    return failure5("DELIVERY_INVENTORY_INVALID", "/lifecycleRoot", "A regular lifecycle root is required.");
+  }
+  const sources = /* @__PURE__ */ new Map();
+  let entryCount = 0;
+  const readDirectory = async (directory) => {
+    const entries = [];
+    const handle = await opendir3(directory);
+    for await (const entry2 of handle) {
+      entries.push(entry2);
+      if (entryCount + entries.length > MAX_ENTRIES) throw new Error("Delivery tree is unbounded.");
+    }
+    entries.sort((left, right) => compareCodePoints(left.name, right.name));
+    return entries;
+  };
+  const scan = async (rootLocator) => {
+    const lexical = join5(lifecycleRoot, rootLocator);
+    let root;
+    try {
+      const state = await lstat5(lexical);
+      root = await realpath6(lexical);
+      if (!state.isDirectory() || state.isSymbolicLink() || !inside3(lifecycleRoot, root)) throw new Error("Unsafe delivery root.");
+    } catch (error) {
+      if (error.code === "ENOENT") return;
+      throw error;
+    }
+    const visit = async (directory, relativeDirectory, depth) => {
+      if (depth > MAX_DEPTH) throw new Error("Delivery tree exceeds the managed depth.");
+      for (const entry2 of await readDirectory(directory)) {
+        entryCount += 1;
+        if (entryCount > MAX_ENTRIES || entry2.isSymbolicLink()) throw new Error("Delivery tree is unsafe or unbounded.");
+        const path = join5(directory, entry2.name);
+        const locator = `${rootLocator}/${relativeDirectory ? `${relativeDirectory}/` : ""}${entry2.name}`;
+        if (entry2.isDirectory()) {
+          if (!canonicalDirectory(locator)) throw new Error("Delivery tree contains an unknown directory.");
+          await visit(path, relativeDirectory ? `${relativeDirectory}/${entry2.name}` : entry2.name, depth + 1);
+        } else if (entry2.isFile()) {
+          const physical = await realpath6(path);
+          if (!inside3(lifecycleRoot, physical)) throw new Error("Delivery file escapes lifecycle root.");
+          const state = await lstat5(physical);
+          sources.set(locator, { path: physical, size: state.size });
+        } else throw new Error("Unsupported delivery entry.");
+      }
+    };
+    await visit(root, "", 0);
+  };
+  try {
+    await scan("delivery");
+    await scan("archive/delivery");
+    for (const [locator, source] of Object.entries(overlays)) {
+      if (!isSafeLocator(locator) || typeof source !== "string" || !(locator.startsWith("delivery/") || locator.startsWith("archive/delivery/"))) {
+        throw new Error("Invalid delivery overlay.");
+      }
+      sources.set(locator, { overlay: source });
+    }
+  } catch {
+    return failure5("DELIVERY_INVENTORY_INVALID", "/delivery", "Delivery inventory could not be collected safely.");
+  }
+  const markerSource = sources.get("delivery/layout.json");
+  if (!markerSource) {
+    return failure5("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/delivery/layout.json", "Delivery layout v2 marker is required.");
+  }
+  try {
+    const source = markerSource.overlay ?? await readFile5(markerSource.path, "utf8");
+    if (!validateJson("delivery-layout", JSON.parse(source)).ok) throw new Error("Invalid layout marker.");
+  } catch {
+    return failure5("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/delivery/layout.json", "Delivery layout v2 marker is invalid.");
+  }
+  const ignored = /* @__PURE__ */ new Set([
+    "delivery/layout.json",
+    "delivery/INDEX-en.md",
+    "delivery/INDEX.md"
+  ]);
+  const viewLocators = ["delivery/views/alignment-review-en.md", "delivery/views/alignment-review.md"];
+  const presentViews = viewLocators.map((locator) => sources.has(locator));
+  if (presentViews[0] !== presentViews[1]) {
+    return failure5("DELIVERY_INVENTORY_PAIR_INVALID", "/delivery/views", "Generated delivery views require both languages.");
+  }
+  if (presentViews[0]) {
+    for (const locator of viewLocators) {
+      const source = sources.get(locator);
+      const text4 = source.overlay ?? (source.size <= 131072 ? await readFile5(source.path, "utf8").catch(() => null) : null);
+      if (typeof text4 !== "string" || Buffer.byteLength(text4) > 131072 || !text4.startsWith(GENERATED_NOTICE)) {
+        return failure5("DELIVERY_INVENTORY_INVALID", `/${locator}`, "Generated delivery view locator is occupied.");
+      }
+      ignored.add(locator);
+    }
+  }
+  for (const [locator, source] of sources) {
+    if (!/\/(?:INDEX-en\.md|INDEX\.md)$/u.test(locator)) continue;
+    if (!canonicalIndex(locator)) {
+      return failure5("DELIVERY_INVENTORY_INVALID", `/${locator}`, "Delivery index locator is not canonical.");
+    }
+    const content3 = source.overlay ?? (source.size <= 131072 ? await readFile5(source.path, "utf8").catch(() => null) : null);
+    if (typeof content3 !== "string" || !content3.startsWith(INDEX_NOTICE)) {
+      return failure5("DELIVERY_INVENTORY_INVALID", `/${locator}`, "Delivery index locator is occupied.");
+    }
+    ignored.add(locator);
+  }
+  const grouped = /* @__PURE__ */ new Map();
+  for (const [locator, source] of [...sources.entries()].sort(([left], [right]) => compareCodePoints(left, right))) {
+    if (ignored.has(locator)) continue;
+    const descriptor = classify(locator);
+    if (!descriptor || descriptor.expectedKind === null) {
+      return failure5("DELIVERY_INVENTORY_INVALID", `/${locator}`, "Delivery contains an unknown managed file.");
+    }
+    const raw = source.overlay ?? await readPrefix(source.path).catch(() => null);
+    const metadata = typeof raw === "string" && Buffer.byteLength(raw) <= 262144 ? parseFrontmatter2(raw) : null;
+    if (!metadata || metadata.artifact_id !== descriptor.artifactId || metadata.artifact_kind !== descriptor.expectedKind || descriptor.ownerId !== null && metadata.owner_artifact_id !== descriptor.ownerId) {
+      return failure5("DELIVERY_INVENTORY_PATH_MISMATCH", `/${locator}`, "Delivery path and Frontmatter ownership must match.");
+    }
+    const expected = descriptor.archived ? archivedDeliveryPair(metadata, { ownerKind: descriptor.ownerKind }) : activeDeliveryPair(metadata, { ownerKind: descriptor.ownerKind });
+    if (!Object.values(expected).includes(locator)) {
+      return failure5("DELIVERY_INVENTORY_PATH_MISMATCH", `/${locator}`, "Delivery locator is not canonical for its owner.");
+    }
+    const key = `${descriptor.archived ? "archive" : "active"}:${metadata.artifact_id}`;
+    const pair = grouped.get(key) ?? {};
+    const language = languageOf(locator);
+    if (pair[language]) return failure5("DELIVERY_INVENTORY_DUPLICATE", `/${locator}`, "Delivery artifact language is duplicated.");
+    pair[language] = { language, locator, frontmatter: metadata };
+    grouped.set(key, pair);
+  }
+  const activeItems = [];
+  const archivedItems = [];
+  const activePairs = [];
+  const archivedPairs = [];
+  const artifactIds = /* @__PURE__ */ new Set();
+  for (const [key, pair] of grouped) {
+    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual3(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
+      return failure5("DELIVERY_INVENTORY_PAIR_INVALID", `/${key}`, "Delivery artifacts require one matching bilingual pair.");
+    }
+    const item = itemFromPair(pair);
+    if (artifactIds.has(item.artifact_id)) {
+      return failure5("DELIVERY_INVENTORY_DUPLICATE", `/${item.artifact_id}`, "Delivery artifact IDs must be globally unique.");
+    }
+    artifactIds.add(item.artifact_id);
+    if (key.startsWith("archive:")) {
+      archivedItems.push(item);
+      archivedPairs.push(pair.en, pair["zh-CN"]);
+    } else {
+      activeItems.push(item);
+      activePairs.push(pair.en, pair["zh-CN"]);
+    }
+  }
+  const sortItems = (values) => values.sort((left, right) => compareCodePoints(left.artifact_id, right.artifact_id));
+  sortItems(activeItems);
+  sortItems(archivedItems);
+  const owners = sortItems(activeItems.filter(({ artifact_kind: kind }) => ["prd", "non-prd-delivery"].includes(kind)));
+  const byOwner = {};
+  const archivedByOwner = {};
+  for (const owner of owners) byOwner[owner.artifact_id] = { owner, assets: [] };
+  for (const item of archivedItems) {
+    if (!item.owner_artifact_id) continue;
+    archivedByOwner[item.owner_artifact_id] ??= { owner_artifact_id: item.owner_artifact_id, assets: [] };
+    archivedByOwner[item.owner_artifact_id].assets.push(item);
+  }
+  const retainedOwnerIds = new Set(Object.values(archivedByOwner).filter(({ owner_artifact_id: ownerId, assets }) => assets.some(({ artifact_id: id, artifact_kind: kind }) => id === ownerId && ["prd", "non-prd-delivery"].includes(kind))).map(({ owner_artifact_id: ownerId }) => ownerId));
+  const ownerKindMismatch = (item, owner) => {
+    const physicalOwnerKind = classify(item.locators.en)?.ownerKind ?? null;
+    return physicalOwnerKind !== null && physicalOwnerKind !== owner.artifact_kind;
+  };
+  for (const item of activeItems) {
+    if (!item.owner_artifact_id) continue;
+    if (!byOwner[item.owner_artifact_id]) {
+      if (item.artifact_kind === "closure-summary" && retainedOwnerIds.has(item.owner_artifact_id)) {
+        const retainedOwner = archivedByOwner[item.owner_artifact_id].assets.find((candidate) => candidate.artifact_id === item.owner_artifact_id && ["prd", "non-prd-delivery"].includes(candidate.artifact_kind));
+        if (retainedOwner && !ownerKindMismatch(item, retainedOwner)) continue;
+        return failure5("DELIVERY_INVENTORY_OWNER_MISMATCH", `/${item.artifact_id}`, "Closure summary and retained physical owner kinds must match.");
+      }
+      return failure5("DELIVERY_INVENTORY_OWNER_MISSING", `/${item.artifact_id}`, "Every active owned asset requires one active physical owner.");
+    }
+    if (ownerKindMismatch(item, byOwner[item.owner_artifact_id].owner)) {
+      return failure5("DELIVERY_INVENTORY_OWNER_MISMATCH", `/${item.artifact_id}`, "Owned asset and physical owner kinds must match.");
+    }
+    byOwner[item.owner_artifact_id].assets.push(item);
+  }
+  for (const entry2 of Object.values(archivedByOwner)) {
+    const retainedOwner = entry2.assets.find(({ artifact_id: id, artifact_kind: kind }) => id === entry2.owner_artifact_id && ["prd", "non-prd-delivery"].includes(kind));
+    const owner = byOwner[entry2.owner_artifact_id]?.owner ?? retainedOwner;
+    if (owner && entry2.assets.some((item) => ownerKindMismatch(item, owner))) {
+      return failure5("DELIVERY_INVENTORY_OWNER_MISMATCH", `/${entry2.owner_artifact_id}`, "Archived assets and physical owner kinds must match.");
+    }
+  }
+  for (const entry2 of Object.values(byOwner)) sortItems(entry2.assets);
+  for (const entry2 of Object.values(archivedByOwner)) sortItems(entry2.assets);
+  return ok({
+    layout_version: 2,
+    feedbacks: sortItems(activeItems.filter(({ artifact_kind: kind }) => kind === "feedback")),
+    owners,
+    closed_summaries: sortItems([...activeItems, ...archivedItems].filter(({ artifact_kind: kind }) => kind === "closure-summary")),
+    views: presentViews[0] ? [{
+      artifact_id: "alignment-review",
+      locators: { en: viewLocators[0], "zh-CN": viewLocators[1] }
+    }] : [],
+    by_owner: byOwner,
+    archived_by_owner: archivedByOwner,
+    pairs: activePairs.sort((left, right) => compareCodePoints(left.locator, right.locator)),
+    archived_pairs: archivedPairs.sort((left, right) => compareCodePoints(left.locator, right.locator))
+  });
+};
+
 // scripts/delivery/alignment-review.mjs
-var GENERATED_NOTICE = "<!-- Generated by Project Lifecycle from validated active alignment state; do not edit. -->";
-var MAX_INVENTORY_FILES = 2e3;
+var GENERATED_NOTICE2 = "<!-- Generated by Project Lifecycle from validated active alignment state; do not edit. -->";
 var MAX_DOCUMENT_BYTES = 262144;
-var failure3 = (path, message) => fail([
+var failure6 = (path, message) => fail([
   createError("ALIGNMENT_REVIEW_INPUT_INVALID", path, message)
 ]);
 var safeTitle = (value) => typeof value === "string" && value.trim() === value && value.length > 0 && value.length <= 200 && !/[\r\n\p{Cc}\p{Cf}]/u.test(value);
 var sortedUnique = (values) => [...new Set(values)].sort(compareCodePoints);
-var acceptedClosure = (closure, feedbackId) => closure?.outcome?.status === "ACCEPTED" && closure?.acceptance?.claimed === true && Array.isArray(closure.feedback_coverage) && closure.feedback_coverage.some((entry) => entry?.feedback_id === feedbackId && entry.status === "COVERED");
+var acceptedClosure = (closure, feedbackId) => closure?.outcome?.status === "ACCEPTED" && closure?.acceptance?.claimed === true && Array.isArray(closure.feedback_coverage) && closure.feedback_coverage.some((entry2) => entry2?.feedback_id === feedbackId && entry2.status === "COVERED");
 var rejectedClosure = (closure) => ["ABANDONED", "CANCELLED", "REJECTED"].includes(closure?.outcome?.status);
-var coversFeedback = (closure, feedbackId) => Array.isArray(closure?.feedback_coverage) && closure.feedback_coverage.some((entry) => entry?.feedback_id === feedbackId);
+var coversFeedback = (closure, feedbackId) => Array.isArray(closure?.feedback_coverage) && closure.feedback_coverage.some((entry2) => entry2?.feedback_id === feedbackId);
 var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}) => {
   if (!Array.isArray(feedbacks) || !Array.isArray(owners) || !Array.isArray(closures)) {
-    return failure3("/", "Alignment review inputs must be bounded arrays.");
+    return failure6("/", "Alignment review inputs must be bounded arrays.");
   }
   const closureByOwner = /* @__PURE__ */ new Map();
-  for (const [index, closure] of closures.entries()) {
+  for (const [index2, closure] of closures.entries()) {
     if (!validateClosureSummary(closure).ok || closureByOwner.has(closure.owner_artifact_id)) {
-      return failure3(`/closures/${index}`, "Closure summaries require unique owner references.");
+      return failure6(`/closures/${index2}`, "Closure summaries require unique owner references.");
     }
     closureByOwner.set(closure.owner_artifact_id, closure);
   }
   const ownerRecords = [];
-  for (const [index, candidate] of owners.entries()) {
+  for (const [index2, candidate] of owners.entries()) {
     const validation2 = validateJson("delivery-frontmatter", candidate);
     if (!validation2.ok || !["prd", "non-prd-delivery"].includes(candidate.artifact_kind)) {
-      return failure3(`/owners/${index}`, "Alignment owners must be valid PRD or non-PRD delivery assets.");
+      return failure6(`/owners/${index2}`, "Alignment owners must be valid PRD or non-PRD delivery assets.");
     }
     ownerRecords.push(candidate);
   }
   const ids = /* @__PURE__ */ new Set();
   const rows = [];
-  for (const [index, entry] of feedbacks.entries()) {
-    const validation2 = validateJson("delivery-frontmatter", entry?.frontmatter);
-    if (!validation2.ok || entry.frontmatter.artifact_kind !== "feedback" || entry.frontmatter.retention_tier !== "active") {
-      return failure3(`/feedbacks/${index}`, "Alignment entries must reference valid Feedback Frontmatter.");
+  for (const [index2, entry2] of feedbacks.entries()) {
+    const validation2 = validateJson("delivery-frontmatter", entry2?.frontmatter);
+    if (!validation2.ok || entry2.frontmatter.artifact_kind !== "feedback" || entry2.frontmatter.retention_tier !== "active") {
+      return failure6(`/feedbacks/${index2}`, "Alignment entries must reference valid Feedback Frontmatter.");
     }
-    const feedbackId = entry.frontmatter.artifact_id;
-    if (ids.has(feedbackId)) return failure3(`/feedbacks/${index}`, "Feedback IDs must be unique.");
+    const feedbackId = entry2.frontmatter.artifact_id;
+    if (ids.has(feedbackId)) return failure6(`/feedbacks/${index2}`, "Feedback IDs must be unique.");
     ids.add(feedbackId);
-    if (entry.marker === null) continue;
-    if (!validateJson("alignment-marker", entry.marker).ok || !entry.frontmatter.domain_ids.includes(entry.marker.primary_domain_id) || !safeTitle(entry.titles?.en) || !safeTitle(entry.titles?.["zh-CN"])) {
-      return failure3(`/feedbacks/${index}`, "Active alignment Feedback must have one validated marker and localized titles.");
+    if (entry2.marker === null) continue;
+    if (!validateJson("alignment-marker", entry2.marker).ok || !entry2.frontmatter.domain_ids.includes(entry2.marker.primary_domain_id) || !safeTitle(entry2.titles?.en) || !safeTitle(entry2.titles?.["zh-CN"])) {
+      return failure6(`/feedbacks/${index2}`, "Active alignment Feedback must have one validated marker and localized titles.");
     }
     const linkedOwners = ownerRecords.filter((candidate) => candidate.relationships.feedback_ids.includes(feedbackId));
     const requiredOwners = [];
     const acceptedOwners = /* @__PURE__ */ new Set();
     for (const candidate of linkedOwners) {
-      const feedbackProject = entry.frontmatter.current_project_id ?? entry.frontmatter.project_id_at_creation;
+      const feedbackProject = entry2.frontmatter.current_project_id ?? entry2.frontmatter.project_id_at_creation;
       const ownerProject = candidate.current_project_id ?? candidate.project_id_at_creation;
       if (ownerProject !== feedbackProject) {
-        return failure3(`/owners/${candidate.artifact_id}`, "Linked alignment owner must belong to the Feedback project.");
+        return failure6(`/owners/${candidate.artifact_id}`, "Linked alignment owner must belong to the Feedback project.");
       }
       const closure = closureByOwner.get(candidate.artifact_id);
       if (closure && closure.baseline.starting !== candidate.knowledge_baseline) {
-        return failure3(`/closures/${candidate.artifact_id}`, "Owner closure must match its starting knowledge baseline.");
+        return failure6(`/closures/${candidate.artifact_id}`, "Owner closure must match its starting knowledge baseline.");
       }
       if (rejectedClosure(closure)) {
         if (!coversFeedback(closure, feedbackId)) {
-          return failure3(`/closures/${candidate.artifact_id}`, "Terminal closure must explicitly cover linked Feedback.");
+          return failure6(`/closures/${candidate.artifact_id}`, "Terminal closure must explicitly cover linked Feedback.");
         }
         continue;
       }
       requiredOwners.push(candidate.artifact_id);
       if (closure?.outcome?.status === "ACCEPTED") {
         if (!acceptedClosure(closure, feedbackId)) {
-          return failure3(`/closures/${candidate.artifact_id}`, "Accepted closure must explicitly cover linked Feedback.");
+          return failure6(`/closures/${candidate.artifact_id}`, "Accepted closure must explicitly cover linked Feedback.");
         }
         acceptedOwners.add(candidate.artifact_id);
       }
     }
     const ownerRef = sortedUnique(requiredOwners);
     const allAccepted = ownerRef.length > 0 && ownerRef.every((ownerId) => acceptedOwners.has(ownerId));
-    const alignmentPhase = ownerRef.length > 0 && !allAccepted ? "DELIVERY_OPEN" : allAccepted ? "KNOWLEDGE_WRITEBACK" : entry.marker.routing_disposition === "DEFERRED" ? "DEFERRED" : "REVIEW_REQUIRED";
+    const alignmentPhase = ownerRef.length > 0 && !allAccepted ? "DELIVERY_OPEN" : allAccepted ? "KNOWLEDGE_WRITEBACK" : entry2.marker.routing_disposition === "DEFERRED" ? "DEFERRED" : "REVIEW_REQUIRED";
     rows.push({
       feedback_id: feedbackId,
-      title: { en: entry.titles.en, "zh-CN": entry.titles["zh-CN"] },
-      primary_domain_id: entry.marker.primary_domain_id,
+      title: { en: entry2.titles.en, "zh-CN": entry2.titles["zh-CN"] },
+      primary_domain_id: entry2.marker.primary_domain_id,
       alignment_phase: alignmentPhase,
       owner_ref: ownerRef
     });
@@ -18381,13 +19465,13 @@ var deriveAlignmentReview = ({ feedbacks = [], owners = [], closures = [] } = {}
   rows.sort((left, right) => compareCodePoints(left.feedback_id, right.feedback_id));
   const review = { schema_version: 1, rows };
   const validation = validateJson("alignment-review", review);
-  return validation.ok ? ok(review) : failure3("/", "Derived alignment review violates its closed schema.");
+  return validation.ok ? ok(review) : failure6("/", "Derived alignment review violates its closed schema.");
 };
 var escapeTable = (value) => value.replace(/[\\`*_\[\]{}()<>#+.!|~-]/gu, "\\$&");
 var render = (review, language) => {
   const heading = language === "en" ? "Active alignment review" : "活动对齐审阅";
   const lines = [
-    GENERATED_NOTICE,
+    GENERATED_NOTICE2,
     `# ${heading}`,
     "",
     "| feedback_id | title | primary_domain_id | alignment_phase | owner_ref |",
@@ -18404,31 +19488,31 @@ var renderAlignmentReviewPair = (review) => ({
   en: render(review, "en"),
   "zh-CN": render(review, "zh-CN")
 });
-var inside2 = (root, candidate) => {
-  const path = relative4(root, candidate);
-  return path === "" || path !== ".." && !path.startsWith(`..${sep4}`) && !isAbsolute5(path);
+var inside4 = (root, candidate) => {
+  const path = relative6(root, candidate);
+  return path === "" || path !== ".." && !path.startsWith(`..${sep6}`) && !isAbsolute8(path);
 };
-var regularDirectory = async (path, parent = null) => {
-  const state = await lstat4(path);
-  const physical = await realpath5(path);
-  if (!state.isDirectory() || state.isSymbolicLink() || parent && !inside2(parent, physical)) {
+var regularDirectory2 = async (path, parent = null) => {
+  const state = await lstat6(path);
+  const physical = await realpath7(path);
+  if (!state.isDirectory() || state.isSymbolicLink() || parent && !inside4(parent, physical)) {
     throw new Error("Unsafe alignment review directory.");
   }
   return physical;
 };
 var resolveLifecycleRoot = async (root) => {
-  if (typeof root !== "string" || !isAbsolute5(root)) throw new Error("Absolute project root required.");
-  const projectRoot = await regularDirectory(root);
-  const docsRoot = await regularDirectory(join4(root, "docs"), projectRoot);
-  const lifecycleRoot = await regularDirectory(join4(root, "docs", "project-lifecycle"), docsRoot);
-  await regularDirectory(join4(root, "docs", "project-lifecycle", "delivery"), lifecycleRoot);
+  if (typeof root !== "string" || !isAbsolute8(root)) throw new Error("Absolute project root required.");
+  const projectRoot = await regularDirectory2(root);
+  const docsRoot = await regularDirectory2(join6(root, "docs"), projectRoot);
+  const lifecycleRoot = await regularDirectory2(join6(root, "docs", "project-lifecycle"), docsRoot);
+  await regularDirectory2(join6(root, "docs", "project-lifecycle", "delivery"), lifecycleRoot);
   return lifecycleRoot;
 };
 var readExisting = async (path) => {
   try {
-    const state = await lstat4(path);
+    const state = await lstat6(path);
     if (!state.isFile() || state.isSymbolicLink()) throw new Error("Unsafe projection target.");
-    return readFile4(path, "utf8");
+    return readFile6(path, "utf8");
   } catch (error) {
     if (error.code === "ENOENT") return null;
     throw error;
@@ -18443,47 +19527,30 @@ var splitDeliveryDocument2 = (source) => {
   if (!parsed.ok || !validateJson("delivery-frontmatter", parsed.value).ok) return null;
   return { frontmatter: parsed.value, body: normalized.slice(closing + 5) };
 };
-var addPairLanguage = (pairs, document, name) => {
-  const id = document.frontmatter.artifact_id;
-  const language = name === `${id}-en.md` ? "en" : name === `${id}.md` ? "zh-CN" : null;
-  if (language === null) throw new Error("Delivery inventory contains a non-canonical locator.");
-  const pair = pairs.get(id) ?? {};
-  if (pair[language]) throw new Error("Delivery inventory contains a duplicate language.");
-  pair[language] = document;
-  pairs.set(id, pair);
-};
 var discoverAlignmentInventory = async (lifecycleRoot) => {
-  const roots = [await regularDirectory(join4(lifecycleRoot, "delivery"), lifecycleRoot)];
-  try {
-    roots.push(await regularDirectory(join4(lifecycleRoot, "archive", "delivery"), lifecycleRoot));
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
-  const entries = [];
-  for (const root of roots) {
-    for (const name of await readdir2(root)) {
-      if (name.endsWith(".md") && !["alignment-review-en.md", "alignment-review.md"].includes(name)) {
-        entries.push({ root, name });
-      }
-    }
-  }
-  if (entries.length > MAX_INVENTORY_FILES) throw new Error("Delivery inventory is unbounded.");
+  const collected = await collectDeliveryInventory({ lifecycleRoot });
+  if (!collected.ok) throw new Error("Delivery inventory is incomplete.");
   const pairs = /* @__PURE__ */ new Map();
-  for (const { root, name } of entries) {
-    const path = join4(root, name);
-    const state = await lstat4(path);
-    if (!state.isFile() || state.isSymbolicLink() || state.size > MAX_DOCUMENT_BYTES) {
+  for (const entry2 of [...collected.value.pairs, ...collected.value.archived_pairs]) {
+    const path = join6(lifecycleRoot, entry2.locator);
+    const state = await lstat6(path);
+    const physical = await realpath7(path);
+    if (!state.isFile() || state.isSymbolicLink() || state.size > MAX_DOCUMENT_BYTES || !inside4(lifecycleRoot, physical)) {
       throw new Error("Delivery inventory contains an unsafe document.");
     }
-    const document = splitDeliveryDocument2(await readFile4(path, "utf8"));
-    if (!document) throw new Error("Delivery inventory contains an invalid document.");
-    addPairLanguage(pairs, document, name);
+    const document3 = splitDeliveryDocument2(await readFile6(physical, "utf8"));
+    if (!document3 || !isDeepStrictEqual4(document3.frontmatter, entry2.frontmatter)) {
+      throw new Error("Delivery inventory changed after validation.");
+    }
+    const pair = pairs.get(entry2.frontmatter.artifact_id) ?? {};
+    pair[entry2.language] = document3;
+    pairs.set(entry2.frontmatter.artifact_id, pair);
   }
   const feedbacks = [];
   const owners = [];
   const closureProofs = /* @__PURE__ */ new Set();
   for (const [id, pair] of pairs) {
-    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual2(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
+    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual4(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
       throw new Error(`Delivery pair ${id} is incomplete or divergent.`);
     }
     const frontmatter = pair.en.frontmatter;
@@ -18524,10 +19591,20 @@ var discoverAlignmentInventory = async (lifecycleRoot) => {
     }))
   };
 };
+var ensureProjectionDirectory = async (lifecycleRoot) => {
+  const path = join6(lifecycleRoot, "delivery", "views");
+  try {
+    return await regularDirectory2(path, lifecycleRoot);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    await mkdir(path);
+    return regularDirectory2(path, lifecycleRoot);
+  }
+};
 var sameRecords = (supplied, authoritative, identity) => {
   const suppliedById = new Map(supplied.map((value) => [identity(value), value]));
   const authoritativeById = new Map(authoritative.map((value) => [identity(value), value]));
-  return suppliedById.size === supplied.length && suppliedById.size === authoritativeById.size && [...authoritativeById].every(([id, value]) => isDeepStrictEqual2(suppliedById.get(id), value));
+  return suppliedById.size === supplied.length && suppliedById.size === authoritativeById.size && [...authoritativeById].every(([id, value]) => isDeepStrictEqual4(suppliedById.get(id), value));
 };
 var validateAuthoritativeInventory = async (lifecycleRoot, input) => {
   const inventory = await discoverAlignmentInventory(lifecycleRoot);
@@ -18539,16 +19616,16 @@ var validateAuthoritativeInventory = async (lifecycleRoot, input) => {
   const suppliedClosureProofs = new Set(suppliedClosures.map((closure) => `${closure.artifact_id}:${closureSummaryHash(closure)}`));
   return sameRecords(suppliedFeedbacks, inventory.feedbacks, ({ frontmatter }) => frontmatter.artifact_id) && sameRecords(suppliedOwners, inventory.owners, ({ artifact_id: id }) => id) && suppliedClosureProofs.size === suppliedClosures.length && suppliedClosureProofs.size === inventory.closureProofs.size && [...suppliedClosureProofs].every((proof) => inventory.closureProofs.has(proof));
 };
-var writeContent = (write, lifecycleRoot, locator, content) => write({
+var writeContent = (write, lifecycleRoot, locator, content3) => write({
   root: lifecycleRoot,
   target: locator,
-  content,
-  validate: async (source) => source === content ? ok(source) : failure3("/", "Generated projection content changed during publication.")
+  content: content3,
+  validate: async (source) => source === content3 ? ok(source) : failure6("/", "Generated projection content changed during publication.")
 });
 var restore = async ({ write, remove, lifecycleRoot, locator, original }) => {
   if (original === null) {
     try {
-      await remove(join4(lifecycleRoot, locator));
+      await remove(join6(lifecycleRoot, locator));
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
@@ -18565,13 +19642,10 @@ var syncAlignmentReview = async (input = {}, operations = {}) => {
   } catch {
     return fail([createError("ALIGNMENT_REVIEW_PATH_INVALID", "/root", "Projection targets require the fixed regular lifecycle root.")]);
   }
-  const locators = {
-    en: "delivery/alignment-review-en.md",
-    "zh-CN": "delivery/alignment-review.md"
-  };
+  const locators = alignmentReviewPair();
   const paths = {
-    en: join4(lifecycleRoot, locators.en),
-    "zh-CN": join4(lifecycleRoot, locators["zh-CN"])
+    en: join6(lifecycleRoot, locators.en),
+    "zh-CN": join6(lifecycleRoot, locators["zh-CN"])
   };
   let existing;
   try {
@@ -18585,8 +19659,8 @@ var syncAlignmentReview = async (input = {}, operations = {}) => {
   if (existing.en === null !== (existing["zh-CN"] === null)) {
     return fail([createError("ALIGNMENT_REVIEW_PAIR_INCOMPLETE", "/delivery", "Generated projection files must exist as a pair.")]);
   }
-  if (existing.en !== null && (!existing.en.startsWith(`${GENERATED_NOTICE}
-`) || !existing["zh-CN"].startsWith(`${GENERATED_NOTICE}
+  if (existing.en !== null && (!existing.en.startsWith(`${GENERATED_NOTICE2}
+`) || !existing["zh-CN"].startsWith(`${GENERATED_NOTICE2}
 `))) {
     return fail([createError("ALIGNMENT_REVIEW_COLLISION", "/delivery", "Projection locators are occupied by a non-generated delivery asset.")]);
   }
@@ -18628,6 +19702,11 @@ var syncAlignmentReview = async (input = {}, operations = {}) => {
   }
   const pair = renderAlignmentReviewPair(review.value);
   try {
+    await ensureProjectionDirectory(lifecycleRoot);
+  } catch {
+    return fail([createError("ALIGNMENT_REVIEW_PATH_INVALID", "/delivery/views", "Projection directory must be a regular managed directory.")]);
+  }
+  try {
     await writeContent(write, lifecycleRoot, locators.en, pair.en);
   } catch {
     return fail([createError("ALIGNMENT_REVIEW_WRITE_FAILED", "/delivery", "English projection publication failed before the pair completed.")]);
@@ -18650,8 +19729,8709 @@ var syncAlignmentReview = async (input = {}, operations = {}) => {
   });
 };
 
+// scripts/delivery/delivery-indexes.mjs
+import { posix as posix3 } from "node:path";
+var NOTICE = "<!-- Generated by Project Lifecycle from validated delivery Frontmatter; do not edit. -->";
+var failure7 = (code, path, message) => fail([createError(code, path, message)]);
+var languageName = (language) => language === "en" ? "INDEX-en.md" : "INDEX.md";
+var text = {
+  en: { title: "Delivery", feedback: "Feedback", owners: "Owners", retained: "Retained owners", closures: "Closure summaries", views: "Views", assets: "Owned assets", archive: "Retained archive", empty: "None." },
+  "zh-CN": { title: "交付", feedback: "反馈", owners: "所有者", retained: "保留的所有者", closures: "闭环摘要", views: "视图", assets: "所属文档", archive: "保留归档", empty: "无。" }
+};
+var entry = (item, language, fromDirectory) => {
+  const locator = item.locators[language];
+  const target = posix3.relative(fromDirectory, locator);
+  return `- [\`${item.artifact_id}\`](${target}) — kind: \`${item.artifact_kind}\`; retention: \`${item.retention_tier}\``;
+};
+var renderRoot = (inventory, language) => {
+  const labels = text[language];
+  const feedback = inventory.feedbacks.map((item) => entry(item, language, "delivery"));
+  const owners = inventory.owners.map((owner) => {
+    const root = owner.artifact_kind === "prd" ? `delivery/prds/${owner.artifact_id}` : `delivery/non-prd/${owner.artifact_id}`;
+    return `- [\`${owner.artifact_id}\`](${posix3.relative("delivery", `${root}/${languageName(language)}`)}) — kind: \`${owner.artifact_kind}\``;
+  });
+  const activeOwnerIds = new Set(inventory.owners.map(({ artifact_id: id }) => id));
+  const retained = Object.values(inventory.archived_by_owner ?? {}).map(({ owner_artifact_id: ownerId, assets }) => assets.find(({ artifact_id: id, artifact_kind: kind }) => id === ownerId && ["prd", "non-prd-delivery"].includes(kind))).filter((owner) => owner && !activeOwnerIds.has(owner.artifact_id)).map((owner) => entry(owner, language, "delivery"));
+  const closures = (inventory.closed_summaries ?? []).map((item) => entry(item, language, "delivery"));
+  const views = (inventory.views ?? []).map((item) => {
+    const target = posix3.relative("delivery", item.locators[language]);
+    return `- [\`${item.artifact_id}\`](${target})`;
+  });
+  return [
+    NOTICE,
+    `# ${labels.title}`,
+    "",
+    `## ${labels.feedback}`,
+    "",
+    ...feedback.length ? feedback : [`- ${labels.empty}`],
+    "",
+    `## ${labels.owners}`,
+    "",
+    ...owners.length ? owners : [`- ${labels.empty}`],
+    "",
+    `## ${labels.retained}`,
+    "",
+    ...retained.length ? retained : [`- ${labels.empty}`],
+    "",
+    `## ${labels.closures}`,
+    "",
+    ...closures.length ? closures : [`- ${labels.empty}`],
+    "",
+    `## ${labels.views}`,
+    "",
+    ...views.length ? views : [`- ${labels.empty}`],
+    ""
+  ].join("\n");
+};
+var renderOwner = (inventory, owner, language) => {
+  const labels = text[language];
+  const ownerRoot2 = owner.artifact_kind === "prd" ? `delivery/prds/${owner.artifact_id}` : `delivery/non-prd/${owner.artifact_id}`;
+  const active = inventory.by_owner[owner.artifact_id]?.assets ?? (inventory.closed_summaries ?? []).filter((item) => item.owner_artifact_id === owner.artifact_id && item.locators.en.startsWith("delivery/"));
+  const archived = inventory.archived_by_owner[owner.artifact_id]?.assets ?? [];
+  return [
+    NOTICE,
+    `# ${owner.artifact_id}`,
+    "",
+    `## ${labels.assets}`,
+    "",
+    ...active.length ? active.map((item) => entry(item, language, ownerRoot2)) : [`- ${labels.empty}`],
+    "",
+    `## ${labels.archive}`,
+    "",
+    ...archived.length ? archived.map((item) => entry(item, language, ownerRoot2)) : [`- ${labels.empty}`],
+    ""
+  ].join("\n");
+};
+var generateDeliveryIndexes = async ({ inventory } = {}) => {
+  if (!inventory || inventory.layout_version !== 2 || !Array.isArray(inventory.owners)) {
+    return failure7("DELIVERY_INDEX_INPUT_INVALID", "/inventory", "A validated delivery inventory is required.");
+  }
+  const files = [];
+  for (const language of ["en", "zh-CN"]) {
+    files.push({ locator: `delivery/${languageName(language)}`, language, content: renderRoot(inventory, language) });
+  }
+  const ownersById = new Map(inventory.owners.map((owner) => [owner.artifact_id, owner]));
+  for (const { owner_artifact_id: ownerId, assets } of Object.values(inventory.archived_by_owner ?? {})) {
+    const retainedOwner = assets.find(({ artifact_id: id, artifact_kind: kind }) => id === ownerId && ["prd", "non-prd-delivery"].includes(kind));
+    if (retainedOwner && !ownersById.has(ownerId)) ownersById.set(ownerId, retainedOwner);
+  }
+  const owners = [...ownersById.values()].sort((left, right) => compareCodePoints(left.artifact_id, right.artifact_id));
+  for (const owner of owners) {
+    const root = owner.artifact_kind === "prd" ? `delivery/prds/${owner.artifact_id}` : `delivery/non-prd/${owner.artifact_id}`;
+    for (const language of ["en", "zh-CN"]) {
+      files.push({
+        locator: `${root}/${languageName(language)}`,
+        language,
+        content: renderOwner(inventory, owner, language)
+      });
+    }
+  }
+  files.sort((left, right) => compareCodePoints(left.locator, right.locator));
+  return ok({
+    files,
+    active_owner_ids: inventory.owners.map(({ artifact_id: id }) => id),
+    retained_owner_ids: Object.keys(inventory.archived_by_owner).sort(compareCodePoints),
+    feedback_ids: inventory.feedbacks.map(({ artifact_id: id }) => id)
+  });
+};
+
+// scripts/delivery/delivery-layout-migration.mjs
+var import_yaml2 = __toESM(require_dist(), 1);
+import { createHash as createHash4 } from "node:crypto";
+import { lstat as lstat8, opendir as opendir5, readFile as readFile8, realpath as realpath9 } from "node:fs/promises";
+import { dirname as dirname5, isAbsolute as isAbsolute10, join as join8, posix as posix4, relative as relative8, resolve as resolve7, sep as sep8 } from "node:path";
+import { isDeepStrictEqual as isDeepStrictEqual5 } from "node:util";
+
+// node_modules/mdast-util-to-string/lib/index.js
+var emptyOptions = {};
+function toString(value, options) {
+  const settings = options || emptyOptions;
+  const includeImageAlt = typeof settings.includeImageAlt === "boolean" ? settings.includeImageAlt : true;
+  const includeHtml = typeof settings.includeHtml === "boolean" ? settings.includeHtml : true;
+  return one(value, includeImageAlt, includeHtml);
+}
+function one(value, includeImageAlt, includeHtml) {
+  if (node(value)) {
+    if ("value" in value) {
+      return value.type === "html" && !includeHtml ? "" : value.value;
+    }
+    if (includeImageAlt && "alt" in value && value.alt) {
+      return value.alt;
+    }
+    if ("children" in value) {
+      return all(value.children, includeImageAlt, includeHtml);
+    }
+  }
+  if (Array.isArray(value)) {
+    return all(value, includeImageAlt, includeHtml);
+  }
+  return "";
+}
+function all(values, includeImageAlt, includeHtml) {
+  const result = [];
+  let index2 = -1;
+  while (++index2 < values.length) {
+    result[index2] = one(values[index2], includeImageAlt, includeHtml);
+  }
+  return result.join("");
+}
+function node(value) {
+  return Boolean(value && typeof value === "object");
+}
+
+// node_modules/character-entities/index.js
+var characterEntities = {
+  AElig: "Æ",
+  AMP: "&",
+  Aacute: "Á",
+  Abreve: "Ă",
+  Acirc: "Â",
+  Acy: "А",
+  Afr: "𝔄",
+  Agrave: "À",
+  Alpha: "Α",
+  Amacr: "Ā",
+  And: "⩓",
+  Aogon: "Ą",
+  Aopf: "𝔸",
+  ApplyFunction: "⁡",
+  Aring: "Å",
+  Ascr: "𝒜",
+  Assign: "≔",
+  Atilde: "Ã",
+  Auml: "Ä",
+  Backslash: "∖",
+  Barv: "⫧",
+  Barwed: "⌆",
+  Bcy: "Б",
+  Because: "∵",
+  Bernoullis: "ℬ",
+  Beta: "Β",
+  Bfr: "𝔅",
+  Bopf: "𝔹",
+  Breve: "˘",
+  Bscr: "ℬ",
+  Bumpeq: "≎",
+  CHcy: "Ч",
+  COPY: "©",
+  Cacute: "Ć",
+  Cap: "⋒",
+  CapitalDifferentialD: "ⅅ",
+  Cayleys: "ℭ",
+  Ccaron: "Č",
+  Ccedil: "Ç",
+  Ccirc: "Ĉ",
+  Cconint: "∰",
+  Cdot: "Ċ",
+  Cedilla: "¸",
+  CenterDot: "·",
+  Cfr: "ℭ",
+  Chi: "Χ",
+  CircleDot: "⊙",
+  CircleMinus: "⊖",
+  CirclePlus: "⊕",
+  CircleTimes: "⊗",
+  ClockwiseContourIntegral: "∲",
+  CloseCurlyDoubleQuote: "”",
+  CloseCurlyQuote: "’",
+  Colon: "∷",
+  Colone: "⩴",
+  Congruent: "≡",
+  Conint: "∯",
+  ContourIntegral: "∮",
+  Copf: "ℂ",
+  Coproduct: "∐",
+  CounterClockwiseContourIntegral: "∳",
+  Cross: "⨯",
+  Cscr: "𝒞",
+  Cup: "⋓",
+  CupCap: "≍",
+  DD: "ⅅ",
+  DDotrahd: "⤑",
+  DJcy: "Ђ",
+  DScy: "Ѕ",
+  DZcy: "Џ",
+  Dagger: "‡",
+  Darr: "↡",
+  Dashv: "⫤",
+  Dcaron: "Ď",
+  Dcy: "Д",
+  Del: "∇",
+  Delta: "Δ",
+  Dfr: "𝔇",
+  DiacriticalAcute: "´",
+  DiacriticalDot: "˙",
+  DiacriticalDoubleAcute: "˝",
+  DiacriticalGrave: "`",
+  DiacriticalTilde: "˜",
+  Diamond: "⋄",
+  DifferentialD: "ⅆ",
+  Dopf: "𝔻",
+  Dot: "¨",
+  DotDot: "⃜",
+  DotEqual: "≐",
+  DoubleContourIntegral: "∯",
+  DoubleDot: "¨",
+  DoubleDownArrow: "⇓",
+  DoubleLeftArrow: "⇐",
+  DoubleLeftRightArrow: "⇔",
+  DoubleLeftTee: "⫤",
+  DoubleLongLeftArrow: "⟸",
+  DoubleLongLeftRightArrow: "⟺",
+  DoubleLongRightArrow: "⟹",
+  DoubleRightArrow: "⇒",
+  DoubleRightTee: "⊨",
+  DoubleUpArrow: "⇑",
+  DoubleUpDownArrow: "⇕",
+  DoubleVerticalBar: "∥",
+  DownArrow: "↓",
+  DownArrowBar: "⤓",
+  DownArrowUpArrow: "⇵",
+  DownBreve: "̑",
+  DownLeftRightVector: "⥐",
+  DownLeftTeeVector: "⥞",
+  DownLeftVector: "↽",
+  DownLeftVectorBar: "⥖",
+  DownRightTeeVector: "⥟",
+  DownRightVector: "⇁",
+  DownRightVectorBar: "⥗",
+  DownTee: "⊤",
+  DownTeeArrow: "↧",
+  Downarrow: "⇓",
+  Dscr: "𝒟",
+  Dstrok: "Đ",
+  ENG: "Ŋ",
+  ETH: "Ð",
+  Eacute: "É",
+  Ecaron: "Ě",
+  Ecirc: "Ê",
+  Ecy: "Э",
+  Edot: "Ė",
+  Efr: "𝔈",
+  Egrave: "È",
+  Element: "∈",
+  Emacr: "Ē",
+  EmptySmallSquare: "◻",
+  EmptyVerySmallSquare: "▫",
+  Eogon: "Ę",
+  Eopf: "𝔼",
+  Epsilon: "Ε",
+  Equal: "⩵",
+  EqualTilde: "≂",
+  Equilibrium: "⇌",
+  Escr: "ℰ",
+  Esim: "⩳",
+  Eta: "Η",
+  Euml: "Ë",
+  Exists: "∃",
+  ExponentialE: "ⅇ",
+  Fcy: "Ф",
+  Ffr: "𝔉",
+  FilledSmallSquare: "◼",
+  FilledVerySmallSquare: "▪",
+  Fopf: "𝔽",
+  ForAll: "∀",
+  Fouriertrf: "ℱ",
+  Fscr: "ℱ",
+  GJcy: "Ѓ",
+  GT: ">",
+  Gamma: "Γ",
+  Gammad: "Ϝ",
+  Gbreve: "Ğ",
+  Gcedil: "Ģ",
+  Gcirc: "Ĝ",
+  Gcy: "Г",
+  Gdot: "Ġ",
+  Gfr: "𝔊",
+  Gg: "⋙",
+  Gopf: "𝔾",
+  GreaterEqual: "≥",
+  GreaterEqualLess: "⋛",
+  GreaterFullEqual: "≧",
+  GreaterGreater: "⪢",
+  GreaterLess: "≷",
+  GreaterSlantEqual: "⩾",
+  GreaterTilde: "≳",
+  Gscr: "𝒢",
+  Gt: "≫",
+  HARDcy: "Ъ",
+  Hacek: "ˇ",
+  Hat: "^",
+  Hcirc: "Ĥ",
+  Hfr: "ℌ",
+  HilbertSpace: "ℋ",
+  Hopf: "ℍ",
+  HorizontalLine: "─",
+  Hscr: "ℋ",
+  Hstrok: "Ħ",
+  HumpDownHump: "≎",
+  HumpEqual: "≏",
+  IEcy: "Е",
+  IJlig: "Ĳ",
+  IOcy: "Ё",
+  Iacute: "Í",
+  Icirc: "Î",
+  Icy: "И",
+  Idot: "İ",
+  Ifr: "ℑ",
+  Igrave: "Ì",
+  Im: "ℑ",
+  Imacr: "Ī",
+  ImaginaryI: "ⅈ",
+  Implies: "⇒",
+  Int: "∬",
+  Integral: "∫",
+  Intersection: "⋂",
+  InvisibleComma: "⁣",
+  InvisibleTimes: "⁢",
+  Iogon: "Į",
+  Iopf: "𝕀",
+  Iota: "Ι",
+  Iscr: "ℐ",
+  Itilde: "Ĩ",
+  Iukcy: "І",
+  Iuml: "Ï",
+  Jcirc: "Ĵ",
+  Jcy: "Й",
+  Jfr: "𝔍",
+  Jopf: "𝕁",
+  Jscr: "𝒥",
+  Jsercy: "Ј",
+  Jukcy: "Є",
+  KHcy: "Х",
+  KJcy: "Ќ",
+  Kappa: "Κ",
+  Kcedil: "Ķ",
+  Kcy: "К",
+  Kfr: "𝔎",
+  Kopf: "𝕂",
+  Kscr: "𝒦",
+  LJcy: "Љ",
+  LT: "<",
+  Lacute: "Ĺ",
+  Lambda: "Λ",
+  Lang: "⟪",
+  Laplacetrf: "ℒ",
+  Larr: "↞",
+  Lcaron: "Ľ",
+  Lcedil: "Ļ",
+  Lcy: "Л",
+  LeftAngleBracket: "⟨",
+  LeftArrow: "←",
+  LeftArrowBar: "⇤",
+  LeftArrowRightArrow: "⇆",
+  LeftCeiling: "⌈",
+  LeftDoubleBracket: "⟦",
+  LeftDownTeeVector: "⥡",
+  LeftDownVector: "⇃",
+  LeftDownVectorBar: "⥙",
+  LeftFloor: "⌊",
+  LeftRightArrow: "↔",
+  LeftRightVector: "⥎",
+  LeftTee: "⊣",
+  LeftTeeArrow: "↤",
+  LeftTeeVector: "⥚",
+  LeftTriangle: "⊲",
+  LeftTriangleBar: "⧏",
+  LeftTriangleEqual: "⊴",
+  LeftUpDownVector: "⥑",
+  LeftUpTeeVector: "⥠",
+  LeftUpVector: "↿",
+  LeftUpVectorBar: "⥘",
+  LeftVector: "↼",
+  LeftVectorBar: "⥒",
+  Leftarrow: "⇐",
+  Leftrightarrow: "⇔",
+  LessEqualGreater: "⋚",
+  LessFullEqual: "≦",
+  LessGreater: "≶",
+  LessLess: "⪡",
+  LessSlantEqual: "⩽",
+  LessTilde: "≲",
+  Lfr: "𝔏",
+  Ll: "⋘",
+  Lleftarrow: "⇚",
+  Lmidot: "Ŀ",
+  LongLeftArrow: "⟵",
+  LongLeftRightArrow: "⟷",
+  LongRightArrow: "⟶",
+  Longleftarrow: "⟸",
+  Longleftrightarrow: "⟺",
+  Longrightarrow: "⟹",
+  Lopf: "𝕃",
+  LowerLeftArrow: "↙",
+  LowerRightArrow: "↘",
+  Lscr: "ℒ",
+  Lsh: "↰",
+  Lstrok: "Ł",
+  Lt: "≪",
+  Map: "⤅",
+  Mcy: "М",
+  MediumSpace: " ",
+  Mellintrf: "ℳ",
+  Mfr: "𝔐",
+  MinusPlus: "∓",
+  Mopf: "𝕄",
+  Mscr: "ℳ",
+  Mu: "Μ",
+  NJcy: "Њ",
+  Nacute: "Ń",
+  Ncaron: "Ň",
+  Ncedil: "Ņ",
+  Ncy: "Н",
+  NegativeMediumSpace: "​",
+  NegativeThickSpace: "​",
+  NegativeThinSpace: "​",
+  NegativeVeryThinSpace: "​",
+  NestedGreaterGreater: "≫",
+  NestedLessLess: "≪",
+  NewLine: "\n",
+  Nfr: "𝔑",
+  NoBreak: "⁠",
+  NonBreakingSpace: " ",
+  Nopf: "ℕ",
+  Not: "⫬",
+  NotCongruent: "≢",
+  NotCupCap: "≭",
+  NotDoubleVerticalBar: "∦",
+  NotElement: "∉",
+  NotEqual: "≠",
+  NotEqualTilde: "≂̸",
+  NotExists: "∄",
+  NotGreater: "≯",
+  NotGreaterEqual: "≱",
+  NotGreaterFullEqual: "≧̸",
+  NotGreaterGreater: "≫̸",
+  NotGreaterLess: "≹",
+  NotGreaterSlantEqual: "⩾̸",
+  NotGreaterTilde: "≵",
+  NotHumpDownHump: "≎̸",
+  NotHumpEqual: "≏̸",
+  NotLeftTriangle: "⋪",
+  NotLeftTriangleBar: "⧏̸",
+  NotLeftTriangleEqual: "⋬",
+  NotLess: "≮",
+  NotLessEqual: "≰",
+  NotLessGreater: "≸",
+  NotLessLess: "≪̸",
+  NotLessSlantEqual: "⩽̸",
+  NotLessTilde: "≴",
+  NotNestedGreaterGreater: "⪢̸",
+  NotNestedLessLess: "⪡̸",
+  NotPrecedes: "⊀",
+  NotPrecedesEqual: "⪯̸",
+  NotPrecedesSlantEqual: "⋠",
+  NotReverseElement: "∌",
+  NotRightTriangle: "⋫",
+  NotRightTriangleBar: "⧐̸",
+  NotRightTriangleEqual: "⋭",
+  NotSquareSubset: "⊏̸",
+  NotSquareSubsetEqual: "⋢",
+  NotSquareSuperset: "⊐̸",
+  NotSquareSupersetEqual: "⋣",
+  NotSubset: "⊂⃒",
+  NotSubsetEqual: "⊈",
+  NotSucceeds: "⊁",
+  NotSucceedsEqual: "⪰̸",
+  NotSucceedsSlantEqual: "⋡",
+  NotSucceedsTilde: "≿̸",
+  NotSuperset: "⊃⃒",
+  NotSupersetEqual: "⊉",
+  NotTilde: "≁",
+  NotTildeEqual: "≄",
+  NotTildeFullEqual: "≇",
+  NotTildeTilde: "≉",
+  NotVerticalBar: "∤",
+  Nscr: "𝒩",
+  Ntilde: "Ñ",
+  Nu: "Ν",
+  OElig: "Œ",
+  Oacute: "Ó",
+  Ocirc: "Ô",
+  Ocy: "О",
+  Odblac: "Ő",
+  Ofr: "𝔒",
+  Ograve: "Ò",
+  Omacr: "Ō",
+  Omega: "Ω",
+  Omicron: "Ο",
+  Oopf: "𝕆",
+  OpenCurlyDoubleQuote: "“",
+  OpenCurlyQuote: "‘",
+  Or: "⩔",
+  Oscr: "𝒪",
+  Oslash: "Ø",
+  Otilde: "Õ",
+  Otimes: "⨷",
+  Ouml: "Ö",
+  OverBar: "‾",
+  OverBrace: "⏞",
+  OverBracket: "⎴",
+  OverParenthesis: "⏜",
+  PartialD: "∂",
+  Pcy: "П",
+  Pfr: "𝔓",
+  Phi: "Φ",
+  Pi: "Π",
+  PlusMinus: "±",
+  Poincareplane: "ℌ",
+  Popf: "ℙ",
+  Pr: "⪻",
+  Precedes: "≺",
+  PrecedesEqual: "⪯",
+  PrecedesSlantEqual: "≼",
+  PrecedesTilde: "≾",
+  Prime: "″",
+  Product: "∏",
+  Proportion: "∷",
+  Proportional: "∝",
+  Pscr: "𝒫",
+  Psi: "Ψ",
+  QUOT: '"',
+  Qfr: "𝔔",
+  Qopf: "ℚ",
+  Qscr: "𝒬",
+  RBarr: "⤐",
+  REG: "®",
+  Racute: "Ŕ",
+  Rang: "⟫",
+  Rarr: "↠",
+  Rarrtl: "⤖",
+  Rcaron: "Ř",
+  Rcedil: "Ŗ",
+  Rcy: "Р",
+  Re: "ℜ",
+  ReverseElement: "∋",
+  ReverseEquilibrium: "⇋",
+  ReverseUpEquilibrium: "⥯",
+  Rfr: "ℜ",
+  Rho: "Ρ",
+  RightAngleBracket: "⟩",
+  RightArrow: "→",
+  RightArrowBar: "⇥",
+  RightArrowLeftArrow: "⇄",
+  RightCeiling: "⌉",
+  RightDoubleBracket: "⟧",
+  RightDownTeeVector: "⥝",
+  RightDownVector: "⇂",
+  RightDownVectorBar: "⥕",
+  RightFloor: "⌋",
+  RightTee: "⊢",
+  RightTeeArrow: "↦",
+  RightTeeVector: "⥛",
+  RightTriangle: "⊳",
+  RightTriangleBar: "⧐",
+  RightTriangleEqual: "⊵",
+  RightUpDownVector: "⥏",
+  RightUpTeeVector: "⥜",
+  RightUpVector: "↾",
+  RightUpVectorBar: "⥔",
+  RightVector: "⇀",
+  RightVectorBar: "⥓",
+  Rightarrow: "⇒",
+  Ropf: "ℝ",
+  RoundImplies: "⥰",
+  Rrightarrow: "⇛",
+  Rscr: "ℛ",
+  Rsh: "↱",
+  RuleDelayed: "⧴",
+  SHCHcy: "Щ",
+  SHcy: "Ш",
+  SOFTcy: "Ь",
+  Sacute: "Ś",
+  Sc: "⪼",
+  Scaron: "Š",
+  Scedil: "Ş",
+  Scirc: "Ŝ",
+  Scy: "С",
+  Sfr: "𝔖",
+  ShortDownArrow: "↓",
+  ShortLeftArrow: "←",
+  ShortRightArrow: "→",
+  ShortUpArrow: "↑",
+  Sigma: "Σ",
+  SmallCircle: "∘",
+  Sopf: "𝕊",
+  Sqrt: "√",
+  Square: "□",
+  SquareIntersection: "⊓",
+  SquareSubset: "⊏",
+  SquareSubsetEqual: "⊑",
+  SquareSuperset: "⊐",
+  SquareSupersetEqual: "⊒",
+  SquareUnion: "⊔",
+  Sscr: "𝒮",
+  Star: "⋆",
+  Sub: "⋐",
+  Subset: "⋐",
+  SubsetEqual: "⊆",
+  Succeeds: "≻",
+  SucceedsEqual: "⪰",
+  SucceedsSlantEqual: "≽",
+  SucceedsTilde: "≿",
+  SuchThat: "∋",
+  Sum: "∑",
+  Sup: "⋑",
+  Superset: "⊃",
+  SupersetEqual: "⊇",
+  Supset: "⋑",
+  THORN: "Þ",
+  TRADE: "™",
+  TSHcy: "Ћ",
+  TScy: "Ц",
+  Tab: "	",
+  Tau: "Τ",
+  Tcaron: "Ť",
+  Tcedil: "Ţ",
+  Tcy: "Т",
+  Tfr: "𝔗",
+  Therefore: "∴",
+  Theta: "Θ",
+  ThickSpace: "  ",
+  ThinSpace: " ",
+  Tilde: "∼",
+  TildeEqual: "≃",
+  TildeFullEqual: "≅",
+  TildeTilde: "≈",
+  Topf: "𝕋",
+  TripleDot: "⃛",
+  Tscr: "𝒯",
+  Tstrok: "Ŧ",
+  Uacute: "Ú",
+  Uarr: "↟",
+  Uarrocir: "⥉",
+  Ubrcy: "Ў",
+  Ubreve: "Ŭ",
+  Ucirc: "Û",
+  Ucy: "У",
+  Udblac: "Ű",
+  Ufr: "𝔘",
+  Ugrave: "Ù",
+  Umacr: "Ū",
+  UnderBar: "_",
+  UnderBrace: "⏟",
+  UnderBracket: "⎵",
+  UnderParenthesis: "⏝",
+  Union: "⋃",
+  UnionPlus: "⊎",
+  Uogon: "Ų",
+  Uopf: "𝕌",
+  UpArrow: "↑",
+  UpArrowBar: "⤒",
+  UpArrowDownArrow: "⇅",
+  UpDownArrow: "↕",
+  UpEquilibrium: "⥮",
+  UpTee: "⊥",
+  UpTeeArrow: "↥",
+  Uparrow: "⇑",
+  Updownarrow: "⇕",
+  UpperLeftArrow: "↖",
+  UpperRightArrow: "↗",
+  Upsi: "ϒ",
+  Upsilon: "Υ",
+  Uring: "Ů",
+  Uscr: "𝒰",
+  Utilde: "Ũ",
+  Uuml: "Ü",
+  VDash: "⊫",
+  Vbar: "⫫",
+  Vcy: "В",
+  Vdash: "⊩",
+  Vdashl: "⫦",
+  Vee: "⋁",
+  Verbar: "‖",
+  Vert: "‖",
+  VerticalBar: "∣",
+  VerticalLine: "|",
+  VerticalSeparator: "❘",
+  VerticalTilde: "≀",
+  VeryThinSpace: " ",
+  Vfr: "𝔙",
+  Vopf: "𝕍",
+  Vscr: "𝒱",
+  Vvdash: "⊪",
+  Wcirc: "Ŵ",
+  Wedge: "⋀",
+  Wfr: "𝔚",
+  Wopf: "𝕎",
+  Wscr: "𝒲",
+  Xfr: "𝔛",
+  Xi: "Ξ",
+  Xopf: "𝕏",
+  Xscr: "𝒳",
+  YAcy: "Я",
+  YIcy: "Ї",
+  YUcy: "Ю",
+  Yacute: "Ý",
+  Ycirc: "Ŷ",
+  Ycy: "Ы",
+  Yfr: "𝔜",
+  Yopf: "𝕐",
+  Yscr: "𝒴",
+  Yuml: "Ÿ",
+  ZHcy: "Ж",
+  Zacute: "Ź",
+  Zcaron: "Ž",
+  Zcy: "З",
+  Zdot: "Ż",
+  ZeroWidthSpace: "​",
+  Zeta: "Ζ",
+  Zfr: "ℨ",
+  Zopf: "ℤ",
+  Zscr: "𝒵",
+  aacute: "á",
+  abreve: "ă",
+  ac: "∾",
+  acE: "∾̳",
+  acd: "∿",
+  acirc: "â",
+  acute: "´",
+  acy: "а",
+  aelig: "æ",
+  af: "⁡",
+  afr: "𝔞",
+  agrave: "à",
+  alefsym: "ℵ",
+  aleph: "ℵ",
+  alpha: "α",
+  amacr: "ā",
+  amalg: "⨿",
+  amp: "&",
+  and: "∧",
+  andand: "⩕",
+  andd: "⩜",
+  andslope: "⩘",
+  andv: "⩚",
+  ang: "∠",
+  ange: "⦤",
+  angle: "∠",
+  angmsd: "∡",
+  angmsdaa: "⦨",
+  angmsdab: "⦩",
+  angmsdac: "⦪",
+  angmsdad: "⦫",
+  angmsdae: "⦬",
+  angmsdaf: "⦭",
+  angmsdag: "⦮",
+  angmsdah: "⦯",
+  angrt: "∟",
+  angrtvb: "⊾",
+  angrtvbd: "⦝",
+  angsph: "∢",
+  angst: "Å",
+  angzarr: "⍼",
+  aogon: "ą",
+  aopf: "𝕒",
+  ap: "≈",
+  apE: "⩰",
+  apacir: "⩯",
+  ape: "≊",
+  apid: "≋",
+  apos: "'",
+  approx: "≈",
+  approxeq: "≊",
+  aring: "å",
+  ascr: "𝒶",
+  ast: "*",
+  asymp: "≈",
+  asympeq: "≍",
+  atilde: "ã",
+  auml: "ä",
+  awconint: "∳",
+  awint: "⨑",
+  bNot: "⫭",
+  backcong: "≌",
+  backepsilon: "϶",
+  backprime: "‵",
+  backsim: "∽",
+  backsimeq: "⋍",
+  barvee: "⊽",
+  barwed: "⌅",
+  barwedge: "⌅",
+  bbrk: "⎵",
+  bbrktbrk: "⎶",
+  bcong: "≌",
+  bcy: "б",
+  bdquo: "„",
+  becaus: "∵",
+  because: "∵",
+  bemptyv: "⦰",
+  bepsi: "϶",
+  bernou: "ℬ",
+  beta: "β",
+  beth: "ℶ",
+  between: "≬",
+  bfr: "𝔟",
+  bigcap: "⋂",
+  bigcirc: "◯",
+  bigcup: "⋃",
+  bigodot: "⨀",
+  bigoplus: "⨁",
+  bigotimes: "⨂",
+  bigsqcup: "⨆",
+  bigstar: "★",
+  bigtriangledown: "▽",
+  bigtriangleup: "△",
+  biguplus: "⨄",
+  bigvee: "⋁",
+  bigwedge: "⋀",
+  bkarow: "⤍",
+  blacklozenge: "⧫",
+  blacksquare: "▪",
+  blacktriangle: "▴",
+  blacktriangledown: "▾",
+  blacktriangleleft: "◂",
+  blacktriangleright: "▸",
+  blank: "␣",
+  blk12: "▒",
+  blk14: "░",
+  blk34: "▓",
+  block: "█",
+  bne: "=⃥",
+  bnequiv: "≡⃥",
+  bnot: "⌐",
+  bopf: "𝕓",
+  bot: "⊥",
+  bottom: "⊥",
+  bowtie: "⋈",
+  boxDL: "╗",
+  boxDR: "╔",
+  boxDl: "╖",
+  boxDr: "╓",
+  boxH: "═",
+  boxHD: "╦",
+  boxHU: "╩",
+  boxHd: "╤",
+  boxHu: "╧",
+  boxUL: "╝",
+  boxUR: "╚",
+  boxUl: "╜",
+  boxUr: "╙",
+  boxV: "║",
+  boxVH: "╬",
+  boxVL: "╣",
+  boxVR: "╠",
+  boxVh: "╫",
+  boxVl: "╢",
+  boxVr: "╟",
+  boxbox: "⧉",
+  boxdL: "╕",
+  boxdR: "╒",
+  boxdl: "┐",
+  boxdr: "┌",
+  boxh: "─",
+  boxhD: "╥",
+  boxhU: "╨",
+  boxhd: "┬",
+  boxhu: "┴",
+  boxminus: "⊟",
+  boxplus: "⊞",
+  boxtimes: "⊠",
+  boxuL: "╛",
+  boxuR: "╘",
+  boxul: "┘",
+  boxur: "└",
+  boxv: "│",
+  boxvH: "╪",
+  boxvL: "╡",
+  boxvR: "╞",
+  boxvh: "┼",
+  boxvl: "┤",
+  boxvr: "├",
+  bprime: "‵",
+  breve: "˘",
+  brvbar: "¦",
+  bscr: "𝒷",
+  bsemi: "⁏",
+  bsim: "∽",
+  bsime: "⋍",
+  bsol: "\\",
+  bsolb: "⧅",
+  bsolhsub: "⟈",
+  bull: "•",
+  bullet: "•",
+  bump: "≎",
+  bumpE: "⪮",
+  bumpe: "≏",
+  bumpeq: "≏",
+  cacute: "ć",
+  cap: "∩",
+  capand: "⩄",
+  capbrcup: "⩉",
+  capcap: "⩋",
+  capcup: "⩇",
+  capdot: "⩀",
+  caps: "∩︀",
+  caret: "⁁",
+  caron: "ˇ",
+  ccaps: "⩍",
+  ccaron: "č",
+  ccedil: "ç",
+  ccirc: "ĉ",
+  ccups: "⩌",
+  ccupssm: "⩐",
+  cdot: "ċ",
+  cedil: "¸",
+  cemptyv: "⦲",
+  cent: "¢",
+  centerdot: "·",
+  cfr: "𝔠",
+  chcy: "ч",
+  check: "✓",
+  checkmark: "✓",
+  chi: "χ",
+  cir: "○",
+  cirE: "⧃",
+  circ: "ˆ",
+  circeq: "≗",
+  circlearrowleft: "↺",
+  circlearrowright: "↻",
+  circledR: "®",
+  circledS: "Ⓢ",
+  circledast: "⊛",
+  circledcirc: "⊚",
+  circleddash: "⊝",
+  cire: "≗",
+  cirfnint: "⨐",
+  cirmid: "⫯",
+  cirscir: "⧂",
+  clubs: "♣",
+  clubsuit: "♣",
+  colon: ":",
+  colone: "≔",
+  coloneq: "≔",
+  comma: ",",
+  commat: "@",
+  comp: "∁",
+  compfn: "∘",
+  complement: "∁",
+  complexes: "ℂ",
+  cong: "≅",
+  congdot: "⩭",
+  conint: "∮",
+  copf: "𝕔",
+  coprod: "∐",
+  copy: "©",
+  copysr: "℗",
+  crarr: "↵",
+  cross: "✗",
+  cscr: "𝒸",
+  csub: "⫏",
+  csube: "⫑",
+  csup: "⫐",
+  csupe: "⫒",
+  ctdot: "⋯",
+  cudarrl: "⤸",
+  cudarrr: "⤵",
+  cuepr: "⋞",
+  cuesc: "⋟",
+  cularr: "↶",
+  cularrp: "⤽",
+  cup: "∪",
+  cupbrcap: "⩈",
+  cupcap: "⩆",
+  cupcup: "⩊",
+  cupdot: "⊍",
+  cupor: "⩅",
+  cups: "∪︀",
+  curarr: "↷",
+  curarrm: "⤼",
+  curlyeqprec: "⋞",
+  curlyeqsucc: "⋟",
+  curlyvee: "⋎",
+  curlywedge: "⋏",
+  curren: "¤",
+  curvearrowleft: "↶",
+  curvearrowright: "↷",
+  cuvee: "⋎",
+  cuwed: "⋏",
+  cwconint: "∲",
+  cwint: "∱",
+  cylcty: "⌭",
+  dArr: "⇓",
+  dHar: "⥥",
+  dagger: "†",
+  daleth: "ℸ",
+  darr: "↓",
+  dash: "‐",
+  dashv: "⊣",
+  dbkarow: "⤏",
+  dblac: "˝",
+  dcaron: "ď",
+  dcy: "д",
+  dd: "ⅆ",
+  ddagger: "‡",
+  ddarr: "⇊",
+  ddotseq: "⩷",
+  deg: "°",
+  delta: "δ",
+  demptyv: "⦱",
+  dfisht: "⥿",
+  dfr: "𝔡",
+  dharl: "⇃",
+  dharr: "⇂",
+  diam: "⋄",
+  diamond: "⋄",
+  diamondsuit: "♦",
+  diams: "♦",
+  die: "¨",
+  digamma: "ϝ",
+  disin: "⋲",
+  div: "÷",
+  divide: "÷",
+  divideontimes: "⋇",
+  divonx: "⋇",
+  djcy: "ђ",
+  dlcorn: "⌞",
+  dlcrop: "⌍",
+  dollar: "$",
+  dopf: "𝕕",
+  dot: "˙",
+  doteq: "≐",
+  doteqdot: "≑",
+  dotminus: "∸",
+  dotplus: "∔",
+  dotsquare: "⊡",
+  doublebarwedge: "⌆",
+  downarrow: "↓",
+  downdownarrows: "⇊",
+  downharpoonleft: "⇃",
+  downharpoonright: "⇂",
+  drbkarow: "⤐",
+  drcorn: "⌟",
+  drcrop: "⌌",
+  dscr: "𝒹",
+  dscy: "ѕ",
+  dsol: "⧶",
+  dstrok: "đ",
+  dtdot: "⋱",
+  dtri: "▿",
+  dtrif: "▾",
+  duarr: "⇵",
+  duhar: "⥯",
+  dwangle: "⦦",
+  dzcy: "џ",
+  dzigrarr: "⟿",
+  eDDot: "⩷",
+  eDot: "≑",
+  eacute: "é",
+  easter: "⩮",
+  ecaron: "ě",
+  ecir: "≖",
+  ecirc: "ê",
+  ecolon: "≕",
+  ecy: "э",
+  edot: "ė",
+  ee: "ⅇ",
+  efDot: "≒",
+  efr: "𝔢",
+  eg: "⪚",
+  egrave: "è",
+  egs: "⪖",
+  egsdot: "⪘",
+  el: "⪙",
+  elinters: "⏧",
+  ell: "ℓ",
+  els: "⪕",
+  elsdot: "⪗",
+  emacr: "ē",
+  empty: "∅",
+  emptyset: "∅",
+  emptyv: "∅",
+  emsp13: " ",
+  emsp14: " ",
+  emsp: " ",
+  eng: "ŋ",
+  ensp: " ",
+  eogon: "ę",
+  eopf: "𝕖",
+  epar: "⋕",
+  eparsl: "⧣",
+  eplus: "⩱",
+  epsi: "ε",
+  epsilon: "ε",
+  epsiv: "ϵ",
+  eqcirc: "≖",
+  eqcolon: "≕",
+  eqsim: "≂",
+  eqslantgtr: "⪖",
+  eqslantless: "⪕",
+  equals: "=",
+  equest: "≟",
+  equiv: "≡",
+  equivDD: "⩸",
+  eqvparsl: "⧥",
+  erDot: "≓",
+  erarr: "⥱",
+  escr: "ℯ",
+  esdot: "≐",
+  esim: "≂",
+  eta: "η",
+  eth: "ð",
+  euml: "ë",
+  euro: "€",
+  excl: "!",
+  exist: "∃",
+  expectation: "ℰ",
+  exponentiale: "ⅇ",
+  fallingdotseq: "≒",
+  fcy: "ф",
+  female: "♀",
+  ffilig: "ﬃ",
+  fflig: "ﬀ",
+  ffllig: "ﬄ",
+  ffr: "𝔣",
+  filig: "ﬁ",
+  fjlig: "fj",
+  flat: "♭",
+  fllig: "ﬂ",
+  fltns: "▱",
+  fnof: "ƒ",
+  fopf: "𝕗",
+  forall: "∀",
+  fork: "⋔",
+  forkv: "⫙",
+  fpartint: "⨍",
+  frac12: "½",
+  frac13: "⅓",
+  frac14: "¼",
+  frac15: "⅕",
+  frac16: "⅙",
+  frac18: "⅛",
+  frac23: "⅔",
+  frac25: "⅖",
+  frac34: "¾",
+  frac35: "⅗",
+  frac38: "⅜",
+  frac45: "⅘",
+  frac56: "⅚",
+  frac58: "⅝",
+  frac78: "⅞",
+  frasl: "⁄",
+  frown: "⌢",
+  fscr: "𝒻",
+  gE: "≧",
+  gEl: "⪌",
+  gacute: "ǵ",
+  gamma: "γ",
+  gammad: "ϝ",
+  gap: "⪆",
+  gbreve: "ğ",
+  gcirc: "ĝ",
+  gcy: "г",
+  gdot: "ġ",
+  ge: "≥",
+  gel: "⋛",
+  geq: "≥",
+  geqq: "≧",
+  geqslant: "⩾",
+  ges: "⩾",
+  gescc: "⪩",
+  gesdot: "⪀",
+  gesdoto: "⪂",
+  gesdotol: "⪄",
+  gesl: "⋛︀",
+  gesles: "⪔",
+  gfr: "𝔤",
+  gg: "≫",
+  ggg: "⋙",
+  gimel: "ℷ",
+  gjcy: "ѓ",
+  gl: "≷",
+  glE: "⪒",
+  gla: "⪥",
+  glj: "⪤",
+  gnE: "≩",
+  gnap: "⪊",
+  gnapprox: "⪊",
+  gne: "⪈",
+  gneq: "⪈",
+  gneqq: "≩",
+  gnsim: "⋧",
+  gopf: "𝕘",
+  grave: "`",
+  gscr: "ℊ",
+  gsim: "≳",
+  gsime: "⪎",
+  gsiml: "⪐",
+  gt: ">",
+  gtcc: "⪧",
+  gtcir: "⩺",
+  gtdot: "⋗",
+  gtlPar: "⦕",
+  gtquest: "⩼",
+  gtrapprox: "⪆",
+  gtrarr: "⥸",
+  gtrdot: "⋗",
+  gtreqless: "⋛",
+  gtreqqless: "⪌",
+  gtrless: "≷",
+  gtrsim: "≳",
+  gvertneqq: "≩︀",
+  gvnE: "≩︀",
+  hArr: "⇔",
+  hairsp: " ",
+  half: "½",
+  hamilt: "ℋ",
+  hardcy: "ъ",
+  harr: "↔",
+  harrcir: "⥈",
+  harrw: "↭",
+  hbar: "ℏ",
+  hcirc: "ĥ",
+  hearts: "♥",
+  heartsuit: "♥",
+  hellip: "…",
+  hercon: "⊹",
+  hfr: "𝔥",
+  hksearow: "⤥",
+  hkswarow: "⤦",
+  hoarr: "⇿",
+  homtht: "∻",
+  hookleftarrow: "↩",
+  hookrightarrow: "↪",
+  hopf: "𝕙",
+  horbar: "―",
+  hscr: "𝒽",
+  hslash: "ℏ",
+  hstrok: "ħ",
+  hybull: "⁃",
+  hyphen: "‐",
+  iacute: "í",
+  ic: "⁣",
+  icirc: "î",
+  icy: "и",
+  iecy: "е",
+  iexcl: "¡",
+  iff: "⇔",
+  ifr: "𝔦",
+  igrave: "ì",
+  ii: "ⅈ",
+  iiiint: "⨌",
+  iiint: "∭",
+  iinfin: "⧜",
+  iiota: "℩",
+  ijlig: "ĳ",
+  imacr: "ī",
+  image: "ℑ",
+  imagline: "ℐ",
+  imagpart: "ℑ",
+  imath: "ı",
+  imof: "⊷",
+  imped: "Ƶ",
+  in: "∈",
+  incare: "℅",
+  infin: "∞",
+  infintie: "⧝",
+  inodot: "ı",
+  int: "∫",
+  intcal: "⊺",
+  integers: "ℤ",
+  intercal: "⊺",
+  intlarhk: "⨗",
+  intprod: "⨼",
+  iocy: "ё",
+  iogon: "į",
+  iopf: "𝕚",
+  iota: "ι",
+  iprod: "⨼",
+  iquest: "¿",
+  iscr: "𝒾",
+  isin: "∈",
+  isinE: "⋹",
+  isindot: "⋵",
+  isins: "⋴",
+  isinsv: "⋳",
+  isinv: "∈",
+  it: "⁢",
+  itilde: "ĩ",
+  iukcy: "і",
+  iuml: "ï",
+  jcirc: "ĵ",
+  jcy: "й",
+  jfr: "𝔧",
+  jmath: "ȷ",
+  jopf: "𝕛",
+  jscr: "𝒿",
+  jsercy: "ј",
+  jukcy: "є",
+  kappa: "κ",
+  kappav: "ϰ",
+  kcedil: "ķ",
+  kcy: "к",
+  kfr: "𝔨",
+  kgreen: "ĸ",
+  khcy: "х",
+  kjcy: "ќ",
+  kopf: "𝕜",
+  kscr: "𝓀",
+  lAarr: "⇚",
+  lArr: "⇐",
+  lAtail: "⤛",
+  lBarr: "⤎",
+  lE: "≦",
+  lEg: "⪋",
+  lHar: "⥢",
+  lacute: "ĺ",
+  laemptyv: "⦴",
+  lagran: "ℒ",
+  lambda: "λ",
+  lang: "⟨",
+  langd: "⦑",
+  langle: "⟨",
+  lap: "⪅",
+  laquo: "«",
+  larr: "←",
+  larrb: "⇤",
+  larrbfs: "⤟",
+  larrfs: "⤝",
+  larrhk: "↩",
+  larrlp: "↫",
+  larrpl: "⤹",
+  larrsim: "⥳",
+  larrtl: "↢",
+  lat: "⪫",
+  latail: "⤙",
+  late: "⪭",
+  lates: "⪭︀",
+  lbarr: "⤌",
+  lbbrk: "❲",
+  lbrace: "{",
+  lbrack: "[",
+  lbrke: "⦋",
+  lbrksld: "⦏",
+  lbrkslu: "⦍",
+  lcaron: "ľ",
+  lcedil: "ļ",
+  lceil: "⌈",
+  lcub: "{",
+  lcy: "л",
+  ldca: "⤶",
+  ldquo: "“",
+  ldquor: "„",
+  ldrdhar: "⥧",
+  ldrushar: "⥋",
+  ldsh: "↲",
+  le: "≤",
+  leftarrow: "←",
+  leftarrowtail: "↢",
+  leftharpoondown: "↽",
+  leftharpoonup: "↼",
+  leftleftarrows: "⇇",
+  leftrightarrow: "↔",
+  leftrightarrows: "⇆",
+  leftrightharpoons: "⇋",
+  leftrightsquigarrow: "↭",
+  leftthreetimes: "⋋",
+  leg: "⋚",
+  leq: "≤",
+  leqq: "≦",
+  leqslant: "⩽",
+  les: "⩽",
+  lescc: "⪨",
+  lesdot: "⩿",
+  lesdoto: "⪁",
+  lesdotor: "⪃",
+  lesg: "⋚︀",
+  lesges: "⪓",
+  lessapprox: "⪅",
+  lessdot: "⋖",
+  lesseqgtr: "⋚",
+  lesseqqgtr: "⪋",
+  lessgtr: "≶",
+  lesssim: "≲",
+  lfisht: "⥼",
+  lfloor: "⌊",
+  lfr: "𝔩",
+  lg: "≶",
+  lgE: "⪑",
+  lhard: "↽",
+  lharu: "↼",
+  lharul: "⥪",
+  lhblk: "▄",
+  ljcy: "љ",
+  ll: "≪",
+  llarr: "⇇",
+  llcorner: "⌞",
+  llhard: "⥫",
+  lltri: "◺",
+  lmidot: "ŀ",
+  lmoust: "⎰",
+  lmoustache: "⎰",
+  lnE: "≨",
+  lnap: "⪉",
+  lnapprox: "⪉",
+  lne: "⪇",
+  lneq: "⪇",
+  lneqq: "≨",
+  lnsim: "⋦",
+  loang: "⟬",
+  loarr: "⇽",
+  lobrk: "⟦",
+  longleftarrow: "⟵",
+  longleftrightarrow: "⟷",
+  longmapsto: "⟼",
+  longrightarrow: "⟶",
+  looparrowleft: "↫",
+  looparrowright: "↬",
+  lopar: "⦅",
+  lopf: "𝕝",
+  loplus: "⨭",
+  lotimes: "⨴",
+  lowast: "∗",
+  lowbar: "_",
+  loz: "◊",
+  lozenge: "◊",
+  lozf: "⧫",
+  lpar: "(",
+  lparlt: "⦓",
+  lrarr: "⇆",
+  lrcorner: "⌟",
+  lrhar: "⇋",
+  lrhard: "⥭",
+  lrm: "‎",
+  lrtri: "⊿",
+  lsaquo: "‹",
+  lscr: "𝓁",
+  lsh: "↰",
+  lsim: "≲",
+  lsime: "⪍",
+  lsimg: "⪏",
+  lsqb: "[",
+  lsquo: "‘",
+  lsquor: "‚",
+  lstrok: "ł",
+  lt: "<",
+  ltcc: "⪦",
+  ltcir: "⩹",
+  ltdot: "⋖",
+  lthree: "⋋",
+  ltimes: "⋉",
+  ltlarr: "⥶",
+  ltquest: "⩻",
+  ltrPar: "⦖",
+  ltri: "◃",
+  ltrie: "⊴",
+  ltrif: "◂",
+  lurdshar: "⥊",
+  luruhar: "⥦",
+  lvertneqq: "≨︀",
+  lvnE: "≨︀",
+  mDDot: "∺",
+  macr: "¯",
+  male: "♂",
+  malt: "✠",
+  maltese: "✠",
+  map: "↦",
+  mapsto: "↦",
+  mapstodown: "↧",
+  mapstoleft: "↤",
+  mapstoup: "↥",
+  marker: "▮",
+  mcomma: "⨩",
+  mcy: "м",
+  mdash: "—",
+  measuredangle: "∡",
+  mfr: "𝔪",
+  mho: "℧",
+  micro: "µ",
+  mid: "∣",
+  midast: "*",
+  midcir: "⫰",
+  middot: "·",
+  minus: "−",
+  minusb: "⊟",
+  minusd: "∸",
+  minusdu: "⨪",
+  mlcp: "⫛",
+  mldr: "…",
+  mnplus: "∓",
+  models: "⊧",
+  mopf: "𝕞",
+  mp: "∓",
+  mscr: "𝓂",
+  mstpos: "∾",
+  mu: "μ",
+  multimap: "⊸",
+  mumap: "⊸",
+  nGg: "⋙̸",
+  nGt: "≫⃒",
+  nGtv: "≫̸",
+  nLeftarrow: "⇍",
+  nLeftrightarrow: "⇎",
+  nLl: "⋘̸",
+  nLt: "≪⃒",
+  nLtv: "≪̸",
+  nRightarrow: "⇏",
+  nVDash: "⊯",
+  nVdash: "⊮",
+  nabla: "∇",
+  nacute: "ń",
+  nang: "∠⃒",
+  nap: "≉",
+  napE: "⩰̸",
+  napid: "≋̸",
+  napos: "ŉ",
+  napprox: "≉",
+  natur: "♮",
+  natural: "♮",
+  naturals: "ℕ",
+  nbsp: " ",
+  nbump: "≎̸",
+  nbumpe: "≏̸",
+  ncap: "⩃",
+  ncaron: "ň",
+  ncedil: "ņ",
+  ncong: "≇",
+  ncongdot: "⩭̸",
+  ncup: "⩂",
+  ncy: "н",
+  ndash: "–",
+  ne: "≠",
+  neArr: "⇗",
+  nearhk: "⤤",
+  nearr: "↗",
+  nearrow: "↗",
+  nedot: "≐̸",
+  nequiv: "≢",
+  nesear: "⤨",
+  nesim: "≂̸",
+  nexist: "∄",
+  nexists: "∄",
+  nfr: "𝔫",
+  ngE: "≧̸",
+  nge: "≱",
+  ngeq: "≱",
+  ngeqq: "≧̸",
+  ngeqslant: "⩾̸",
+  nges: "⩾̸",
+  ngsim: "≵",
+  ngt: "≯",
+  ngtr: "≯",
+  nhArr: "⇎",
+  nharr: "↮",
+  nhpar: "⫲",
+  ni: "∋",
+  nis: "⋼",
+  nisd: "⋺",
+  niv: "∋",
+  njcy: "њ",
+  nlArr: "⇍",
+  nlE: "≦̸",
+  nlarr: "↚",
+  nldr: "‥",
+  nle: "≰",
+  nleftarrow: "↚",
+  nleftrightarrow: "↮",
+  nleq: "≰",
+  nleqq: "≦̸",
+  nleqslant: "⩽̸",
+  nles: "⩽̸",
+  nless: "≮",
+  nlsim: "≴",
+  nlt: "≮",
+  nltri: "⋪",
+  nltrie: "⋬",
+  nmid: "∤",
+  nopf: "𝕟",
+  not: "¬",
+  notin: "∉",
+  notinE: "⋹̸",
+  notindot: "⋵̸",
+  notinva: "∉",
+  notinvb: "⋷",
+  notinvc: "⋶",
+  notni: "∌",
+  notniva: "∌",
+  notnivb: "⋾",
+  notnivc: "⋽",
+  npar: "∦",
+  nparallel: "∦",
+  nparsl: "⫽⃥",
+  npart: "∂̸",
+  npolint: "⨔",
+  npr: "⊀",
+  nprcue: "⋠",
+  npre: "⪯̸",
+  nprec: "⊀",
+  npreceq: "⪯̸",
+  nrArr: "⇏",
+  nrarr: "↛",
+  nrarrc: "⤳̸",
+  nrarrw: "↝̸",
+  nrightarrow: "↛",
+  nrtri: "⋫",
+  nrtrie: "⋭",
+  nsc: "⊁",
+  nsccue: "⋡",
+  nsce: "⪰̸",
+  nscr: "𝓃",
+  nshortmid: "∤",
+  nshortparallel: "∦",
+  nsim: "≁",
+  nsime: "≄",
+  nsimeq: "≄",
+  nsmid: "∤",
+  nspar: "∦",
+  nsqsube: "⋢",
+  nsqsupe: "⋣",
+  nsub: "⊄",
+  nsubE: "⫅̸",
+  nsube: "⊈",
+  nsubset: "⊂⃒",
+  nsubseteq: "⊈",
+  nsubseteqq: "⫅̸",
+  nsucc: "⊁",
+  nsucceq: "⪰̸",
+  nsup: "⊅",
+  nsupE: "⫆̸",
+  nsupe: "⊉",
+  nsupset: "⊃⃒",
+  nsupseteq: "⊉",
+  nsupseteqq: "⫆̸",
+  ntgl: "≹",
+  ntilde: "ñ",
+  ntlg: "≸",
+  ntriangleleft: "⋪",
+  ntrianglelefteq: "⋬",
+  ntriangleright: "⋫",
+  ntrianglerighteq: "⋭",
+  nu: "ν",
+  num: "#",
+  numero: "№",
+  numsp: " ",
+  nvDash: "⊭",
+  nvHarr: "⤄",
+  nvap: "≍⃒",
+  nvdash: "⊬",
+  nvge: "≥⃒",
+  nvgt: ">⃒",
+  nvinfin: "⧞",
+  nvlArr: "⤂",
+  nvle: "≤⃒",
+  nvlt: "<⃒",
+  nvltrie: "⊴⃒",
+  nvrArr: "⤃",
+  nvrtrie: "⊵⃒",
+  nvsim: "∼⃒",
+  nwArr: "⇖",
+  nwarhk: "⤣",
+  nwarr: "↖",
+  nwarrow: "↖",
+  nwnear: "⤧",
+  oS: "Ⓢ",
+  oacute: "ó",
+  oast: "⊛",
+  ocir: "⊚",
+  ocirc: "ô",
+  ocy: "о",
+  odash: "⊝",
+  odblac: "ő",
+  odiv: "⨸",
+  odot: "⊙",
+  odsold: "⦼",
+  oelig: "œ",
+  ofcir: "⦿",
+  ofr: "𝔬",
+  ogon: "˛",
+  ograve: "ò",
+  ogt: "⧁",
+  ohbar: "⦵",
+  ohm: "Ω",
+  oint: "∮",
+  olarr: "↺",
+  olcir: "⦾",
+  olcross: "⦻",
+  oline: "‾",
+  olt: "⧀",
+  omacr: "ō",
+  omega: "ω",
+  omicron: "ο",
+  omid: "⦶",
+  ominus: "⊖",
+  oopf: "𝕠",
+  opar: "⦷",
+  operp: "⦹",
+  oplus: "⊕",
+  or: "∨",
+  orarr: "↻",
+  ord: "⩝",
+  order: "ℴ",
+  orderof: "ℴ",
+  ordf: "ª",
+  ordm: "º",
+  origof: "⊶",
+  oror: "⩖",
+  orslope: "⩗",
+  orv: "⩛",
+  oscr: "ℴ",
+  oslash: "ø",
+  osol: "⊘",
+  otilde: "õ",
+  otimes: "⊗",
+  otimesas: "⨶",
+  ouml: "ö",
+  ovbar: "⌽",
+  par: "∥",
+  para: "¶",
+  parallel: "∥",
+  parsim: "⫳",
+  parsl: "⫽",
+  part: "∂",
+  pcy: "п",
+  percnt: "%",
+  period: ".",
+  permil: "‰",
+  perp: "⊥",
+  pertenk: "‱",
+  pfr: "𝔭",
+  phi: "φ",
+  phiv: "ϕ",
+  phmmat: "ℳ",
+  phone: "☎",
+  pi: "π",
+  pitchfork: "⋔",
+  piv: "ϖ",
+  planck: "ℏ",
+  planckh: "ℎ",
+  plankv: "ℏ",
+  plus: "+",
+  plusacir: "⨣",
+  plusb: "⊞",
+  pluscir: "⨢",
+  plusdo: "∔",
+  plusdu: "⨥",
+  pluse: "⩲",
+  plusmn: "±",
+  plussim: "⨦",
+  plustwo: "⨧",
+  pm: "±",
+  pointint: "⨕",
+  popf: "𝕡",
+  pound: "£",
+  pr: "≺",
+  prE: "⪳",
+  prap: "⪷",
+  prcue: "≼",
+  pre: "⪯",
+  prec: "≺",
+  precapprox: "⪷",
+  preccurlyeq: "≼",
+  preceq: "⪯",
+  precnapprox: "⪹",
+  precneqq: "⪵",
+  precnsim: "⋨",
+  precsim: "≾",
+  prime: "′",
+  primes: "ℙ",
+  prnE: "⪵",
+  prnap: "⪹",
+  prnsim: "⋨",
+  prod: "∏",
+  profalar: "⌮",
+  profline: "⌒",
+  profsurf: "⌓",
+  prop: "∝",
+  propto: "∝",
+  prsim: "≾",
+  prurel: "⊰",
+  pscr: "𝓅",
+  psi: "ψ",
+  puncsp: " ",
+  qfr: "𝔮",
+  qint: "⨌",
+  qopf: "𝕢",
+  qprime: "⁗",
+  qscr: "𝓆",
+  quaternions: "ℍ",
+  quatint: "⨖",
+  quest: "?",
+  questeq: "≟",
+  quot: '"',
+  rAarr: "⇛",
+  rArr: "⇒",
+  rAtail: "⤜",
+  rBarr: "⤏",
+  rHar: "⥤",
+  race: "∽̱",
+  racute: "ŕ",
+  radic: "√",
+  raemptyv: "⦳",
+  rang: "⟩",
+  rangd: "⦒",
+  range: "⦥",
+  rangle: "⟩",
+  raquo: "»",
+  rarr: "→",
+  rarrap: "⥵",
+  rarrb: "⇥",
+  rarrbfs: "⤠",
+  rarrc: "⤳",
+  rarrfs: "⤞",
+  rarrhk: "↪",
+  rarrlp: "↬",
+  rarrpl: "⥅",
+  rarrsim: "⥴",
+  rarrtl: "↣",
+  rarrw: "↝",
+  ratail: "⤚",
+  ratio: "∶",
+  rationals: "ℚ",
+  rbarr: "⤍",
+  rbbrk: "❳",
+  rbrace: "}",
+  rbrack: "]",
+  rbrke: "⦌",
+  rbrksld: "⦎",
+  rbrkslu: "⦐",
+  rcaron: "ř",
+  rcedil: "ŗ",
+  rceil: "⌉",
+  rcub: "}",
+  rcy: "р",
+  rdca: "⤷",
+  rdldhar: "⥩",
+  rdquo: "”",
+  rdquor: "”",
+  rdsh: "↳",
+  real: "ℜ",
+  realine: "ℛ",
+  realpart: "ℜ",
+  reals: "ℝ",
+  rect: "▭",
+  reg: "®",
+  rfisht: "⥽",
+  rfloor: "⌋",
+  rfr: "𝔯",
+  rhard: "⇁",
+  rharu: "⇀",
+  rharul: "⥬",
+  rho: "ρ",
+  rhov: "ϱ",
+  rightarrow: "→",
+  rightarrowtail: "↣",
+  rightharpoondown: "⇁",
+  rightharpoonup: "⇀",
+  rightleftarrows: "⇄",
+  rightleftharpoons: "⇌",
+  rightrightarrows: "⇉",
+  rightsquigarrow: "↝",
+  rightthreetimes: "⋌",
+  ring: "˚",
+  risingdotseq: "≓",
+  rlarr: "⇄",
+  rlhar: "⇌",
+  rlm: "‏",
+  rmoust: "⎱",
+  rmoustache: "⎱",
+  rnmid: "⫮",
+  roang: "⟭",
+  roarr: "⇾",
+  robrk: "⟧",
+  ropar: "⦆",
+  ropf: "𝕣",
+  roplus: "⨮",
+  rotimes: "⨵",
+  rpar: ")",
+  rpargt: "⦔",
+  rppolint: "⨒",
+  rrarr: "⇉",
+  rsaquo: "›",
+  rscr: "𝓇",
+  rsh: "↱",
+  rsqb: "]",
+  rsquo: "’",
+  rsquor: "’",
+  rthree: "⋌",
+  rtimes: "⋊",
+  rtri: "▹",
+  rtrie: "⊵",
+  rtrif: "▸",
+  rtriltri: "⧎",
+  ruluhar: "⥨",
+  rx: "℞",
+  sacute: "ś",
+  sbquo: "‚",
+  sc: "≻",
+  scE: "⪴",
+  scap: "⪸",
+  scaron: "š",
+  sccue: "≽",
+  sce: "⪰",
+  scedil: "ş",
+  scirc: "ŝ",
+  scnE: "⪶",
+  scnap: "⪺",
+  scnsim: "⋩",
+  scpolint: "⨓",
+  scsim: "≿",
+  scy: "с",
+  sdot: "⋅",
+  sdotb: "⊡",
+  sdote: "⩦",
+  seArr: "⇘",
+  searhk: "⤥",
+  searr: "↘",
+  searrow: "↘",
+  sect: "§",
+  semi: ";",
+  seswar: "⤩",
+  setminus: "∖",
+  setmn: "∖",
+  sext: "✶",
+  sfr: "𝔰",
+  sfrown: "⌢",
+  sharp: "♯",
+  shchcy: "щ",
+  shcy: "ш",
+  shortmid: "∣",
+  shortparallel: "∥",
+  shy: "­",
+  sigma: "σ",
+  sigmaf: "ς",
+  sigmav: "ς",
+  sim: "∼",
+  simdot: "⩪",
+  sime: "≃",
+  simeq: "≃",
+  simg: "⪞",
+  simgE: "⪠",
+  siml: "⪝",
+  simlE: "⪟",
+  simne: "≆",
+  simplus: "⨤",
+  simrarr: "⥲",
+  slarr: "←",
+  smallsetminus: "∖",
+  smashp: "⨳",
+  smeparsl: "⧤",
+  smid: "∣",
+  smile: "⌣",
+  smt: "⪪",
+  smte: "⪬",
+  smtes: "⪬︀",
+  softcy: "ь",
+  sol: "/",
+  solb: "⧄",
+  solbar: "⌿",
+  sopf: "𝕤",
+  spades: "♠",
+  spadesuit: "♠",
+  spar: "∥",
+  sqcap: "⊓",
+  sqcaps: "⊓︀",
+  sqcup: "⊔",
+  sqcups: "⊔︀",
+  sqsub: "⊏",
+  sqsube: "⊑",
+  sqsubset: "⊏",
+  sqsubseteq: "⊑",
+  sqsup: "⊐",
+  sqsupe: "⊒",
+  sqsupset: "⊐",
+  sqsupseteq: "⊒",
+  squ: "□",
+  square: "□",
+  squarf: "▪",
+  squf: "▪",
+  srarr: "→",
+  sscr: "𝓈",
+  ssetmn: "∖",
+  ssmile: "⌣",
+  sstarf: "⋆",
+  star: "☆",
+  starf: "★",
+  straightepsilon: "ϵ",
+  straightphi: "ϕ",
+  strns: "¯",
+  sub: "⊂",
+  subE: "⫅",
+  subdot: "⪽",
+  sube: "⊆",
+  subedot: "⫃",
+  submult: "⫁",
+  subnE: "⫋",
+  subne: "⊊",
+  subplus: "⪿",
+  subrarr: "⥹",
+  subset: "⊂",
+  subseteq: "⊆",
+  subseteqq: "⫅",
+  subsetneq: "⊊",
+  subsetneqq: "⫋",
+  subsim: "⫇",
+  subsub: "⫕",
+  subsup: "⫓",
+  succ: "≻",
+  succapprox: "⪸",
+  succcurlyeq: "≽",
+  succeq: "⪰",
+  succnapprox: "⪺",
+  succneqq: "⪶",
+  succnsim: "⋩",
+  succsim: "≿",
+  sum: "∑",
+  sung: "♪",
+  sup1: "¹",
+  sup2: "²",
+  sup3: "³",
+  sup: "⊃",
+  supE: "⫆",
+  supdot: "⪾",
+  supdsub: "⫘",
+  supe: "⊇",
+  supedot: "⫄",
+  suphsol: "⟉",
+  suphsub: "⫗",
+  suplarr: "⥻",
+  supmult: "⫂",
+  supnE: "⫌",
+  supne: "⊋",
+  supplus: "⫀",
+  supset: "⊃",
+  supseteq: "⊇",
+  supseteqq: "⫆",
+  supsetneq: "⊋",
+  supsetneqq: "⫌",
+  supsim: "⫈",
+  supsub: "⫔",
+  supsup: "⫖",
+  swArr: "⇙",
+  swarhk: "⤦",
+  swarr: "↙",
+  swarrow: "↙",
+  swnwar: "⤪",
+  szlig: "ß",
+  target: "⌖",
+  tau: "τ",
+  tbrk: "⎴",
+  tcaron: "ť",
+  tcedil: "ţ",
+  tcy: "т",
+  tdot: "⃛",
+  telrec: "⌕",
+  tfr: "𝔱",
+  there4: "∴",
+  therefore: "∴",
+  theta: "θ",
+  thetasym: "ϑ",
+  thetav: "ϑ",
+  thickapprox: "≈",
+  thicksim: "∼",
+  thinsp: " ",
+  thkap: "≈",
+  thksim: "∼",
+  thorn: "þ",
+  tilde: "˜",
+  times: "×",
+  timesb: "⊠",
+  timesbar: "⨱",
+  timesd: "⨰",
+  tint: "∭",
+  toea: "⤨",
+  top: "⊤",
+  topbot: "⌶",
+  topcir: "⫱",
+  topf: "𝕥",
+  topfork: "⫚",
+  tosa: "⤩",
+  tprime: "‴",
+  trade: "™",
+  triangle: "▵",
+  triangledown: "▿",
+  triangleleft: "◃",
+  trianglelefteq: "⊴",
+  triangleq: "≜",
+  triangleright: "▹",
+  trianglerighteq: "⊵",
+  tridot: "◬",
+  trie: "≜",
+  triminus: "⨺",
+  triplus: "⨹",
+  trisb: "⧍",
+  tritime: "⨻",
+  trpezium: "⏢",
+  tscr: "𝓉",
+  tscy: "ц",
+  tshcy: "ћ",
+  tstrok: "ŧ",
+  twixt: "≬",
+  twoheadleftarrow: "↞",
+  twoheadrightarrow: "↠",
+  uArr: "⇑",
+  uHar: "⥣",
+  uacute: "ú",
+  uarr: "↑",
+  ubrcy: "ў",
+  ubreve: "ŭ",
+  ucirc: "û",
+  ucy: "у",
+  udarr: "⇅",
+  udblac: "ű",
+  udhar: "⥮",
+  ufisht: "⥾",
+  ufr: "𝔲",
+  ugrave: "ù",
+  uharl: "↿",
+  uharr: "↾",
+  uhblk: "▀",
+  ulcorn: "⌜",
+  ulcorner: "⌜",
+  ulcrop: "⌏",
+  ultri: "◸",
+  umacr: "ū",
+  uml: "¨",
+  uogon: "ų",
+  uopf: "𝕦",
+  uparrow: "↑",
+  updownarrow: "↕",
+  upharpoonleft: "↿",
+  upharpoonright: "↾",
+  uplus: "⊎",
+  upsi: "υ",
+  upsih: "ϒ",
+  upsilon: "υ",
+  upuparrows: "⇈",
+  urcorn: "⌝",
+  urcorner: "⌝",
+  urcrop: "⌎",
+  uring: "ů",
+  urtri: "◹",
+  uscr: "𝓊",
+  utdot: "⋰",
+  utilde: "ũ",
+  utri: "▵",
+  utrif: "▴",
+  uuarr: "⇈",
+  uuml: "ü",
+  uwangle: "⦧",
+  vArr: "⇕",
+  vBar: "⫨",
+  vBarv: "⫩",
+  vDash: "⊨",
+  vangrt: "⦜",
+  varepsilon: "ϵ",
+  varkappa: "ϰ",
+  varnothing: "∅",
+  varphi: "ϕ",
+  varpi: "ϖ",
+  varpropto: "∝",
+  varr: "↕",
+  varrho: "ϱ",
+  varsigma: "ς",
+  varsubsetneq: "⊊︀",
+  varsubsetneqq: "⫋︀",
+  varsupsetneq: "⊋︀",
+  varsupsetneqq: "⫌︀",
+  vartheta: "ϑ",
+  vartriangleleft: "⊲",
+  vartriangleright: "⊳",
+  vcy: "в",
+  vdash: "⊢",
+  vee: "∨",
+  veebar: "⊻",
+  veeeq: "≚",
+  vellip: "⋮",
+  verbar: "|",
+  vert: "|",
+  vfr: "𝔳",
+  vltri: "⊲",
+  vnsub: "⊂⃒",
+  vnsup: "⊃⃒",
+  vopf: "𝕧",
+  vprop: "∝",
+  vrtri: "⊳",
+  vscr: "𝓋",
+  vsubnE: "⫋︀",
+  vsubne: "⊊︀",
+  vsupnE: "⫌︀",
+  vsupne: "⊋︀",
+  vzigzag: "⦚",
+  wcirc: "ŵ",
+  wedbar: "⩟",
+  wedge: "∧",
+  wedgeq: "≙",
+  weierp: "℘",
+  wfr: "𝔴",
+  wopf: "𝕨",
+  wp: "℘",
+  wr: "≀",
+  wreath: "≀",
+  wscr: "𝓌",
+  xcap: "⋂",
+  xcirc: "◯",
+  xcup: "⋃",
+  xdtri: "▽",
+  xfr: "𝔵",
+  xhArr: "⟺",
+  xharr: "⟷",
+  xi: "ξ",
+  xlArr: "⟸",
+  xlarr: "⟵",
+  xmap: "⟼",
+  xnis: "⋻",
+  xodot: "⨀",
+  xopf: "𝕩",
+  xoplus: "⨁",
+  xotime: "⨂",
+  xrArr: "⟹",
+  xrarr: "⟶",
+  xscr: "𝓍",
+  xsqcup: "⨆",
+  xuplus: "⨄",
+  xutri: "△",
+  xvee: "⋁",
+  xwedge: "⋀",
+  yacute: "ý",
+  yacy: "я",
+  ycirc: "ŷ",
+  ycy: "ы",
+  yen: "¥",
+  yfr: "𝔶",
+  yicy: "ї",
+  yopf: "𝕪",
+  yscr: "𝓎",
+  yucy: "ю",
+  yuml: "ÿ",
+  zacute: "ź",
+  zcaron: "ž",
+  zcy: "з",
+  zdot: "ż",
+  zeetrf: "ℨ",
+  zeta: "ζ",
+  zfr: "𝔷",
+  zhcy: "ж",
+  zigrarr: "⇝",
+  zopf: "𝕫",
+  zscr: "𝓏",
+  zwj: "‍",
+  zwnj: "‌"
+};
+
+// node_modules/decode-named-character-reference/index.js
+var own = {}.hasOwnProperty;
+function decodeNamedCharacterReference(value) {
+  return own.call(characterEntities, value) ? characterEntities[value] : false;
+}
+
+// node_modules/micromark-util-chunked/index.js
+function splice(list2, start, remove, items) {
+  const end = list2.length;
+  let chunkStart = 0;
+  let parameters;
+  if (start < 0) {
+    start = -start > end ? 0 : end + start;
+  } else {
+    start = start > end ? end : start;
+  }
+  remove = remove > 0 ? remove : 0;
+  if (items.length < 1e4) {
+    parameters = Array.from(items);
+    parameters.unshift(start, remove);
+    list2.splice(...parameters);
+  } else {
+    if (remove) list2.splice(start, remove);
+    while (chunkStart < items.length) {
+      parameters = items.slice(chunkStart, chunkStart + 1e4);
+      parameters.unshift(start, 0);
+      list2.splice(...parameters);
+      chunkStart += 1e4;
+      start += 1e4;
+    }
+  }
+}
+function push(list2, items) {
+  if (list2.length > 0) {
+    splice(list2, list2.length, 0, items);
+    return list2;
+  }
+  return items;
+}
+
+// node_modules/micromark-util-combine-extensions/index.js
+var hasOwnProperty = {}.hasOwnProperty;
+function combineExtensions(extensions) {
+  const all2 = {};
+  let index2 = -1;
+  while (++index2 < extensions.length) {
+    syntaxExtension(all2, extensions[index2]);
+  }
+  return all2;
+}
+function syntaxExtension(all2, extension2) {
+  let hook;
+  for (hook in extension2) {
+    const maybe = hasOwnProperty.call(all2, hook) ? all2[hook] : void 0;
+    const left = maybe || (all2[hook] = {});
+    const right = extension2[hook];
+    let code;
+    if (right) {
+      for (code in right) {
+        if (!hasOwnProperty.call(left, code)) left[code] = [];
+        const value = right[code];
+        constructs(
+          // @ts-expect-error Looks like a list.
+          left[code],
+          Array.isArray(value) ? value : value ? [value] : []
+        );
+      }
+    }
+  }
+}
+function constructs(existing, list2) {
+  let index2 = -1;
+  const before = [];
+  while (++index2 < list2.length) {
+    ;
+    (list2[index2].add === "after" ? existing : before).push(list2[index2]);
+  }
+  splice(existing, 0, 0, before);
+}
+
+// node_modules/micromark-util-decode-numeric-character-reference/index.js
+function decodeNumericCharacterReference(value, base) {
+  const code = Number.parseInt(value, base);
+  if (
+    // C0 except for HT, LF, FF, CR, space.
+    code < 9 || code === 11 || code > 13 && code < 32 || // Control character (DEL) of C0, and C1 controls.
+    code > 126 && code < 160 || // Lone high surrogates and low surrogates.
+    code > 55295 && code < 57344 || // Noncharacters.
+    code > 64975 && code < 65008 || /* eslint-disable no-bitwise */
+    (code & 65535) === 65535 || (code & 65535) === 65534 || /* eslint-enable no-bitwise */
+    // Out of range
+    code > 1114111
+  ) {
+    return "�";
+  }
+  return String.fromCodePoint(code);
+}
+
+// node_modules/micromark-util-normalize-identifier/index.js
+function normalizeIdentifier(value) {
+  return value.replace(/[\t\n\r ]+/g, " ").replace(/^ | $/g, "").toLowerCase().toUpperCase();
+}
+
+// node_modules/micromark-util-character/index.js
+var asciiAlpha = regexCheck(/[A-Za-z]/);
+var asciiAlphanumeric = regexCheck(/[\dA-Za-z]/);
+var asciiAtext = regexCheck(/[#-'*+\--9=?A-Z^-~]/);
+function asciiControl(code) {
+  return (
+    // Special whitespace codes (which have negative values), C0 and Control
+    // character DEL
+    code !== null && (code < 32 || code === 127)
+  );
+}
+var asciiDigit = regexCheck(/\d/);
+var asciiHexDigit = regexCheck(/[\dA-Fa-f]/);
+var asciiPunctuation = regexCheck(/[!-/:-@[-`{-~]/);
+function markdownLineEnding(code) {
+  return code !== null && code < -2;
+}
+function markdownLineEndingOrSpace(code) {
+  return code !== null && (code < 0 || code === 32);
+}
+function markdownSpace(code) {
+  return code === -2 || code === -1 || code === 32;
+}
+var unicodePunctuation = regexCheck(new RegExp("\\p{P}|\\p{S}", "u"));
+var unicodeWhitespace = regexCheck(/\s/);
+function regexCheck(regex) {
+  return check;
+  function check(code) {
+    return code !== null && code > -1 && regex.test(String.fromCharCode(code));
+  }
+}
+
+// node_modules/micromark-factory-space/index.js
+function factorySpace(effects, ok2, type, max) {
+  const limit = max ? max - 1 : Number.POSITIVE_INFINITY;
+  let size = 0;
+  return start;
+  function start(code) {
+    if (markdownSpace(code)) {
+      effects.enter(type);
+      return prefix(code);
+    }
+    return ok2(code);
+  }
+  function prefix(code) {
+    if (markdownSpace(code) && size++ < limit) {
+      effects.consume(code);
+      return prefix;
+    }
+    effects.exit(type);
+    return ok2(code);
+  }
+}
+
+// node_modules/micromark/lib/initialize/content.js
+var content = {
+  tokenize: initializeContent
+};
+function initializeContent(effects) {
+  const contentStart = effects.attempt(this.parser.constructs.contentInitial, afterContentStartConstruct, paragraphInitial);
+  let previous2;
+  return contentStart;
+  function afterContentStartConstruct(code) {
+    if (code === null) {
+      effects.consume(code);
+      return;
+    }
+    effects.enter("lineEnding");
+    effects.consume(code);
+    effects.exit("lineEnding");
+    return factorySpace(effects, contentStart, "linePrefix");
+  }
+  function paragraphInitial(code) {
+    effects.enter("paragraph");
+    return lineStart(code);
+  }
+  function lineStart(code) {
+    const token = effects.enter("chunkText", {
+      contentType: "text",
+      previous: previous2
+    });
+    if (previous2) {
+      previous2.next = token;
+    }
+    previous2 = token;
+    return data(code);
+  }
+  function data(code) {
+    if (code === null) {
+      effects.exit("chunkText");
+      effects.exit("paragraph");
+      effects.consume(code);
+      return;
+    }
+    if (markdownLineEnding(code)) {
+      effects.consume(code);
+      effects.exit("chunkText");
+      return lineStart;
+    }
+    effects.consume(code);
+    return data;
+  }
+}
+
+// node_modules/micromark/lib/initialize/document.js
+var document = {
+  tokenize: initializeDocument
+};
+var containerConstruct = {
+  tokenize: tokenizeContainer
+};
+function initializeDocument(effects) {
+  const self = this;
+  const stack = [];
+  let continued = 0;
+  let childFlow;
+  let childToken;
+  let lineStartOffset;
+  return start;
+  function start(code) {
+    if (continued < stack.length) {
+      const item = stack[continued];
+      self.containerState = item[1];
+      return effects.attempt(item[0].continuation, documentContinue, checkNewContainers)(code);
+    }
+    return checkNewContainers(code);
+  }
+  function documentContinue(code) {
+    continued++;
+    if (self.containerState._closeFlow) {
+      self.containerState._closeFlow = void 0;
+      if (childFlow) {
+        closeFlow();
+      }
+      const indexBeforeExits = self.events.length;
+      let indexBeforeFlow = indexBeforeExits;
+      let point3;
+      while (indexBeforeFlow--) {
+        if (self.events[indexBeforeFlow][0] === "exit" && self.events[indexBeforeFlow][1].type === "chunkFlow") {
+          point3 = self.events[indexBeforeFlow][1].end;
+          break;
+        }
+      }
+      exitContainers(continued);
+      let index2 = indexBeforeExits;
+      while (index2 < self.events.length) {
+        self.events[index2][1].end = {
+          ...point3
+        };
+        index2++;
+      }
+      splice(self.events, indexBeforeFlow + 1, 0, self.events.slice(indexBeforeExits));
+      self.events.length = index2;
+      return checkNewContainers(code);
+    }
+    return start(code);
+  }
+  function checkNewContainers(code) {
+    if (continued === stack.length) {
+      if (!childFlow) {
+        return documentContinued(code);
+      }
+      if (childFlow.currentConstruct && childFlow.currentConstruct.concrete) {
+        return flowStart(code);
+      }
+      self.interrupt = Boolean(childFlow.currentConstruct && !childFlow._gfmTableDynamicInterruptHack);
+    }
+    self.containerState = {};
+    return effects.check(containerConstruct, thereIsANewContainer, thereIsNoNewContainer)(code);
+  }
+  function thereIsANewContainer(code) {
+    if (childFlow) closeFlow();
+    exitContainers(continued);
+    return documentContinued(code);
+  }
+  function thereIsNoNewContainer(code) {
+    self.parser.lazy[self.now().line] = continued !== stack.length;
+    lineStartOffset = self.now().offset;
+    return flowStart(code);
+  }
+  function documentContinued(code) {
+    self.containerState = {};
+    return effects.attempt(containerConstruct, containerContinue, flowStart)(code);
+  }
+  function containerContinue(code) {
+    continued++;
+    stack.push([self.currentConstruct, self.containerState]);
+    return documentContinued(code);
+  }
+  function flowStart(code) {
+    if (code === null) {
+      if (childFlow) closeFlow();
+      exitContainers(0);
+      effects.consume(code);
+      return;
+    }
+    childFlow = childFlow || self.parser.flow(self.now());
+    effects.enter("chunkFlow", {
+      _tokenizer: childFlow,
+      contentType: "flow",
+      previous: childToken
+    });
+    return flowContinue(code);
+  }
+  function flowContinue(code) {
+    if (code === null) {
+      writeToChild(effects.exit("chunkFlow"), true);
+      exitContainers(0);
+      effects.consume(code);
+      return;
+    }
+    if (markdownLineEnding(code)) {
+      effects.consume(code);
+      writeToChild(effects.exit("chunkFlow"));
+      continued = 0;
+      self.interrupt = void 0;
+      return start;
+    }
+    effects.consume(code);
+    return flowContinue;
+  }
+  function writeToChild(token, endOfFile) {
+    const stream = self.sliceStream(token);
+    if (endOfFile) stream.push(null);
+    token.previous = childToken;
+    if (childToken) childToken.next = token;
+    childToken = token;
+    childFlow.defineSkip(token.start);
+    childFlow.write(stream);
+    if (self.parser.lazy[token.start.line]) {
+      let index2 = childFlow.events.length;
+      while (index2--) {
+        if (
+          // The token starts before the line ending…
+          childFlow.events[index2][1].start.offset < lineStartOffset && // …and either is not ended yet…
+          (!childFlow.events[index2][1].end || // …or ends after it.
+          childFlow.events[index2][1].end.offset > lineStartOffset)
+        ) {
+          return;
+        }
+      }
+      const indexBeforeExits = self.events.length;
+      let indexBeforeFlow = indexBeforeExits;
+      let seen;
+      let point3;
+      while (indexBeforeFlow--) {
+        if (self.events[indexBeforeFlow][0] === "exit" && self.events[indexBeforeFlow][1].type === "chunkFlow") {
+          if (seen) {
+            point3 = self.events[indexBeforeFlow][1].end;
+            break;
+          }
+          seen = true;
+        }
+      }
+      exitContainers(continued);
+      index2 = indexBeforeExits;
+      while (index2 < self.events.length) {
+        self.events[index2][1].end = {
+          ...point3
+        };
+        index2++;
+      }
+      splice(self.events, indexBeforeFlow + 1, 0, self.events.slice(indexBeforeExits));
+      self.events.length = index2;
+    }
+  }
+  function exitContainers(size) {
+    let index2 = stack.length;
+    while (index2-- > size) {
+      const entry2 = stack[index2];
+      self.containerState = entry2[1];
+      entry2[0].exit.call(self, effects);
+    }
+    stack.length = size;
+  }
+  function closeFlow() {
+    childFlow.write([null]);
+    childToken = void 0;
+    childFlow = void 0;
+    self.containerState._closeFlow = void 0;
+  }
+}
+function tokenizeContainer(effects, ok2, nok) {
+  return factorySpace(effects, effects.attempt(this.parser.constructs.document, ok2, nok), "linePrefix", this.parser.constructs.disable.null.includes("codeIndented") ? void 0 : 4);
+}
+
+// node_modules/micromark-util-classify-character/index.js
+function classifyCharacter(code) {
+  if (code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code)) {
+    return 1;
+  }
+  if (unicodePunctuation(code)) {
+    return 2;
+  }
+}
+
+// node_modules/micromark-util-resolve-all/index.js
+function resolveAll(constructs2, events, context) {
+  const called = [];
+  let index2 = -1;
+  while (++index2 < constructs2.length) {
+    const resolve9 = constructs2[index2].resolveAll;
+    if (resolve9 && !called.includes(resolve9)) {
+      events = resolve9(events, context);
+      called.push(resolve9);
+    }
+  }
+  return events;
+}
+
+// node_modules/micromark-core-commonmark/lib/attention.js
+var attention = {
+  name: "attention",
+  resolveAll: resolveAllAttention,
+  tokenize: tokenizeAttention
+};
+function resolveAllAttention(events, context) {
+  let index2 = -1;
+  let open6;
+  let group;
+  let text4;
+  let openingSequence;
+  let closingSequence;
+  let use;
+  let nextEvents;
+  let offset;
+  while (++index2 < events.length) {
+    if (events[index2][0] === "enter" && events[index2][1].type === "attentionSequence" && events[index2][1]._close) {
+      open6 = index2;
+      while (open6--) {
+        if (events[open6][0] === "exit" && events[open6][1].type === "attentionSequence" && events[open6][1]._open && // If the markers are the same:
+        context.sliceSerialize(events[open6][1]).charCodeAt(0) === context.sliceSerialize(events[index2][1]).charCodeAt(0)) {
+          if ((events[open6][1]._close || events[index2][1]._open) && (events[index2][1].end.offset - events[index2][1].start.offset) % 3 && !((events[open6][1].end.offset - events[open6][1].start.offset + events[index2][1].end.offset - events[index2][1].start.offset) % 3)) {
+            continue;
+          }
+          use = events[open6][1].end.offset - events[open6][1].start.offset > 1 && events[index2][1].end.offset - events[index2][1].start.offset > 1 ? 2 : 1;
+          const start = {
+            ...events[open6][1].end
+          };
+          const end = {
+            ...events[index2][1].start
+          };
+          movePoint(start, -use);
+          movePoint(end, use);
+          openingSequence = {
+            type: use > 1 ? "strongSequence" : "emphasisSequence",
+            start,
+            end: {
+              ...events[open6][1].end
+            }
+          };
+          closingSequence = {
+            type: use > 1 ? "strongSequence" : "emphasisSequence",
+            start: {
+              ...events[index2][1].start
+            },
+            end
+          };
+          text4 = {
+            type: use > 1 ? "strongText" : "emphasisText",
+            start: {
+              ...events[open6][1].end
+            },
+            end: {
+              ...events[index2][1].start
+            }
+          };
+          group = {
+            type: use > 1 ? "strong" : "emphasis",
+            start: {
+              ...openingSequence.start
+            },
+            end: {
+              ...closingSequence.end
+            }
+          };
+          events[open6][1].end = {
+            ...openingSequence.start
+          };
+          events[index2][1].start = {
+            ...closingSequence.end
+          };
+          nextEvents = [];
+          if (events[open6][1].end.offset - events[open6][1].start.offset) {
+            nextEvents = push(nextEvents, [["enter", events[open6][1], context], ["exit", events[open6][1], context]]);
+          }
+          nextEvents = push(nextEvents, [["enter", group, context], ["enter", openingSequence, context], ["exit", openingSequence, context], ["enter", text4, context]]);
+          nextEvents = push(nextEvents, resolveAll(context.parser.constructs.insideSpan.null, events.slice(open6 + 1, index2), context));
+          nextEvents = push(nextEvents, [["exit", text4, context], ["enter", closingSequence, context], ["exit", closingSequence, context], ["exit", group, context]]);
+          if (events[index2][1].end.offset - events[index2][1].start.offset) {
+            offset = 2;
+            nextEvents = push(nextEvents, [["enter", events[index2][1], context], ["exit", events[index2][1], context]]);
+          } else {
+            offset = 0;
+          }
+          splice(events, open6 - 1, index2 - open6 + 3, nextEvents);
+          index2 = open6 + nextEvents.length - offset - 2;
+          break;
+        }
+      }
+    }
+  }
+  index2 = -1;
+  while (++index2 < events.length) {
+    if (events[index2][1].type === "attentionSequence") {
+      events[index2][1].type = "data";
+    }
+  }
+  return events;
+}
+function tokenizeAttention(effects, ok2) {
+  const attentionMarkers2 = this.parser.constructs.attentionMarkers.null;
+  const previous2 = this.previous;
+  const before = classifyCharacter(previous2);
+  let marker;
+  return start;
+  function start(code) {
+    marker = code;
+    effects.enter("attentionSequence");
+    return inside9(code);
+  }
+  function inside9(code) {
+    if (code === marker) {
+      effects.consume(code);
+      return inside9;
+    }
+    const token = effects.exit("attentionSequence");
+    const after = classifyCharacter(code);
+    const open6 = !after || after === 2 && before || attentionMarkers2.includes(code);
+    const close = !before || before === 2 && after || attentionMarkers2.includes(previous2);
+    token._open = Boolean(marker === 42 ? open6 : open6 && (before || !close));
+    token._close = Boolean(marker === 42 ? close : close && (after || !open6));
+    return ok2(code);
+  }
+}
+function movePoint(point3, offset) {
+  point3.column += offset;
+  point3.offset += offset;
+  point3._bufferIndex += offset;
+}
+
+// node_modules/micromark-core-commonmark/lib/autolink.js
+var autolink = {
+  name: "autolink",
+  tokenize: tokenizeAutolink
+};
+function tokenizeAutolink(effects, ok2, nok) {
+  let size = 0;
+  return start;
+  function start(code) {
+    effects.enter("autolink");
+    effects.enter("autolinkMarker");
+    effects.consume(code);
+    effects.exit("autolinkMarker");
+    effects.enter("autolinkProtocol");
+    return open6;
+  }
+  function open6(code) {
+    if (asciiAlpha(code)) {
+      effects.consume(code);
+      return schemeOrEmailAtext;
+    }
+    if (code === 64) {
+      return nok(code);
+    }
+    return emailAtext(code);
+  }
+  function schemeOrEmailAtext(code) {
+    if (code === 43 || code === 45 || code === 46 || asciiAlphanumeric(code)) {
+      size = 1;
+      return schemeInsideOrEmailAtext(code);
+    }
+    return emailAtext(code);
+  }
+  function schemeInsideOrEmailAtext(code) {
+    if (code === 58) {
+      effects.consume(code);
+      size = 0;
+      return urlInside;
+    }
+    if ((code === 43 || code === 45 || code === 46 || asciiAlphanumeric(code)) && size++ < 32) {
+      effects.consume(code);
+      return schemeInsideOrEmailAtext;
+    }
+    size = 0;
+    return emailAtext(code);
+  }
+  function urlInside(code) {
+    if (code === 62) {
+      effects.exit("autolinkProtocol");
+      effects.enter("autolinkMarker");
+      effects.consume(code);
+      effects.exit("autolinkMarker");
+      effects.exit("autolink");
+      return ok2;
+    }
+    if (code === null || code === 32 || code === 60 || asciiControl(code)) {
+      return nok(code);
+    }
+    effects.consume(code);
+    return urlInside;
+  }
+  function emailAtext(code) {
+    if (code === 64) {
+      effects.consume(code);
+      return emailAtSignOrDot;
+    }
+    if (asciiAtext(code)) {
+      effects.consume(code);
+      return emailAtext;
+    }
+    return nok(code);
+  }
+  function emailAtSignOrDot(code) {
+    return asciiAlphanumeric(code) ? emailLabel(code) : nok(code);
+  }
+  function emailLabel(code) {
+    if (code === 46) {
+      effects.consume(code);
+      size = 0;
+      return emailAtSignOrDot;
+    }
+    if (code === 62) {
+      effects.exit("autolinkProtocol").type = "autolinkEmail";
+      effects.enter("autolinkMarker");
+      effects.consume(code);
+      effects.exit("autolinkMarker");
+      effects.exit("autolink");
+      return ok2;
+    }
+    return emailValue(code);
+  }
+  function emailValue(code) {
+    if ((code === 45 || asciiAlphanumeric(code)) && size++ < 63) {
+      const next = code === 45 ? emailValue : emailLabel;
+      effects.consume(code);
+      return next;
+    }
+    return nok(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/blank-line.js
+var blankLine = {
+  partial: true,
+  tokenize: tokenizeBlankLine
+};
+function tokenizeBlankLine(effects, ok2, nok) {
+  return start;
+  function start(code) {
+    return markdownSpace(code) ? factorySpace(effects, after, "linePrefix")(code) : after(code);
+  }
+  function after(code) {
+    return code === null || markdownLineEnding(code) ? ok2(code) : nok(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/block-quote.js
+var blockQuote = {
+  continuation: {
+    tokenize: tokenizeBlockQuoteContinuation
+  },
+  exit,
+  name: "blockQuote",
+  tokenize: tokenizeBlockQuoteStart
+};
+function tokenizeBlockQuoteStart(effects, ok2, nok) {
+  const self = this;
+  return start;
+  function start(code) {
+    if (code === 62) {
+      const state = self.containerState;
+      if (!state.open) {
+        effects.enter("blockQuote", {
+          _container: true
+        });
+        state.open = true;
+      }
+      effects.enter("blockQuotePrefix");
+      effects.enter("blockQuoteMarker");
+      effects.consume(code);
+      effects.exit("blockQuoteMarker");
+      return after;
+    }
+    return nok(code);
+  }
+  function after(code) {
+    if (markdownSpace(code)) {
+      effects.enter("blockQuotePrefixWhitespace");
+      effects.consume(code);
+      effects.exit("blockQuotePrefixWhitespace");
+      effects.exit("blockQuotePrefix");
+      return ok2;
+    }
+    effects.exit("blockQuotePrefix");
+    return ok2(code);
+  }
+}
+function tokenizeBlockQuoteContinuation(effects, ok2, nok) {
+  const self = this;
+  return contStart;
+  function contStart(code) {
+    if (markdownSpace(code)) {
+      return factorySpace(effects, contBefore, "linePrefix", self.parser.constructs.disable.null.includes("codeIndented") ? void 0 : 4)(code);
+    }
+    return contBefore(code);
+  }
+  function contBefore(code) {
+    return effects.attempt(blockQuote, ok2, nok)(code);
+  }
+}
+function exit(effects) {
+  effects.exit("blockQuote");
+}
+
+// node_modules/micromark-core-commonmark/lib/character-escape.js
+var characterEscape = {
+  name: "characterEscape",
+  tokenize: tokenizeCharacterEscape
+};
+function tokenizeCharacterEscape(effects, ok2, nok) {
+  return start;
+  function start(code) {
+    effects.enter("characterEscape");
+    effects.enter("escapeMarker");
+    effects.consume(code);
+    effects.exit("escapeMarker");
+    return inside9;
+  }
+  function inside9(code) {
+    if (asciiPunctuation(code)) {
+      effects.enter("characterEscapeValue");
+      effects.consume(code);
+      effects.exit("characterEscapeValue");
+      effects.exit("characterEscape");
+      return ok2;
+    }
+    return nok(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/character-reference.js
+var characterReference = {
+  name: "characterReference",
+  tokenize: tokenizeCharacterReference
+};
+function tokenizeCharacterReference(effects, ok2, nok) {
+  const self = this;
+  let size = 0;
+  let max;
+  let test;
+  return start;
+  function start(code) {
+    effects.enter("characterReference");
+    effects.enter("characterReferenceMarker");
+    effects.consume(code);
+    effects.exit("characterReferenceMarker");
+    return open6;
+  }
+  function open6(code) {
+    if (code === 35) {
+      effects.enter("characterReferenceMarkerNumeric");
+      effects.consume(code);
+      effects.exit("characterReferenceMarkerNumeric");
+      return numeric;
+    }
+    effects.enter("characterReferenceValue");
+    max = 31;
+    test = asciiAlphanumeric;
+    return value(code);
+  }
+  function numeric(code) {
+    if (code === 88 || code === 120) {
+      effects.enter("characterReferenceMarkerHexadecimal");
+      effects.consume(code);
+      effects.exit("characterReferenceMarkerHexadecimal");
+      effects.enter("characterReferenceValue");
+      max = 6;
+      test = asciiHexDigit;
+      return value;
+    }
+    effects.enter("characterReferenceValue");
+    max = 7;
+    test = asciiDigit;
+    return value(code);
+  }
+  function value(code) {
+    if (code === 59 && size) {
+      const token = effects.exit("characterReferenceValue");
+      if (test === asciiAlphanumeric && !decodeNamedCharacterReference(self.sliceSerialize(token))) {
+        return nok(code);
+      }
+      effects.enter("characterReferenceMarker");
+      effects.consume(code);
+      effects.exit("characterReferenceMarker");
+      effects.exit("characterReference");
+      return ok2;
+    }
+    if (test(code) && size++ < max) {
+      effects.consume(code);
+      return value;
+    }
+    return nok(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/code-fenced.js
+var nonLazyContinuation = {
+  partial: true,
+  tokenize: tokenizeNonLazyContinuation
+};
+var codeFenced = {
+  concrete: true,
+  name: "codeFenced",
+  tokenize: tokenizeCodeFenced
+};
+function tokenizeCodeFenced(effects, ok2, nok) {
+  const self = this;
+  const closeStart = {
+    partial: true,
+    tokenize: tokenizeCloseStart
+  };
+  let initialPrefix = 0;
+  let sizeOpen = 0;
+  let marker;
+  return start;
+  function start(code) {
+    return beforeSequenceOpen(code);
+  }
+  function beforeSequenceOpen(code) {
+    const tail = self.events[self.events.length - 1];
+    initialPrefix = tail && tail[1].type === "linePrefix" ? tail[2].sliceSerialize(tail[1], true).length : 0;
+    marker = code;
+    effects.enter("codeFenced");
+    effects.enter("codeFencedFence");
+    effects.enter("codeFencedFenceSequence");
+    return sequenceOpen(code);
+  }
+  function sequenceOpen(code) {
+    if (code === marker) {
+      sizeOpen++;
+      effects.consume(code);
+      return sequenceOpen;
+    }
+    if (sizeOpen < 3) {
+      return nok(code);
+    }
+    effects.exit("codeFencedFenceSequence");
+    return markdownSpace(code) ? factorySpace(effects, infoBefore, "whitespace")(code) : infoBefore(code);
+  }
+  function infoBefore(code) {
+    if (code === null || markdownLineEnding(code)) {
+      effects.exit("codeFencedFence");
+      return self.interrupt ? ok2(code) : effects.check(nonLazyContinuation, atNonLazyBreak, after)(code);
+    }
+    effects.enter("codeFencedFenceInfo");
+    effects.enter("chunkString", {
+      contentType: "string"
+    });
+    return info(code);
+  }
+  function info(code) {
+    if (code === null || markdownLineEnding(code)) {
+      effects.exit("chunkString");
+      effects.exit("codeFencedFenceInfo");
+      return infoBefore(code);
+    }
+    if (markdownSpace(code)) {
+      effects.exit("chunkString");
+      effects.exit("codeFencedFenceInfo");
+      return factorySpace(effects, metaBefore, "whitespace")(code);
+    }
+    if (code === 96 && code === marker) {
+      return nok(code);
+    }
+    effects.consume(code);
+    return info;
+  }
+  function metaBefore(code) {
+    if (code === null || markdownLineEnding(code)) {
+      return infoBefore(code);
+    }
+    effects.enter("codeFencedFenceMeta");
+    effects.enter("chunkString", {
+      contentType: "string"
+    });
+    return meta(code);
+  }
+  function meta(code) {
+    if (code === null || markdownLineEnding(code)) {
+      effects.exit("chunkString");
+      effects.exit("codeFencedFenceMeta");
+      return infoBefore(code);
+    }
+    if (code === 96 && code === marker) {
+      return nok(code);
+    }
+    effects.consume(code);
+    return meta;
+  }
+  function atNonLazyBreak(code) {
+    return effects.attempt(closeStart, after, contentBefore)(code);
+  }
+  function contentBefore(code) {
+    effects.enter("lineEnding");
+    effects.consume(code);
+    effects.exit("lineEnding");
+    return contentStart;
+  }
+  function contentStart(code) {
+    return initialPrefix > 0 && markdownSpace(code) ? factorySpace(effects, beforeContentChunk, "linePrefix", initialPrefix + 1)(code) : beforeContentChunk(code);
+  }
+  function beforeContentChunk(code) {
+    if (code === null || markdownLineEnding(code)) {
+      return effects.check(nonLazyContinuation, atNonLazyBreak, after)(code);
+    }
+    effects.enter("codeFlowValue");
+    return contentChunk(code);
+  }
+  function contentChunk(code) {
+    if (code === null || markdownLineEnding(code)) {
+      effects.exit("codeFlowValue");
+      return beforeContentChunk(code);
+    }
+    effects.consume(code);
+    return contentChunk;
+  }
+  function after(code) {
+    effects.exit("codeFenced");
+    return ok2(code);
+  }
+  function tokenizeCloseStart(effects2, ok3, nok2) {
+    let size = 0;
+    return startBefore;
+    function startBefore(code) {
+      effects2.enter("lineEnding");
+      effects2.consume(code);
+      effects2.exit("lineEnding");
+      return start2;
+    }
+    function start2(code) {
+      effects2.enter("codeFencedFence");
+      return markdownSpace(code) ? factorySpace(effects2, beforeSequenceClose, "linePrefix", self.parser.constructs.disable.null.includes("codeIndented") ? void 0 : 4)(code) : beforeSequenceClose(code);
+    }
+    function beforeSequenceClose(code) {
+      if (code === marker) {
+        effects2.enter("codeFencedFenceSequence");
+        return sequenceClose(code);
+      }
+      return nok2(code);
+    }
+    function sequenceClose(code) {
+      if (code === marker) {
+        size++;
+        effects2.consume(code);
+        return sequenceClose;
+      }
+      if (size >= sizeOpen) {
+        effects2.exit("codeFencedFenceSequence");
+        return markdownSpace(code) ? factorySpace(effects2, sequenceCloseAfter, "whitespace")(code) : sequenceCloseAfter(code);
+      }
+      return nok2(code);
+    }
+    function sequenceCloseAfter(code) {
+      if (code === null || markdownLineEnding(code)) {
+        effects2.exit("codeFencedFence");
+        return ok3(code);
+      }
+      return nok2(code);
+    }
+  }
+}
+function tokenizeNonLazyContinuation(effects, ok2, nok) {
+  const self = this;
+  return start;
+  function start(code) {
+    if (code === null) {
+      return nok(code);
+    }
+    effects.enter("lineEnding");
+    effects.consume(code);
+    effects.exit("lineEnding");
+    return lineStart;
+  }
+  function lineStart(code) {
+    return self.parser.lazy[self.now().line] ? nok(code) : ok2(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/code-indented.js
+var codeIndented = {
+  name: "codeIndented",
+  tokenize: tokenizeCodeIndented
+};
+var furtherStart = {
+  partial: true,
+  tokenize: tokenizeFurtherStart
+};
+function tokenizeCodeIndented(effects, ok2, nok) {
+  const self = this;
+  return start;
+  function start(code) {
+    effects.enter("codeIndented");
+    return factorySpace(effects, afterPrefix, "linePrefix", 4 + 1)(code);
+  }
+  function afterPrefix(code) {
+    const tail = self.events[self.events.length - 1];
+    return tail && tail[1].type === "linePrefix" && tail[2].sliceSerialize(tail[1], true).length >= 4 ? atBreak(code) : nok(code);
+  }
+  function atBreak(code) {
+    if (code === null) {
+      return after(code);
+    }
+    if (markdownLineEnding(code)) {
+      return effects.attempt(furtherStart, atBreak, after)(code);
+    }
+    effects.enter("codeFlowValue");
+    return inside9(code);
+  }
+  function inside9(code) {
+    if (code === null || markdownLineEnding(code)) {
+      effects.exit("codeFlowValue");
+      return atBreak(code);
+    }
+    effects.consume(code);
+    return inside9;
+  }
+  function after(code) {
+    effects.exit("codeIndented");
+    return ok2(code);
+  }
+}
+function tokenizeFurtherStart(effects, ok2, nok) {
+  const self = this;
+  return furtherStart2;
+  function furtherStart2(code) {
+    if (self.parser.lazy[self.now().line]) {
+      return nok(code);
+    }
+    if (markdownLineEnding(code)) {
+      effects.enter("lineEnding");
+      effects.consume(code);
+      effects.exit("lineEnding");
+      return furtherStart2;
+    }
+    return factorySpace(effects, afterPrefix, "linePrefix", 4 + 1)(code);
+  }
+  function afterPrefix(code) {
+    const tail = self.events[self.events.length - 1];
+    return tail && tail[1].type === "linePrefix" && tail[2].sliceSerialize(tail[1], true).length >= 4 ? ok2(code) : markdownLineEnding(code) ? furtherStart2(code) : nok(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/code-text.js
+var codeText = {
+  name: "codeText",
+  previous,
+  resolve: resolveCodeText,
+  tokenize: tokenizeCodeText
+};
+function resolveCodeText(events) {
+  let tailExitIndex = events.length - 4;
+  let headEnterIndex = 3;
+  let index2;
+  let enter;
+  if ((events[headEnterIndex][1].type === "lineEnding" || events[headEnterIndex][1].type === "space") && (events[tailExitIndex][1].type === "lineEnding" || events[tailExitIndex][1].type === "space")) {
+    index2 = headEnterIndex;
+    while (++index2 < tailExitIndex) {
+      if (events[index2][1].type === "codeTextData") {
+        events[headEnterIndex][1].type = "codeTextPadding";
+        events[tailExitIndex][1].type = "codeTextPadding";
+        headEnterIndex += 2;
+        tailExitIndex -= 2;
+        break;
+      }
+    }
+  }
+  index2 = headEnterIndex - 1;
+  tailExitIndex++;
+  while (++index2 <= tailExitIndex) {
+    if (enter === void 0) {
+      if (index2 !== tailExitIndex && events[index2][1].type !== "lineEnding") {
+        enter = index2;
+      }
+    } else if (index2 === tailExitIndex || events[index2][1].type === "lineEnding") {
+      events[enter][1].type = "codeTextData";
+      if (index2 !== enter + 2) {
+        events[enter][1].end = events[index2 - 1][1].end;
+        events.splice(enter + 2, index2 - enter - 2);
+        tailExitIndex -= index2 - enter - 2;
+        index2 = enter + 2;
+      }
+      enter = void 0;
+    }
+  }
+  return events;
+}
+function previous(code) {
+  return code !== 96 || this.events[this.events.length - 1][1].type === "characterEscape";
+}
+function tokenizeCodeText(effects, ok2, nok) {
+  const self = this;
+  let sizeOpen = 0;
+  let size;
+  let token;
+  return start;
+  function start(code) {
+    effects.enter("codeText");
+    effects.enter("codeTextSequence");
+    return sequenceOpen(code);
+  }
+  function sequenceOpen(code) {
+    if (code === 96) {
+      effects.consume(code);
+      sizeOpen++;
+      return sequenceOpen;
+    }
+    effects.exit("codeTextSequence");
+    return between(code);
+  }
+  function between(code) {
+    if (code === null) {
+      return nok(code);
+    }
+    if (code === 32) {
+      effects.enter("space");
+      effects.consume(code);
+      effects.exit("space");
+      return between;
+    }
+    if (code === 96) {
+      token = effects.enter("codeTextSequence");
+      size = 0;
+      return sequenceClose(code);
+    }
+    if (markdownLineEnding(code)) {
+      effects.enter("lineEnding");
+      effects.consume(code);
+      effects.exit("lineEnding");
+      return between;
+    }
+    effects.enter("codeTextData");
+    return data(code);
+  }
+  function data(code) {
+    if (code === null || code === 32 || code === 96 || markdownLineEnding(code)) {
+      effects.exit("codeTextData");
+      return between(code);
+    }
+    effects.consume(code);
+    return data;
+  }
+  function sequenceClose(code) {
+    if (code === 96) {
+      effects.consume(code);
+      size++;
+      return sequenceClose;
+    }
+    if (size === sizeOpen) {
+      effects.exit("codeTextSequence");
+      effects.exit("codeText");
+      return ok2(code);
+    }
+    token.type = "codeTextData";
+    return data(code);
+  }
+}
+
+// node_modules/micromark-util-subtokenize/lib/splice-buffer.js
+var SpliceBuffer = class {
+  /**
+   * @param {ReadonlyArray<T> | null | undefined} [initial]
+   *   Initial items (optional).
+   * @returns
+   *   Splice buffer.
+   */
+  constructor(initial) {
+    this.left = initial ? [...initial] : [];
+    this.right = [];
+  }
+  /**
+   * Array access;
+   * does not move the cursor.
+   *
+   * @param {number} index
+   *   Index.
+   * @return {T}
+   *   Item.
+   */
+  get(index2) {
+    if (index2 < 0 || index2 >= this.left.length + this.right.length) {
+      throw new RangeError("Cannot access index `" + index2 + "` in a splice buffer of size `" + (this.left.length + this.right.length) + "`");
+    }
+    if (index2 < this.left.length) return this.left[index2];
+    return this.right[this.right.length - index2 + this.left.length - 1];
+  }
+  /**
+   * The length of the splice buffer, one greater than the largest index in the
+   * array.
+   */
+  get length() {
+    return this.left.length + this.right.length;
+  }
+  /**
+   * Remove and return `list[0]`;
+   * moves the cursor to `0`.
+   *
+   * @returns {T | undefined}
+   *   Item, optional.
+   */
+  shift() {
+    this.setCursor(0);
+    return this.right.pop();
+  }
+  /**
+   * Slice the buffer to get an array;
+   * does not move the cursor.
+   *
+   * @param {number} start
+   *   Start.
+   * @param {number | null | undefined} [end]
+   *   End (optional).
+   * @returns {Array<T>}
+   *   Array of items.
+   */
+  slice(start, end) {
+    const stop = end === null || end === void 0 ? Number.POSITIVE_INFINITY : end;
+    if (stop < this.left.length) {
+      return this.left.slice(start, stop);
+    }
+    if (start > this.left.length) {
+      return this.right.slice(this.right.length - stop + this.left.length, this.right.length - start + this.left.length).reverse();
+    }
+    return this.left.slice(start).concat(this.right.slice(this.right.length - stop + this.left.length).reverse());
+  }
+  /**
+   * Mimics the behavior of Array.prototype.splice() except for the change of
+   * interface necessary to avoid segfaults when patching in very large arrays.
+   *
+   * This operation moves cursor is moved to `start` and results in the cursor
+   * placed after any inserted items.
+   *
+   * @param {number} start
+   *   Start;
+   *   zero-based index at which to start changing the array;
+   *   negative numbers count backwards from the end of the array and values
+   *   that are out-of bounds are clamped to the appropriate end of the array.
+   * @param {number | null | undefined} [deleteCount=0]
+   *   Delete count (default: `0`);
+   *   maximum number of elements to delete, starting from start.
+   * @param {Array<T> | null | undefined} [items=[]]
+   *   Items to include in place of the deleted items (default: `[]`).
+   * @return {Array<T>}
+   *   Any removed items.
+   */
+  splice(start, deleteCount, items) {
+    const count = deleteCount || 0;
+    this.setCursor(Math.trunc(start));
+    const removed = this.right.splice(this.right.length - count, Number.POSITIVE_INFINITY);
+    if (items) chunkedPush(this.left, items);
+    return removed.reverse();
+  }
+  /**
+   * Remove and return the highest-numbered item in the array, so
+   * `list[list.length - 1]`;
+   * Moves the cursor to `length`.
+   *
+   * @returns {T | undefined}
+   *   Item, optional.
+   */
+  pop() {
+    this.setCursor(Number.POSITIVE_INFINITY);
+    return this.left.pop();
+  }
+  /**
+   * Inserts a single item to the high-numbered side of the array;
+   * moves the cursor to `length`.
+   *
+   * @param {T} item
+   *   Item.
+   * @returns {undefined}
+   *   Nothing.
+   */
+  push(item) {
+    this.setCursor(Number.POSITIVE_INFINITY);
+    this.left.push(item);
+  }
+  /**
+   * Inserts many items to the high-numbered side of the array.
+   * Moves the cursor to `length`.
+   *
+   * @param {Array<T>} items
+   *   Items.
+   * @returns {undefined}
+   *   Nothing.
+   */
+  pushMany(items) {
+    this.setCursor(Number.POSITIVE_INFINITY);
+    chunkedPush(this.left, items);
+  }
+  /**
+   * Inserts a single item to the low-numbered side of the array;
+   * Moves the cursor to `0`.
+   *
+   * @param {T} item
+   *   Item.
+   * @returns {undefined}
+   *   Nothing.
+   */
+  unshift(item) {
+    this.setCursor(0);
+    this.right.push(item);
+  }
+  /**
+   * Inserts many items to the low-numbered side of the array;
+   * moves the cursor to `0`.
+   *
+   * @param {Array<T>} items
+   *   Items.
+   * @returns {undefined}
+   *   Nothing.
+   */
+  unshiftMany(items) {
+    this.setCursor(0);
+    chunkedPush(this.right, items.reverse());
+  }
+  /**
+   * Move the cursor to a specific position in the array. Requires
+   * time proportional to the distance moved.
+   *
+   * If `n < 0`, the cursor will end up at the beginning.
+   * If `n > length`, the cursor will end up at the end.
+   *
+   * @param {number} n
+   *   Position.
+   * @return {undefined}
+   *   Nothing.
+   */
+  setCursor(n) {
+    if (n === this.left.length || n > this.left.length && this.right.length === 0 || n < 0 && this.left.length === 0) return;
+    if (n < this.left.length) {
+      const removed = this.left.splice(n, Number.POSITIVE_INFINITY);
+      chunkedPush(this.right, removed.reverse());
+    } else {
+      const removed = this.right.splice(this.left.length + this.right.length - n, Number.POSITIVE_INFINITY);
+      chunkedPush(this.left, removed.reverse());
+    }
+  }
+};
+function chunkedPush(list2, right) {
+  let chunkStart = 0;
+  if (right.length < 1e4) {
+    list2.push(...right);
+  } else {
+    while (chunkStart < right.length) {
+      list2.push(...right.slice(chunkStart, chunkStart + 1e4));
+      chunkStart += 1e4;
+    }
+  }
+}
+
+// node_modules/micromark-util-subtokenize/index.js
+function subtokenize(eventsArray) {
+  const jumps = {};
+  let index2 = -1;
+  let event;
+  let lineIndex;
+  let otherIndex;
+  let otherEvent;
+  let parameters;
+  let subevents;
+  let more;
+  const events = new SpliceBuffer(eventsArray);
+  while (++index2 < events.length) {
+    while (index2 in jumps) {
+      index2 = jumps[index2];
+    }
+    event = events.get(index2);
+    if (index2 && event[1].type === "chunkFlow" && events.get(index2 - 1)[1].type === "listItemPrefix") {
+      subevents = event[1]._tokenizer.events;
+      otherIndex = 0;
+      if (otherIndex < subevents.length && subevents[otherIndex][1].type === "lineEndingBlank") {
+        otherIndex += 2;
+      }
+      if (otherIndex < subevents.length && subevents[otherIndex][1].type === "content") {
+        while (++otherIndex < subevents.length) {
+          if (subevents[otherIndex][1].type === "content") {
+            break;
+          }
+          if (subevents[otherIndex][1].type === "chunkText") {
+            subevents[otherIndex][1]._isInFirstContentOfListItem = true;
+            otherIndex++;
+          }
+        }
+      }
+    }
+    if (event[0] === "enter") {
+      if (event[1].contentType) {
+        Object.assign(jumps, subcontent(events, index2));
+        index2 = jumps[index2];
+        more = true;
+      }
+    } else if (event[1]._container) {
+      otherIndex = index2;
+      lineIndex = void 0;
+      while (otherIndex--) {
+        otherEvent = events.get(otherIndex);
+        if (otherEvent[1].type === "lineEnding" || otherEvent[1].type === "lineEndingBlank") {
+          if (otherEvent[0] === "enter") {
+            if (lineIndex) {
+              events.get(lineIndex)[1].type = "lineEndingBlank";
+            }
+            otherEvent[1].type = "lineEnding";
+            lineIndex = otherIndex;
+          }
+        } else if (otherEvent[1].type === "linePrefix" || otherEvent[1].type === "listItemIndent") {
+        } else {
+          break;
+        }
+      }
+      if (lineIndex) {
+        event[1].end = {
+          ...events.get(lineIndex)[1].start
+        };
+        parameters = events.slice(lineIndex, index2);
+        parameters.unshift(event);
+        events.splice(lineIndex, index2 - lineIndex + 1, parameters);
+      }
+    }
+  }
+  splice(eventsArray, 0, Number.POSITIVE_INFINITY, events.slice(0));
+  return !more;
+}
+function subcontent(events, eventIndex) {
+  const token = events.get(eventIndex)[1];
+  const context = events.get(eventIndex)[2];
+  let startPosition = eventIndex - 1;
+  const startPositions = [];
+  let tokenizer = token._tokenizer;
+  if (!tokenizer) {
+    tokenizer = context.parser[token.contentType](token.start);
+    if (token._contentTypeTextTrailing) {
+      tokenizer._contentTypeTextTrailing = true;
+    }
+  }
+  const childEvents = tokenizer.events;
+  const jumps = [];
+  const gaps = {};
+  let stream;
+  let previous2;
+  let index2 = -1;
+  let current = token;
+  let adjust = 0;
+  let start = 0;
+  const breaks = [start];
+  while (current) {
+    while (events.get(++startPosition)[1] !== current) {
+    }
+    startPositions.push(startPosition);
+    if (!current._tokenizer) {
+      stream = context.sliceStream(current);
+      if (!current.next) {
+        stream.push(null);
+      }
+      if (previous2) {
+        tokenizer.defineSkip(current.start);
+      }
+      if (current._isInFirstContentOfListItem) {
+        tokenizer._gfmTasklistFirstContentOfListItem = true;
+      }
+      tokenizer.write(stream);
+      if (current._isInFirstContentOfListItem) {
+        tokenizer._gfmTasklistFirstContentOfListItem = void 0;
+      }
+    }
+    previous2 = current;
+    current = current.next;
+  }
+  current = token;
+  while (++index2 < childEvents.length) {
+    if (
+      // Find a void token that includes a break.
+      childEvents[index2][0] === "exit" && childEvents[index2 - 1][0] === "enter" && childEvents[index2][1].type === childEvents[index2 - 1][1].type && childEvents[index2][1].start.line !== childEvents[index2][1].end.line
+    ) {
+      start = index2 + 1;
+      breaks.push(start);
+      current._tokenizer = void 0;
+      current.previous = void 0;
+      current = current.next;
+    }
+  }
+  tokenizer.events = [];
+  if (current) {
+    current._tokenizer = void 0;
+    current.previous = void 0;
+  } else {
+    breaks.pop();
+  }
+  index2 = breaks.length;
+  while (index2--) {
+    const slice = childEvents.slice(breaks[index2], breaks[index2 + 1]);
+    const start2 = startPositions.pop();
+    jumps.push([start2, start2 + slice.length - 1]);
+    events.splice(start2, 2, slice);
+  }
+  jumps.reverse();
+  index2 = -1;
+  while (++index2 < jumps.length) {
+    gaps[adjust + jumps[index2][0]] = adjust + jumps[index2][1];
+    adjust += jumps[index2][1] - jumps[index2][0] - 1;
+  }
+  return gaps;
+}
+
+// node_modules/micromark-core-commonmark/lib/content.js
+var content2 = {
+  resolve: resolveContent,
+  tokenize: tokenizeContent
+};
+var continuationConstruct = {
+  partial: true,
+  tokenize: tokenizeContinuation
+};
+function resolveContent(events) {
+  subtokenize(events);
+  return events;
+}
+function tokenizeContent(effects, ok2) {
+  let previous2;
+  return chunkStart;
+  function chunkStart(code) {
+    effects.enter("content");
+    previous2 = effects.enter("chunkContent", {
+      contentType: "content"
+    });
+    return chunkInside(code);
+  }
+  function chunkInside(code) {
+    if (code === null) {
+      return contentEnd(code);
+    }
+    if (markdownLineEnding(code)) {
+      return effects.check(continuationConstruct, contentContinue, contentEnd)(code);
+    }
+    effects.consume(code);
+    return chunkInside;
+  }
+  function contentEnd(code) {
+    effects.exit("chunkContent");
+    effects.exit("content");
+    return ok2(code);
+  }
+  function contentContinue(code) {
+    effects.consume(code);
+    effects.exit("chunkContent");
+    previous2.next = effects.enter("chunkContent", {
+      contentType: "content",
+      previous: previous2
+    });
+    previous2 = previous2.next;
+    return chunkInside;
+  }
+}
+function tokenizeContinuation(effects, ok2, nok) {
+  const self = this;
+  return startLookahead;
+  function startLookahead(code) {
+    effects.exit("chunkContent");
+    effects.enter("lineEnding");
+    effects.consume(code);
+    effects.exit("lineEnding");
+    return factorySpace(effects, prefixed, "linePrefix");
+  }
+  function prefixed(code) {
+    if (code === null || markdownLineEnding(code)) {
+      return nok(code);
+    }
+    const tail = self.events[self.events.length - 1];
+    if (!self.parser.constructs.disable.null.includes("codeIndented") && tail && tail[1].type === "linePrefix" && tail[2].sliceSerialize(tail[1], true).length >= 4) {
+      return ok2(code);
+    }
+    return effects.interrupt(self.parser.constructs.flow, nok, ok2)(code);
+  }
+}
+
+// node_modules/micromark-factory-destination/index.js
+function factoryDestination(effects, ok2, nok, type, literalType, literalMarkerType, rawType, stringType, max) {
+  const limit = max || Number.POSITIVE_INFINITY;
+  let balance = 0;
+  return start;
+  function start(code) {
+    if (code === 60) {
+      effects.enter(type);
+      effects.enter(literalType);
+      effects.enter(literalMarkerType);
+      effects.consume(code);
+      effects.exit(literalMarkerType);
+      return enclosedBefore;
+    }
+    if (code === null || code === 32 || code === 41 || asciiControl(code)) {
+      return nok(code);
+    }
+    effects.enter(type);
+    effects.enter(rawType);
+    effects.enter(stringType);
+    effects.enter("chunkString", {
+      contentType: "string"
+    });
+    return raw(code);
+  }
+  function enclosedBefore(code) {
+    if (code === 62) {
+      effects.enter(literalMarkerType);
+      effects.consume(code);
+      effects.exit(literalMarkerType);
+      effects.exit(literalType);
+      effects.exit(type);
+      return ok2;
+    }
+    effects.enter(stringType);
+    effects.enter("chunkString", {
+      contentType: "string"
+    });
+    return enclosed(code);
+  }
+  function enclosed(code) {
+    if (code === 62) {
+      effects.exit("chunkString");
+      effects.exit(stringType);
+      return enclosedBefore(code);
+    }
+    if (code === null || code === 60 || markdownLineEnding(code)) {
+      return nok(code);
+    }
+    effects.consume(code);
+    return code === 92 ? enclosedEscape : enclosed;
+  }
+  function enclosedEscape(code) {
+    if (code === 60 || code === 62 || code === 92) {
+      effects.consume(code);
+      return enclosed;
+    }
+    return enclosed(code);
+  }
+  function raw(code) {
+    if (!balance && (code === null || code === 41 || markdownLineEndingOrSpace(code))) {
+      effects.exit("chunkString");
+      effects.exit(stringType);
+      effects.exit(rawType);
+      effects.exit(type);
+      return ok2(code);
+    }
+    if (balance < limit && code === 40) {
+      effects.consume(code);
+      balance++;
+      return raw;
+    }
+    if (code === 41) {
+      effects.consume(code);
+      balance--;
+      return raw;
+    }
+    if (code === null || code === 32 || code === 40 || asciiControl(code)) {
+      return nok(code);
+    }
+    effects.consume(code);
+    return code === 92 ? rawEscape : raw;
+  }
+  function rawEscape(code) {
+    if (code === 40 || code === 41 || code === 92) {
+      effects.consume(code);
+      return raw;
+    }
+    return raw(code);
+  }
+}
+
+// node_modules/micromark-factory-label/index.js
+function factoryLabel(effects, ok2, nok, type, markerType, stringType) {
+  const self = this;
+  let size = 0;
+  let seen;
+  return start;
+  function start(code) {
+    effects.enter(type);
+    effects.enter(markerType);
+    effects.consume(code);
+    effects.exit(markerType);
+    effects.enter(stringType);
+    return atBreak;
+  }
+  function atBreak(code) {
+    if (size > 999 || code === null || code === 91 || code === 93 && !seen || // To do: remove in the future once we’ve switched from
+    // `micromark-extension-footnote` to `micromark-extension-gfm-footnote`,
+    // which doesn’t need this.
+    // Hidden footnotes hook.
+    /* c8 ignore next 3 */
+    code === 94 && !size && "_hiddenFootnoteSupport" in self.parser.constructs) {
+      return nok(code);
+    }
+    if (code === 93) {
+      effects.exit(stringType);
+      effects.enter(markerType);
+      effects.consume(code);
+      effects.exit(markerType);
+      effects.exit(type);
+      return ok2;
+    }
+    if (markdownLineEnding(code)) {
+      effects.enter("lineEnding");
+      effects.consume(code);
+      effects.exit("lineEnding");
+      return atBreak;
+    }
+    effects.enter("chunkString", {
+      contentType: "string"
+    });
+    return labelInside(code);
+  }
+  function labelInside(code) {
+    if (code === null || code === 91 || code === 93 || markdownLineEnding(code) || size++ > 999) {
+      effects.exit("chunkString");
+      return atBreak(code);
+    }
+    effects.consume(code);
+    if (!seen) seen = !markdownSpace(code);
+    return code === 92 ? labelEscape : labelInside;
+  }
+  function labelEscape(code) {
+    if (code === 91 || code === 92 || code === 93) {
+      effects.consume(code);
+      size++;
+      return labelInside;
+    }
+    return labelInside(code);
+  }
+}
+
+// node_modules/micromark-factory-title/index.js
+function factoryTitle(effects, ok2, nok, type, markerType, stringType) {
+  let marker;
+  return start;
+  function start(code) {
+    if (code === 34 || code === 39 || code === 40) {
+      effects.enter(type);
+      effects.enter(markerType);
+      effects.consume(code);
+      effects.exit(markerType);
+      marker = code === 40 ? 41 : code;
+      return begin;
+    }
+    return nok(code);
+  }
+  function begin(code) {
+    if (code === marker) {
+      effects.enter(markerType);
+      effects.consume(code);
+      effects.exit(markerType);
+      effects.exit(type);
+      return ok2;
+    }
+    effects.enter(stringType);
+    return atBreak(code);
+  }
+  function atBreak(code) {
+    if (code === marker) {
+      effects.exit(stringType);
+      return begin(marker);
+    }
+    if (code === null) {
+      return nok(code);
+    }
+    if (markdownLineEnding(code)) {
+      effects.enter("lineEnding");
+      effects.consume(code);
+      effects.exit("lineEnding");
+      return factorySpace(effects, atBreak, "linePrefix");
+    }
+    effects.enter("chunkString", {
+      contentType: "string"
+    });
+    return inside9(code);
+  }
+  function inside9(code) {
+    if (code === marker || code === null || markdownLineEnding(code)) {
+      effects.exit("chunkString");
+      return atBreak(code);
+    }
+    effects.consume(code);
+    return code === 92 ? escape2 : inside9;
+  }
+  function escape2(code) {
+    if (code === marker || code === 92) {
+      effects.consume(code);
+      return inside9;
+    }
+    return inside9(code);
+  }
+}
+
+// node_modules/micromark-factory-whitespace/index.js
+function factoryWhitespace(effects, ok2) {
+  let seen;
+  return start;
+  function start(code) {
+    if (markdownLineEnding(code)) {
+      effects.enter("lineEnding");
+      effects.consume(code);
+      effects.exit("lineEnding");
+      seen = true;
+      return start;
+    }
+    if (markdownSpace(code)) {
+      return factorySpace(effects, start, seen ? "linePrefix" : "lineSuffix")(code);
+    }
+    return ok2(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/definition.js
+var definition = {
+  name: "definition",
+  tokenize: tokenizeDefinition
+};
+var titleBefore = {
+  partial: true,
+  tokenize: tokenizeTitleBefore
+};
+function tokenizeDefinition(effects, ok2, nok) {
+  const self = this;
+  let identifier;
+  return start;
+  function start(code) {
+    effects.enter("definition");
+    return before(code);
+  }
+  function before(code) {
+    return factoryLabel.call(
+      self,
+      effects,
+      labelAfter,
+      // Note: we don’t need to reset the way `markdown-rs` does.
+      nok,
+      "definitionLabel",
+      "definitionLabelMarker",
+      "definitionLabelString"
+    )(code);
+  }
+  function labelAfter(code) {
+    identifier = normalizeIdentifier(self.sliceSerialize(self.events[self.events.length - 1][1]).slice(1, -1));
+    if (code === 58) {
+      effects.enter("definitionMarker");
+      effects.consume(code);
+      effects.exit("definitionMarker");
+      return markerAfter;
+    }
+    return nok(code);
+  }
+  function markerAfter(code) {
+    return markdownLineEndingOrSpace(code) ? factoryWhitespace(effects, destinationBefore)(code) : destinationBefore(code);
+  }
+  function destinationBefore(code) {
+    return factoryDestination(
+      effects,
+      destinationAfter,
+      // Note: we don’t need to reset the way `markdown-rs` does.
+      nok,
+      "definitionDestination",
+      "definitionDestinationLiteral",
+      "definitionDestinationLiteralMarker",
+      "definitionDestinationRaw",
+      "definitionDestinationString"
+    )(code);
+  }
+  function destinationAfter(code) {
+    return effects.attempt(titleBefore, after, after)(code);
+  }
+  function after(code) {
+    return markdownSpace(code) ? factorySpace(effects, afterWhitespace, "whitespace")(code) : afterWhitespace(code);
+  }
+  function afterWhitespace(code) {
+    if (code === null || markdownLineEnding(code)) {
+      effects.exit("definition");
+      self.parser.defined.push(identifier);
+      return ok2(code);
+    }
+    return nok(code);
+  }
+}
+function tokenizeTitleBefore(effects, ok2, nok) {
+  return titleBefore2;
+  function titleBefore2(code) {
+    return markdownLineEndingOrSpace(code) ? factoryWhitespace(effects, beforeMarker)(code) : nok(code);
+  }
+  function beforeMarker(code) {
+    return factoryTitle(effects, titleAfter, nok, "definitionTitle", "definitionTitleMarker", "definitionTitleString")(code);
+  }
+  function titleAfter(code) {
+    return markdownSpace(code) ? factorySpace(effects, titleAfterOptionalWhitespace, "whitespace")(code) : titleAfterOptionalWhitespace(code);
+  }
+  function titleAfterOptionalWhitespace(code) {
+    return code === null || markdownLineEnding(code) ? ok2(code) : nok(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/hard-break-escape.js
+var hardBreakEscape = {
+  name: "hardBreakEscape",
+  tokenize: tokenizeHardBreakEscape
+};
+function tokenizeHardBreakEscape(effects, ok2, nok) {
+  return start;
+  function start(code) {
+    effects.enter("hardBreakEscape");
+    effects.consume(code);
+    return after;
+  }
+  function after(code) {
+    if (markdownLineEnding(code)) {
+      effects.exit("hardBreakEscape");
+      return ok2(code);
+    }
+    return nok(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/heading-atx.js
+var headingAtx = {
+  name: "headingAtx",
+  resolve: resolveHeadingAtx,
+  tokenize: tokenizeHeadingAtx
+};
+function resolveHeadingAtx(events, context) {
+  let contentEnd = events.length - 2;
+  let contentStart = 3;
+  let content3;
+  let text4;
+  if (events[contentStart][1].type === "whitespace") {
+    contentStart += 2;
+  }
+  if (contentEnd - 2 > contentStart && events[contentEnd][1].type === "whitespace") {
+    contentEnd -= 2;
+  }
+  if (events[contentEnd][1].type === "atxHeadingSequence" && (contentStart === contentEnd - 1 || contentEnd - 4 > contentStart && events[contentEnd - 2][1].type === "whitespace")) {
+    contentEnd -= contentStart + 1 === contentEnd ? 2 : 4;
+  }
+  if (contentEnd > contentStart) {
+    content3 = {
+      type: "atxHeadingText",
+      start: events[contentStart][1].start,
+      end: events[contentEnd][1].end
+    };
+    text4 = {
+      type: "chunkText",
+      start: events[contentStart][1].start,
+      end: events[contentEnd][1].end,
+      contentType: "text"
+    };
+    splice(events, contentStart, contentEnd - contentStart + 1, [["enter", content3, context], ["enter", text4, context], ["exit", text4, context], ["exit", content3, context]]);
+  }
+  return events;
+}
+function tokenizeHeadingAtx(effects, ok2, nok) {
+  let size = 0;
+  return start;
+  function start(code) {
+    effects.enter("atxHeading");
+    return before(code);
+  }
+  function before(code) {
+    effects.enter("atxHeadingSequence");
+    return sequenceOpen(code);
+  }
+  function sequenceOpen(code) {
+    if (code === 35 && size++ < 6) {
+      effects.consume(code);
+      return sequenceOpen;
+    }
+    if (code === null || markdownLineEndingOrSpace(code)) {
+      effects.exit("atxHeadingSequence");
+      return atBreak(code);
+    }
+    return nok(code);
+  }
+  function atBreak(code) {
+    if (code === 35) {
+      effects.enter("atxHeadingSequence");
+      return sequenceFurther(code);
+    }
+    if (code === null || markdownLineEnding(code)) {
+      effects.exit("atxHeading");
+      return ok2(code);
+    }
+    if (markdownSpace(code)) {
+      return factorySpace(effects, atBreak, "whitespace")(code);
+    }
+    effects.enter("atxHeadingText");
+    return data(code);
+  }
+  function sequenceFurther(code) {
+    if (code === 35) {
+      effects.consume(code);
+      return sequenceFurther;
+    }
+    effects.exit("atxHeadingSequence");
+    return atBreak(code);
+  }
+  function data(code) {
+    if (code === null || code === 35 || markdownLineEndingOrSpace(code)) {
+      effects.exit("atxHeadingText");
+      return atBreak(code);
+    }
+    effects.consume(code);
+    return data;
+  }
+}
+
+// node_modules/micromark-util-html-tag-name/index.js
+var htmlBlockNames = [
+  "address",
+  "article",
+  "aside",
+  "base",
+  "basefont",
+  "blockquote",
+  "body",
+  "caption",
+  "center",
+  "col",
+  "colgroup",
+  "dd",
+  "details",
+  "dialog",
+  "dir",
+  "div",
+  "dl",
+  "dt",
+  "fieldset",
+  "figcaption",
+  "figure",
+  "footer",
+  "form",
+  "frame",
+  "frameset",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "head",
+  "header",
+  "hr",
+  "html",
+  "iframe",
+  "legend",
+  "li",
+  "link",
+  "main",
+  "menu",
+  "menuitem",
+  "nav",
+  "noframes",
+  "ol",
+  "optgroup",
+  "option",
+  "p",
+  "param",
+  "search",
+  "section",
+  "summary",
+  "table",
+  "tbody",
+  "td",
+  "tfoot",
+  "th",
+  "thead",
+  "title",
+  "tr",
+  "track",
+  "ul"
+];
+var htmlRawNames = ["pre", "script", "style", "textarea"];
+
+// node_modules/micromark-core-commonmark/lib/html-flow.js
+var htmlFlow = {
+  concrete: true,
+  name: "htmlFlow",
+  resolveTo: resolveToHtmlFlow,
+  tokenize: tokenizeHtmlFlow
+};
+var blankLineBefore = {
+  partial: true,
+  tokenize: tokenizeBlankLineBefore
+};
+var nonLazyContinuationStart = {
+  partial: true,
+  tokenize: tokenizeNonLazyContinuationStart
+};
+function resolveToHtmlFlow(events) {
+  let index2 = events.length;
+  while (index2--) {
+    if (events[index2][0] === "enter" && events[index2][1].type === "htmlFlow") {
+      break;
+    }
+  }
+  if (index2 > 1 && events[index2 - 2][1].type === "linePrefix") {
+    events[index2][1].start = events[index2 - 2][1].start;
+    events[index2 + 1][1].start = events[index2 - 2][1].start;
+    events.splice(index2 - 2, 2);
+  }
+  return events;
+}
+function tokenizeHtmlFlow(effects, ok2, nok) {
+  const self = this;
+  let marker;
+  let closingTag;
+  let buffer;
+  let index2;
+  let markerB;
+  return start;
+  function start(code) {
+    return before(code);
+  }
+  function before(code) {
+    effects.enter("htmlFlow");
+    effects.enter("htmlFlowData");
+    effects.consume(code);
+    return open6;
+  }
+  function open6(code) {
+    if (code === 33) {
+      effects.consume(code);
+      return declarationOpen;
+    }
+    if (code === 47) {
+      effects.consume(code);
+      closingTag = true;
+      return tagCloseStart;
+    }
+    if (code === 63) {
+      effects.consume(code);
+      marker = 3;
+      return self.interrupt ? ok2 : continuationDeclarationInside;
+    }
+    if (asciiAlpha(code)) {
+      effects.consume(code);
+      buffer = String.fromCharCode(code);
+      return tagName;
+    }
+    return nok(code);
+  }
+  function declarationOpen(code) {
+    if (code === 45) {
+      effects.consume(code);
+      marker = 2;
+      return commentOpenInside;
+    }
+    if (code === 91) {
+      effects.consume(code);
+      marker = 5;
+      index2 = 0;
+      return cdataOpenInside;
+    }
+    if (asciiAlpha(code)) {
+      effects.consume(code);
+      marker = 4;
+      return self.interrupt ? ok2 : continuationDeclarationInside;
+    }
+    return nok(code);
+  }
+  function commentOpenInside(code) {
+    if (code === 45) {
+      effects.consume(code);
+      return self.interrupt ? ok2 : continuationDeclarationInside;
+    }
+    return nok(code);
+  }
+  function cdataOpenInside(code) {
+    const value = "CDATA[";
+    if (code === value.charCodeAt(index2++)) {
+      effects.consume(code);
+      if (index2 === value.length) {
+        return self.interrupt ? ok2 : continuation;
+      }
+      return cdataOpenInside;
+    }
+    return nok(code);
+  }
+  function tagCloseStart(code) {
+    if (asciiAlpha(code)) {
+      effects.consume(code);
+      buffer = String.fromCharCode(code);
+      return tagName;
+    }
+    return nok(code);
+  }
+  function tagName(code) {
+    if (code === null || code === 47 || code === 62 || markdownLineEndingOrSpace(code)) {
+      const slash = code === 47;
+      const name = buffer.toLowerCase();
+      if (!slash && !closingTag && htmlRawNames.includes(name)) {
+        marker = 1;
+        return self.interrupt ? ok2(code) : continuation(code);
+      }
+      if (htmlBlockNames.includes(buffer.toLowerCase())) {
+        marker = 6;
+        if (slash) {
+          effects.consume(code);
+          return basicSelfClosing;
+        }
+        return self.interrupt ? ok2(code) : continuation(code);
+      }
+      marker = 7;
+      return self.interrupt && !self.parser.lazy[self.now().line] ? nok(code) : closingTag ? completeClosingTagAfter(code) : completeAttributeNameBefore(code);
+    }
+    if (code === 45 || asciiAlphanumeric(code)) {
+      effects.consume(code);
+      buffer += String.fromCharCode(code);
+      return tagName;
+    }
+    return nok(code);
+  }
+  function basicSelfClosing(code) {
+    if (code === 62) {
+      effects.consume(code);
+      return self.interrupt ? ok2 : continuation;
+    }
+    return nok(code);
+  }
+  function completeClosingTagAfter(code) {
+    if (markdownSpace(code)) {
+      effects.consume(code);
+      return completeClosingTagAfter;
+    }
+    return completeEnd(code);
+  }
+  function completeAttributeNameBefore(code) {
+    if (code === 47) {
+      effects.consume(code);
+      return completeEnd;
+    }
+    if (code === 58 || code === 95 || asciiAlpha(code)) {
+      effects.consume(code);
+      return completeAttributeName;
+    }
+    if (markdownSpace(code)) {
+      effects.consume(code);
+      return completeAttributeNameBefore;
+    }
+    return completeEnd(code);
+  }
+  function completeAttributeName(code) {
+    if (code === 45 || code === 46 || code === 58 || code === 95 || asciiAlphanumeric(code)) {
+      effects.consume(code);
+      return completeAttributeName;
+    }
+    return completeAttributeNameAfter(code);
+  }
+  function completeAttributeNameAfter(code) {
+    if (code === 61) {
+      effects.consume(code);
+      return completeAttributeValueBefore;
+    }
+    if (markdownSpace(code)) {
+      effects.consume(code);
+      return completeAttributeNameAfter;
+    }
+    return completeAttributeNameBefore(code);
+  }
+  function completeAttributeValueBefore(code) {
+    if (code === null || code === 60 || code === 61 || code === 62 || code === 96) {
+      return nok(code);
+    }
+    if (code === 34 || code === 39) {
+      effects.consume(code);
+      markerB = code;
+      return completeAttributeValueQuoted;
+    }
+    if (markdownSpace(code)) {
+      effects.consume(code);
+      return completeAttributeValueBefore;
+    }
+    return completeAttributeValueUnquoted(code);
+  }
+  function completeAttributeValueQuoted(code) {
+    if (code === markerB) {
+      effects.consume(code);
+      markerB = null;
+      return completeAttributeValueQuotedAfter;
+    }
+    if (code === null || markdownLineEnding(code)) {
+      return nok(code);
+    }
+    effects.consume(code);
+    return completeAttributeValueQuoted;
+  }
+  function completeAttributeValueUnquoted(code) {
+    if (code === null || code === 34 || code === 39 || code === 47 || code === 60 || code === 61 || code === 62 || code === 96 || markdownLineEndingOrSpace(code)) {
+      return completeAttributeNameAfter(code);
+    }
+    effects.consume(code);
+    return completeAttributeValueUnquoted;
+  }
+  function completeAttributeValueQuotedAfter(code) {
+    if (code === 47 || code === 62 || markdownSpace(code)) {
+      return completeAttributeNameBefore(code);
+    }
+    return nok(code);
+  }
+  function completeEnd(code) {
+    if (code === 62) {
+      effects.consume(code);
+      return completeAfter;
+    }
+    return nok(code);
+  }
+  function completeAfter(code) {
+    if (code === null || markdownLineEnding(code)) {
+      return continuation(code);
+    }
+    if (markdownSpace(code)) {
+      effects.consume(code);
+      return completeAfter;
+    }
+    return nok(code);
+  }
+  function continuation(code) {
+    if (code === 45 && marker === 2) {
+      effects.consume(code);
+      return continuationCommentInside;
+    }
+    if (code === 60 && marker === 1) {
+      effects.consume(code);
+      return continuationRawTagOpen;
+    }
+    if (code === 62 && marker === 4) {
+      effects.consume(code);
+      return continuationClose;
+    }
+    if (code === 63 && marker === 3) {
+      effects.consume(code);
+      return continuationDeclarationInside;
+    }
+    if (code === 93 && marker === 5) {
+      effects.consume(code);
+      return continuationCdataInside;
+    }
+    if (markdownLineEnding(code) && (marker === 6 || marker === 7)) {
+      effects.exit("htmlFlowData");
+      return effects.check(blankLineBefore, continuationAfter, continuationStart)(code);
+    }
+    if (code === null || markdownLineEnding(code)) {
+      effects.exit("htmlFlowData");
+      return continuationStart(code);
+    }
+    effects.consume(code);
+    return continuation;
+  }
+  function continuationStart(code) {
+    return effects.check(nonLazyContinuationStart, continuationStartNonLazy, continuationAfter)(code);
+  }
+  function continuationStartNonLazy(code) {
+    effects.enter("lineEnding");
+    effects.consume(code);
+    effects.exit("lineEnding");
+    return continuationBefore;
+  }
+  function continuationBefore(code) {
+    if (code === null || markdownLineEnding(code)) {
+      return continuationStart(code);
+    }
+    effects.enter("htmlFlowData");
+    return continuation(code);
+  }
+  function continuationCommentInside(code) {
+    if (code === 45) {
+      effects.consume(code);
+      return continuationDeclarationInside;
+    }
+    return continuation(code);
+  }
+  function continuationRawTagOpen(code) {
+    if (code === 47) {
+      effects.consume(code);
+      buffer = "";
+      return continuationRawEndTag;
+    }
+    return continuation(code);
+  }
+  function continuationRawEndTag(code) {
+    if (code === 62) {
+      const name = buffer.toLowerCase();
+      if (htmlRawNames.includes(name)) {
+        effects.consume(code);
+        return continuationClose;
+      }
+      return continuation(code);
+    }
+    if (asciiAlpha(code) && buffer.length < 8) {
+      effects.consume(code);
+      buffer += String.fromCharCode(code);
+      return continuationRawEndTag;
+    }
+    return continuation(code);
+  }
+  function continuationCdataInside(code) {
+    if (code === 93) {
+      effects.consume(code);
+      return continuationDeclarationInside;
+    }
+    return continuation(code);
+  }
+  function continuationDeclarationInside(code) {
+    if (code === 62) {
+      effects.consume(code);
+      return continuationClose;
+    }
+    if (code === 45 && marker === 2) {
+      effects.consume(code);
+      return continuationDeclarationInside;
+    }
+    return continuation(code);
+  }
+  function continuationClose(code) {
+    if (code === null || markdownLineEnding(code)) {
+      effects.exit("htmlFlowData");
+      return continuationAfter(code);
+    }
+    effects.consume(code);
+    return continuationClose;
+  }
+  function continuationAfter(code) {
+    effects.exit("htmlFlow");
+    return ok2(code);
+  }
+}
+function tokenizeNonLazyContinuationStart(effects, ok2, nok) {
+  const self = this;
+  return start;
+  function start(code) {
+    if (markdownLineEnding(code)) {
+      effects.enter("lineEnding");
+      effects.consume(code);
+      effects.exit("lineEnding");
+      return after;
+    }
+    return nok(code);
+  }
+  function after(code) {
+    return self.parser.lazy[self.now().line] ? nok(code) : ok2(code);
+  }
+}
+function tokenizeBlankLineBefore(effects, ok2, nok) {
+  return start;
+  function start(code) {
+    effects.enter("lineEnding");
+    effects.consume(code);
+    effects.exit("lineEnding");
+    return effects.attempt(blankLine, ok2, nok);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/html-text.js
+var htmlText = {
+  name: "htmlText",
+  tokenize: tokenizeHtmlText
+};
+function tokenizeHtmlText(effects, ok2, nok) {
+  const self = this;
+  let marker;
+  let index2;
+  let returnState;
+  return start;
+  function start(code) {
+    effects.enter("htmlText");
+    effects.enter("htmlTextData");
+    effects.consume(code);
+    return open6;
+  }
+  function open6(code) {
+    if (code === 33) {
+      effects.consume(code);
+      return declarationOpen;
+    }
+    if (code === 47) {
+      effects.consume(code);
+      return tagCloseStart;
+    }
+    if (code === 63) {
+      effects.consume(code);
+      return instruction;
+    }
+    if (asciiAlpha(code)) {
+      effects.consume(code);
+      return tagOpen;
+    }
+    return nok(code);
+  }
+  function declarationOpen(code) {
+    if (code === 45) {
+      effects.consume(code);
+      return commentOpenInside;
+    }
+    if (code === 91) {
+      effects.consume(code);
+      index2 = 0;
+      return cdataOpenInside;
+    }
+    if (asciiAlpha(code)) {
+      effects.consume(code);
+      return declaration;
+    }
+    return nok(code);
+  }
+  function commentOpenInside(code) {
+    if (code === 45) {
+      effects.consume(code);
+      return commentEnd;
+    }
+    return nok(code);
+  }
+  function comment(code) {
+    if (code === null) {
+      return nok(code);
+    }
+    if (code === 45) {
+      effects.consume(code);
+      return commentClose;
+    }
+    if (markdownLineEnding(code)) {
+      returnState = comment;
+      return lineEndingBefore(code);
+    }
+    effects.consume(code);
+    return comment;
+  }
+  function commentClose(code) {
+    if (code === 45) {
+      effects.consume(code);
+      return commentEnd;
+    }
+    return comment(code);
+  }
+  function commentEnd(code) {
+    return code === 62 ? end(code) : code === 45 ? commentClose(code) : comment(code);
+  }
+  function cdataOpenInside(code) {
+    const value = "CDATA[";
+    if (code === value.charCodeAt(index2++)) {
+      effects.consume(code);
+      return index2 === value.length ? cdata : cdataOpenInside;
+    }
+    return nok(code);
+  }
+  function cdata(code) {
+    if (code === null) {
+      return nok(code);
+    }
+    if (code === 93) {
+      effects.consume(code);
+      return cdataClose;
+    }
+    if (markdownLineEnding(code)) {
+      returnState = cdata;
+      return lineEndingBefore(code);
+    }
+    effects.consume(code);
+    return cdata;
+  }
+  function cdataClose(code) {
+    if (code === 93) {
+      effects.consume(code);
+      return cdataEnd;
+    }
+    return cdata(code);
+  }
+  function cdataEnd(code) {
+    if (code === 62) {
+      return end(code);
+    }
+    if (code === 93) {
+      effects.consume(code);
+      return cdataEnd;
+    }
+    return cdata(code);
+  }
+  function declaration(code) {
+    if (code === null || code === 62) {
+      return end(code);
+    }
+    if (markdownLineEnding(code)) {
+      returnState = declaration;
+      return lineEndingBefore(code);
+    }
+    effects.consume(code);
+    return declaration;
+  }
+  function instruction(code) {
+    if (code === null) {
+      return nok(code);
+    }
+    if (code === 63) {
+      effects.consume(code);
+      return instructionClose;
+    }
+    if (markdownLineEnding(code)) {
+      returnState = instruction;
+      return lineEndingBefore(code);
+    }
+    effects.consume(code);
+    return instruction;
+  }
+  function instructionClose(code) {
+    return code === 62 ? end(code) : instruction(code);
+  }
+  function tagCloseStart(code) {
+    if (asciiAlpha(code)) {
+      effects.consume(code);
+      return tagClose;
+    }
+    return nok(code);
+  }
+  function tagClose(code) {
+    if (code === 45 || asciiAlphanumeric(code)) {
+      effects.consume(code);
+      return tagClose;
+    }
+    return tagCloseBetween(code);
+  }
+  function tagCloseBetween(code) {
+    if (markdownLineEnding(code)) {
+      returnState = tagCloseBetween;
+      return lineEndingBefore(code);
+    }
+    if (markdownSpace(code)) {
+      effects.consume(code);
+      return tagCloseBetween;
+    }
+    return end(code);
+  }
+  function tagOpen(code) {
+    if (code === 45 || asciiAlphanumeric(code)) {
+      effects.consume(code);
+      return tagOpen;
+    }
+    if (code === 47 || code === 62 || markdownLineEndingOrSpace(code)) {
+      return tagOpenBetween(code);
+    }
+    return nok(code);
+  }
+  function tagOpenBetween(code) {
+    if (code === 47) {
+      effects.consume(code);
+      return end;
+    }
+    if (code === 58 || code === 95 || asciiAlpha(code)) {
+      effects.consume(code);
+      return tagOpenAttributeName;
+    }
+    if (markdownLineEnding(code)) {
+      returnState = tagOpenBetween;
+      return lineEndingBefore(code);
+    }
+    if (markdownSpace(code)) {
+      effects.consume(code);
+      return tagOpenBetween;
+    }
+    return end(code);
+  }
+  function tagOpenAttributeName(code) {
+    if (code === 45 || code === 46 || code === 58 || code === 95 || asciiAlphanumeric(code)) {
+      effects.consume(code);
+      return tagOpenAttributeName;
+    }
+    return tagOpenAttributeNameAfter(code);
+  }
+  function tagOpenAttributeNameAfter(code) {
+    if (code === 61) {
+      effects.consume(code);
+      return tagOpenAttributeValueBefore;
+    }
+    if (markdownLineEnding(code)) {
+      returnState = tagOpenAttributeNameAfter;
+      return lineEndingBefore(code);
+    }
+    if (markdownSpace(code)) {
+      effects.consume(code);
+      return tagOpenAttributeNameAfter;
+    }
+    return tagOpenBetween(code);
+  }
+  function tagOpenAttributeValueBefore(code) {
+    if (code === null || code === 60 || code === 61 || code === 62 || code === 96) {
+      return nok(code);
+    }
+    if (code === 34 || code === 39) {
+      effects.consume(code);
+      marker = code;
+      return tagOpenAttributeValueQuoted;
+    }
+    if (markdownLineEnding(code)) {
+      returnState = tagOpenAttributeValueBefore;
+      return lineEndingBefore(code);
+    }
+    if (markdownSpace(code)) {
+      effects.consume(code);
+      return tagOpenAttributeValueBefore;
+    }
+    effects.consume(code);
+    return tagOpenAttributeValueUnquoted;
+  }
+  function tagOpenAttributeValueQuoted(code) {
+    if (code === marker) {
+      effects.consume(code);
+      marker = void 0;
+      return tagOpenAttributeValueQuotedAfter;
+    }
+    if (code === null) {
+      return nok(code);
+    }
+    if (markdownLineEnding(code)) {
+      returnState = tagOpenAttributeValueQuoted;
+      return lineEndingBefore(code);
+    }
+    effects.consume(code);
+    return tagOpenAttributeValueQuoted;
+  }
+  function tagOpenAttributeValueUnquoted(code) {
+    if (code === null || code === 34 || code === 39 || code === 60 || code === 61 || code === 96) {
+      return nok(code);
+    }
+    if (code === 47 || code === 62 || markdownLineEndingOrSpace(code)) {
+      return tagOpenBetween(code);
+    }
+    effects.consume(code);
+    return tagOpenAttributeValueUnquoted;
+  }
+  function tagOpenAttributeValueQuotedAfter(code) {
+    if (code === 47 || code === 62 || markdownLineEndingOrSpace(code)) {
+      return tagOpenBetween(code);
+    }
+    return nok(code);
+  }
+  function end(code) {
+    if (code === 62) {
+      effects.consume(code);
+      effects.exit("htmlTextData");
+      effects.exit("htmlText");
+      return ok2;
+    }
+    return nok(code);
+  }
+  function lineEndingBefore(code) {
+    effects.exit("htmlTextData");
+    effects.enter("lineEnding");
+    effects.consume(code);
+    effects.exit("lineEnding");
+    return lineEndingAfter;
+  }
+  function lineEndingAfter(code) {
+    return markdownSpace(code) ? factorySpace(effects, lineEndingAfterPrefix, "linePrefix", self.parser.constructs.disable.null.includes("codeIndented") ? void 0 : 4)(code) : lineEndingAfterPrefix(code);
+  }
+  function lineEndingAfterPrefix(code) {
+    effects.enter("htmlTextData");
+    return returnState(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/label-end.js
+var labelEnd = {
+  name: "labelEnd",
+  resolveAll: resolveAllLabelEnd,
+  resolveTo: resolveToLabelEnd,
+  tokenize: tokenizeLabelEnd
+};
+var resourceConstruct = {
+  tokenize: tokenizeResource
+};
+var referenceFullConstruct = {
+  tokenize: tokenizeReferenceFull
+};
+var referenceCollapsedConstruct = {
+  tokenize: tokenizeReferenceCollapsed
+};
+function resolveAllLabelEnd(events) {
+  let index2 = -1;
+  const newEvents = [];
+  while (++index2 < events.length) {
+    const token = events[index2][1];
+    newEvents.push(events[index2]);
+    if (token.type === "labelImage" || token.type === "labelLink" || token.type === "labelEnd") {
+      const offset = token.type === "labelImage" ? 4 : 2;
+      token.type = "data";
+      index2 += offset;
+    }
+  }
+  if (events.length !== newEvents.length) {
+    splice(events, 0, events.length, newEvents);
+  }
+  return events;
+}
+function resolveToLabelEnd(events, context) {
+  let index2 = events.length;
+  let offset = 0;
+  let token;
+  let open6;
+  let close;
+  let media;
+  while (index2--) {
+    token = events[index2][1];
+    if (open6) {
+      if (token.type === "link" || token.type === "labelLink" && token._inactive) {
+        break;
+      }
+      if (events[index2][0] === "enter" && token.type === "labelLink") {
+        token._inactive = true;
+      }
+    } else if (close) {
+      if (events[index2][0] === "enter" && (token.type === "labelImage" || token.type === "labelLink") && !token._balanced) {
+        open6 = index2;
+        if (token.type !== "labelLink") {
+          offset = 2;
+          break;
+        }
+      }
+    } else if (token.type === "labelEnd") {
+      close = index2;
+    }
+  }
+  const group = {
+    type: events[open6][1].type === "labelLink" ? "link" : "image",
+    start: {
+      ...events[open6][1].start
+    },
+    end: {
+      ...events[events.length - 1][1].end
+    }
+  };
+  const label = {
+    type: "label",
+    start: {
+      ...events[open6][1].start
+    },
+    end: {
+      ...events[close][1].end
+    }
+  };
+  const text4 = {
+    type: "labelText",
+    start: {
+      ...events[open6 + offset + 2][1].end
+    },
+    end: {
+      ...events[close - 2][1].start
+    }
+  };
+  media = [["enter", group, context], ["enter", label, context]];
+  media = push(media, events.slice(open6 + 1, open6 + offset + 3));
+  media = push(media, [["enter", text4, context]]);
+  media = push(media, resolveAll(context.parser.constructs.insideSpan.null, events.slice(open6 + offset + 4, close - 3), context));
+  media = push(media, [["exit", text4, context], events[close - 2], events[close - 1], ["exit", label, context]]);
+  media = push(media, events.slice(close + 1));
+  media = push(media, [["exit", group, context]]);
+  splice(events, open6, events.length, media);
+  return events;
+}
+function tokenizeLabelEnd(effects, ok2, nok) {
+  const self = this;
+  let index2 = self.events.length;
+  let labelStart;
+  let defined;
+  while (index2--) {
+    if ((self.events[index2][1].type === "labelImage" || self.events[index2][1].type === "labelLink") && !self.events[index2][1]._balanced) {
+      labelStart = self.events[index2][1];
+      break;
+    }
+  }
+  return start;
+  function start(code) {
+    if (!labelStart) {
+      return nok(code);
+    }
+    if (labelStart._inactive) {
+      return labelEndNok(code);
+    }
+    defined = self.parser.defined.includes(normalizeIdentifier(self.sliceSerialize({
+      start: labelStart.end,
+      end: self.now()
+    })));
+    effects.enter("labelEnd");
+    effects.enter("labelMarker");
+    effects.consume(code);
+    effects.exit("labelMarker");
+    effects.exit("labelEnd");
+    return after;
+  }
+  function after(code) {
+    if (code === 40) {
+      return effects.attempt(resourceConstruct, labelEndOk, defined ? labelEndOk : labelEndNok)(code);
+    }
+    if (code === 91) {
+      return effects.attempt(referenceFullConstruct, labelEndOk, defined ? referenceNotFull : labelEndNok)(code);
+    }
+    return defined ? labelEndOk(code) : labelEndNok(code);
+  }
+  function referenceNotFull(code) {
+    return effects.attempt(referenceCollapsedConstruct, labelEndOk, labelEndNok)(code);
+  }
+  function labelEndOk(code) {
+    return ok2(code);
+  }
+  function labelEndNok(code) {
+    labelStart._balanced = true;
+    return nok(code);
+  }
+}
+function tokenizeResource(effects, ok2, nok) {
+  return resourceStart;
+  function resourceStart(code) {
+    effects.enter("resource");
+    effects.enter("resourceMarker");
+    effects.consume(code);
+    effects.exit("resourceMarker");
+    return resourceBefore;
+  }
+  function resourceBefore(code) {
+    return markdownLineEndingOrSpace(code) ? factoryWhitespace(effects, resourceOpen)(code) : resourceOpen(code);
+  }
+  function resourceOpen(code) {
+    if (code === 41) {
+      return resourceEnd(code);
+    }
+    return factoryDestination(effects, resourceDestinationAfter, resourceDestinationMissing, "resourceDestination", "resourceDestinationLiteral", "resourceDestinationLiteralMarker", "resourceDestinationRaw", "resourceDestinationString", 32)(code);
+  }
+  function resourceDestinationAfter(code) {
+    return markdownLineEndingOrSpace(code) ? factoryWhitespace(effects, resourceBetween)(code) : resourceEnd(code);
+  }
+  function resourceDestinationMissing(code) {
+    return nok(code);
+  }
+  function resourceBetween(code) {
+    if (code === 34 || code === 39 || code === 40) {
+      return factoryTitle(effects, resourceTitleAfter, nok, "resourceTitle", "resourceTitleMarker", "resourceTitleString")(code);
+    }
+    return resourceEnd(code);
+  }
+  function resourceTitleAfter(code) {
+    return markdownLineEndingOrSpace(code) ? factoryWhitespace(effects, resourceEnd)(code) : resourceEnd(code);
+  }
+  function resourceEnd(code) {
+    if (code === 41) {
+      effects.enter("resourceMarker");
+      effects.consume(code);
+      effects.exit("resourceMarker");
+      effects.exit("resource");
+      return ok2;
+    }
+    return nok(code);
+  }
+}
+function tokenizeReferenceFull(effects, ok2, nok) {
+  const self = this;
+  return referenceFull;
+  function referenceFull(code) {
+    return factoryLabel.call(self, effects, referenceFullAfter, referenceFullMissing, "reference", "referenceMarker", "referenceString")(code);
+  }
+  function referenceFullAfter(code) {
+    return self.parser.defined.includes(normalizeIdentifier(self.sliceSerialize(self.events[self.events.length - 1][1]).slice(1, -1))) ? ok2(code) : nok(code);
+  }
+  function referenceFullMissing(code) {
+    return nok(code);
+  }
+}
+function tokenizeReferenceCollapsed(effects, ok2, nok) {
+  return referenceCollapsedStart;
+  function referenceCollapsedStart(code) {
+    effects.enter("reference");
+    effects.enter("referenceMarker");
+    effects.consume(code);
+    effects.exit("referenceMarker");
+    return referenceCollapsedOpen;
+  }
+  function referenceCollapsedOpen(code) {
+    if (code === 93) {
+      effects.enter("referenceMarker");
+      effects.consume(code);
+      effects.exit("referenceMarker");
+      effects.exit("reference");
+      return ok2;
+    }
+    return nok(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/label-start-image.js
+var labelStartImage = {
+  name: "labelStartImage",
+  resolveAll: labelEnd.resolveAll,
+  tokenize: tokenizeLabelStartImage
+};
+function tokenizeLabelStartImage(effects, ok2, nok) {
+  const self = this;
+  return start;
+  function start(code) {
+    effects.enter("labelImage");
+    effects.enter("labelImageMarker");
+    effects.consume(code);
+    effects.exit("labelImageMarker");
+    return open6;
+  }
+  function open6(code) {
+    if (code === 91) {
+      effects.enter("labelMarker");
+      effects.consume(code);
+      effects.exit("labelMarker");
+      effects.exit("labelImage");
+      return after;
+    }
+    return nok(code);
+  }
+  function after(code) {
+    return code === 94 && "_hiddenFootnoteSupport" in self.parser.constructs ? nok(code) : ok2(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/label-start-link.js
+var labelStartLink = {
+  name: "labelStartLink",
+  resolveAll: labelEnd.resolveAll,
+  tokenize: tokenizeLabelStartLink
+};
+function tokenizeLabelStartLink(effects, ok2, nok) {
+  const self = this;
+  return start;
+  function start(code) {
+    effects.enter("labelLink");
+    effects.enter("labelMarker");
+    effects.consume(code);
+    effects.exit("labelMarker");
+    effects.exit("labelLink");
+    return after;
+  }
+  function after(code) {
+    return code === 94 && "_hiddenFootnoteSupport" in self.parser.constructs ? nok(code) : ok2(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/line-ending.js
+var lineEnding = {
+  name: "lineEnding",
+  tokenize: tokenizeLineEnding
+};
+function tokenizeLineEnding(effects, ok2) {
+  return start;
+  function start(code) {
+    effects.enter("lineEnding");
+    effects.consume(code);
+    effects.exit("lineEnding");
+    return factorySpace(effects, ok2, "linePrefix");
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/thematic-break.js
+var thematicBreak = {
+  name: "thematicBreak",
+  tokenize: tokenizeThematicBreak
+};
+function tokenizeThematicBreak(effects, ok2, nok) {
+  let size = 0;
+  let marker;
+  return start;
+  function start(code) {
+    effects.enter("thematicBreak");
+    return before(code);
+  }
+  function before(code) {
+    marker = code;
+    return atBreak(code);
+  }
+  function atBreak(code) {
+    if (code === marker) {
+      effects.enter("thematicBreakSequence");
+      return sequence(code);
+    }
+    if (size >= 3 && (code === null || markdownLineEnding(code))) {
+      effects.exit("thematicBreak");
+      return ok2(code);
+    }
+    return nok(code);
+  }
+  function sequence(code) {
+    if (code === marker) {
+      effects.consume(code);
+      size++;
+      return sequence;
+    }
+    effects.exit("thematicBreakSequence");
+    return markdownSpace(code) ? factorySpace(effects, atBreak, "whitespace")(code) : atBreak(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/list.js
+var list = {
+  continuation: {
+    tokenize: tokenizeListContinuation
+  },
+  exit: tokenizeListEnd,
+  name: "list",
+  tokenize: tokenizeListStart
+};
+var listItemPrefixWhitespaceConstruct = {
+  partial: true,
+  tokenize: tokenizeListItemPrefixWhitespace
+};
+var indentConstruct = {
+  partial: true,
+  tokenize: tokenizeIndent
+};
+function tokenizeListStart(effects, ok2, nok) {
+  const self = this;
+  const tail = self.events[self.events.length - 1];
+  let initialSize = tail && tail[1].type === "linePrefix" ? tail[2].sliceSerialize(tail[1], true).length : 0;
+  let size = 0;
+  return start;
+  function start(code) {
+    const kind = self.containerState.type || (code === 42 || code === 43 || code === 45 ? "listUnordered" : "listOrdered");
+    if (kind === "listUnordered" ? !self.containerState.marker || code === self.containerState.marker : asciiDigit(code)) {
+      if (!self.containerState.type) {
+        self.containerState.type = kind;
+        effects.enter(kind, {
+          _container: true
+        });
+      }
+      if (kind === "listUnordered") {
+        effects.enter("listItemPrefix");
+        return code === 42 || code === 45 ? effects.check(thematicBreak, nok, atMarker)(code) : atMarker(code);
+      }
+      if (!self.interrupt || code === 49) {
+        effects.enter("listItemPrefix");
+        effects.enter("listItemValue");
+        return inside9(code);
+      }
+    }
+    return nok(code);
+  }
+  function inside9(code) {
+    if (asciiDigit(code) && ++size < 10) {
+      effects.consume(code);
+      return inside9;
+    }
+    if ((!self.interrupt || size < 2) && (self.containerState.marker ? code === self.containerState.marker : code === 41 || code === 46)) {
+      effects.exit("listItemValue");
+      return atMarker(code);
+    }
+    return nok(code);
+  }
+  function atMarker(code) {
+    effects.enter("listItemMarker");
+    effects.consume(code);
+    effects.exit("listItemMarker");
+    self.containerState.marker = self.containerState.marker || code;
+    return effects.check(
+      blankLine,
+      // Can’t be empty when interrupting.
+      self.interrupt ? nok : onBlank,
+      effects.attempt(listItemPrefixWhitespaceConstruct, endOfPrefix, otherPrefix)
+    );
+  }
+  function onBlank(code) {
+    self.containerState.initialBlankLine = true;
+    initialSize++;
+    return endOfPrefix(code);
+  }
+  function otherPrefix(code) {
+    if (markdownSpace(code)) {
+      effects.enter("listItemPrefixWhitespace");
+      effects.consume(code);
+      effects.exit("listItemPrefixWhitespace");
+      return endOfPrefix;
+    }
+    return nok(code);
+  }
+  function endOfPrefix(code) {
+    self.containerState.size = initialSize + self.sliceSerialize(effects.exit("listItemPrefix"), true).length;
+    return ok2(code);
+  }
+}
+function tokenizeListContinuation(effects, ok2, nok) {
+  const self = this;
+  self.containerState._closeFlow = void 0;
+  return effects.check(blankLine, onBlank, notBlank);
+  function onBlank(code) {
+    self.containerState.furtherBlankLines = self.containerState.furtherBlankLines || self.containerState.initialBlankLine;
+    return factorySpace(effects, ok2, "listItemIndent", self.containerState.size + 1)(code);
+  }
+  function notBlank(code) {
+    if (self.containerState.furtherBlankLines || !markdownSpace(code)) {
+      self.containerState.furtherBlankLines = void 0;
+      self.containerState.initialBlankLine = void 0;
+      return notInCurrentItem(code);
+    }
+    self.containerState.furtherBlankLines = void 0;
+    self.containerState.initialBlankLine = void 0;
+    return effects.attempt(indentConstruct, ok2, notInCurrentItem)(code);
+  }
+  function notInCurrentItem(code) {
+    self.containerState._closeFlow = true;
+    self.interrupt = void 0;
+    return factorySpace(effects, effects.attempt(list, ok2, nok), "linePrefix", self.parser.constructs.disable.null.includes("codeIndented") ? void 0 : 4)(code);
+  }
+}
+function tokenizeIndent(effects, ok2, nok) {
+  const self = this;
+  return factorySpace(effects, afterPrefix, "listItemIndent", self.containerState.size + 1);
+  function afterPrefix(code) {
+    const tail = self.events[self.events.length - 1];
+    return tail && tail[1].type === "listItemIndent" && tail[2].sliceSerialize(tail[1], true).length === self.containerState.size ? ok2(code) : nok(code);
+  }
+}
+function tokenizeListEnd(effects) {
+  effects.exit(this.containerState.type);
+}
+function tokenizeListItemPrefixWhitespace(effects, ok2, nok) {
+  const self = this;
+  return factorySpace(effects, afterPrefix, "listItemPrefixWhitespace", self.parser.constructs.disable.null.includes("codeIndented") ? void 0 : 4 + 1);
+  function afterPrefix(code) {
+    const tail = self.events[self.events.length - 1];
+    return !markdownSpace(code) && tail && tail[1].type === "listItemPrefixWhitespace" ? ok2(code) : nok(code);
+  }
+}
+
+// node_modules/micromark-core-commonmark/lib/setext-underline.js
+var setextUnderline = {
+  name: "setextUnderline",
+  resolveTo: resolveToSetextUnderline,
+  tokenize: tokenizeSetextUnderline
+};
+function resolveToSetextUnderline(events, context) {
+  let index2 = events.length;
+  let content3;
+  let text4;
+  let definition2;
+  while (index2--) {
+    if (events[index2][0] === "enter") {
+      if (events[index2][1].type === "content") {
+        content3 = index2;
+        break;
+      }
+      if (events[index2][1].type === "paragraph") {
+        text4 = index2;
+      }
+    } else {
+      if (events[index2][1].type === "content") {
+        events.splice(index2, 1);
+      }
+      if (!definition2 && events[index2][1].type === "definition") {
+        definition2 = index2;
+      }
+    }
+  }
+  const heading = {
+    type: "setextHeading",
+    start: {
+      ...events[content3][1].start
+    },
+    end: {
+      ...events[events.length - 1][1].end
+    }
+  };
+  events[text4][1].type = "setextHeadingText";
+  if (definition2) {
+    events.splice(text4, 0, ["enter", heading, context]);
+    events.splice(definition2 + 1, 0, ["exit", events[content3][1], context]);
+    events[content3][1].end = {
+      ...events[definition2][1].end
+    };
+  } else {
+    events[content3][1] = heading;
+  }
+  events.push(["exit", heading, context]);
+  return events;
+}
+function tokenizeSetextUnderline(effects, ok2, nok) {
+  const self = this;
+  let marker;
+  return start;
+  function start(code) {
+    let index2 = self.events.length;
+    let paragraph;
+    while (index2--) {
+      if (self.events[index2][1].type !== "lineEnding" && self.events[index2][1].type !== "linePrefix" && self.events[index2][1].type !== "content") {
+        paragraph = self.events[index2][1].type === "paragraph";
+        break;
+      }
+    }
+    if (!self.parser.lazy[self.now().line] && (self.interrupt || paragraph)) {
+      effects.enter("setextHeadingLine");
+      marker = code;
+      return before(code);
+    }
+    return nok(code);
+  }
+  function before(code) {
+    effects.enter("setextHeadingLineSequence");
+    return inside9(code);
+  }
+  function inside9(code) {
+    if (code === marker) {
+      effects.consume(code);
+      return inside9;
+    }
+    effects.exit("setextHeadingLineSequence");
+    return markdownSpace(code) ? factorySpace(effects, after, "lineSuffix")(code) : after(code);
+  }
+  function after(code) {
+    if (code === null || markdownLineEnding(code)) {
+      effects.exit("setextHeadingLine");
+      return ok2(code);
+    }
+    return nok(code);
+  }
+}
+
+// node_modules/micromark/lib/initialize/flow.js
+var flow = {
+  tokenize: initializeFlow
+};
+function initializeFlow(effects) {
+  const self = this;
+  const initial = effects.attempt(
+    // Try to parse a blank line.
+    blankLine,
+    atBlankEnding,
+    // Try to parse initial flow (essentially, only code).
+    effects.attempt(this.parser.constructs.flowInitial, afterConstruct, factorySpace(effects, effects.attempt(this.parser.constructs.flow, afterConstruct, effects.attempt(content2, afterConstruct)), "linePrefix"))
+  );
+  return initial;
+  function atBlankEnding(code) {
+    if (code === null) {
+      effects.consume(code);
+      return;
+    }
+    effects.enter("lineEndingBlank");
+    effects.consume(code);
+    effects.exit("lineEndingBlank");
+    self.currentConstruct = void 0;
+    return initial;
+  }
+  function afterConstruct(code) {
+    if (code === null) {
+      effects.consume(code);
+      return;
+    }
+    effects.enter("lineEnding");
+    effects.consume(code);
+    effects.exit("lineEnding");
+    self.currentConstruct = void 0;
+    return initial;
+  }
+}
+
+// node_modules/micromark/lib/initialize/text.js
+var resolver = {
+  resolveAll: createResolver()
+};
+var string = initializeFactory("string");
+var text2 = initializeFactory("text");
+function initializeFactory(field) {
+  return {
+    resolveAll: createResolver(field === "text" ? resolveAllLineSuffixes : void 0),
+    tokenize: initializeText
+  };
+  function initializeText(effects) {
+    const self = this;
+    const constructs2 = this.parser.constructs[field];
+    const text4 = effects.attempt(constructs2, start, notText);
+    return start;
+    function start(code) {
+      return atBreak(code) ? text4(code) : notText(code);
+    }
+    function notText(code) {
+      if (code === null) {
+        effects.consume(code);
+        return;
+      }
+      effects.enter("data");
+      effects.consume(code);
+      return data;
+    }
+    function data(code) {
+      if (atBreak(code)) {
+        effects.exit("data");
+        return text4(code);
+      }
+      effects.consume(code);
+      return data;
+    }
+    function atBreak(code) {
+      if (code === null) {
+        return true;
+      }
+      const list2 = constructs2[code];
+      let index2 = -1;
+      if (list2) {
+        while (++index2 < list2.length) {
+          const item = list2[index2];
+          if (!item.previous || item.previous.call(self, self.previous)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+  }
+}
+function createResolver(extraResolver) {
+  return resolveAllText;
+  function resolveAllText(events, context) {
+    let index2 = -1;
+    let enter;
+    while (++index2 <= events.length) {
+      if (enter === void 0) {
+        if (events[index2] && events[index2][1].type === "data") {
+          enter = index2;
+          index2++;
+        }
+      } else if (!events[index2] || events[index2][1].type !== "data") {
+        if (index2 !== enter + 2) {
+          events[enter][1].end = events[index2 - 1][1].end;
+          events.splice(enter + 2, index2 - enter - 2);
+          index2 = enter + 2;
+        }
+        enter = void 0;
+      }
+    }
+    return extraResolver ? extraResolver(events, context) : events;
+  }
+}
+function resolveAllLineSuffixes(events, context) {
+  let eventIndex = 0;
+  while (++eventIndex <= events.length) {
+    if ((eventIndex === events.length || events[eventIndex][1].type === "lineEnding") && events[eventIndex - 1][1].type === "data") {
+      const data = events[eventIndex - 1][1];
+      const chunks = context.sliceStream(data);
+      let index2 = chunks.length;
+      let bufferIndex = -1;
+      let size = 0;
+      let tabs;
+      while (index2--) {
+        const chunk = chunks[index2];
+        if (typeof chunk === "string") {
+          bufferIndex = chunk.length;
+          while (chunk.charCodeAt(bufferIndex - 1) === 32) {
+            size++;
+            bufferIndex--;
+          }
+          if (bufferIndex) break;
+          bufferIndex = -1;
+        } else if (chunk === -2) {
+          tabs = true;
+          size++;
+        } else if (chunk === -1) {
+        } else {
+          index2++;
+          break;
+        }
+      }
+      if (context._contentTypeTextTrailing && eventIndex === events.length) {
+        size = 0;
+      }
+      if (size) {
+        const token = {
+          type: eventIndex === events.length || tabs || size < 2 ? "lineSuffix" : "hardBreakTrailing",
+          start: {
+            _bufferIndex: index2 ? bufferIndex : data.start._bufferIndex + bufferIndex,
+            _index: data.start._index + index2,
+            line: data.end.line,
+            column: data.end.column - size,
+            offset: data.end.offset - size
+          },
+          end: {
+            ...data.end
+          }
+        };
+        data.end = {
+          ...token.start
+        };
+        if (data.start.offset === data.end.offset) {
+          Object.assign(data, token);
+        } else {
+          events.splice(eventIndex, 0, ["enter", token, context], ["exit", token, context]);
+          eventIndex += 2;
+        }
+      }
+      eventIndex++;
+    }
+  }
+  return events;
+}
+
+// node_modules/micromark/lib/constructs.js
+var constructs_exports = {};
+__export(constructs_exports, {
+  attentionMarkers: () => attentionMarkers,
+  contentInitial: () => contentInitial,
+  disable: () => disable,
+  document: () => document2,
+  flow: () => flow2,
+  flowInitial: () => flowInitial,
+  insideSpan: () => insideSpan,
+  string: () => string2,
+  text: () => text3
+});
+var document2 = {
+  [42]: list,
+  [43]: list,
+  [45]: list,
+  [48]: list,
+  [49]: list,
+  [50]: list,
+  [51]: list,
+  [52]: list,
+  [53]: list,
+  [54]: list,
+  [55]: list,
+  [56]: list,
+  [57]: list,
+  [62]: blockQuote
+};
+var contentInitial = {
+  [91]: definition
+};
+var flowInitial = {
+  [-2]: codeIndented,
+  [-1]: codeIndented,
+  [32]: codeIndented
+};
+var flow2 = {
+  [35]: headingAtx,
+  [42]: thematicBreak,
+  [45]: [setextUnderline, thematicBreak],
+  [60]: htmlFlow,
+  [61]: setextUnderline,
+  [95]: thematicBreak,
+  [96]: codeFenced,
+  [126]: codeFenced
+};
+var string2 = {
+  [38]: characterReference,
+  [92]: characterEscape
+};
+var text3 = {
+  [-5]: lineEnding,
+  [-4]: lineEnding,
+  [-3]: lineEnding,
+  [33]: labelStartImage,
+  [38]: characterReference,
+  [42]: attention,
+  [60]: [autolink, htmlText],
+  [91]: labelStartLink,
+  [92]: [hardBreakEscape, characterEscape],
+  [93]: labelEnd,
+  [95]: attention,
+  [96]: codeText
+};
+var insideSpan = {
+  null: [attention, resolver]
+};
+var attentionMarkers = {
+  null: [42, 95]
+};
+var disable = {
+  null: []
+};
+
+// node_modules/micromark/lib/create-tokenizer.js
+function createTokenizer(parser, initialize, from) {
+  let point3 = {
+    _bufferIndex: -1,
+    _index: 0,
+    line: from && from.line || 1,
+    column: from && from.column || 1,
+    offset: from && from.offset || 0
+  };
+  const columnStart = {};
+  const resolveAllConstructs = [];
+  let chunks = [];
+  let stack = [];
+  let consumed = true;
+  const effects = {
+    attempt: constructFactory(onsuccessfulconstruct),
+    check: constructFactory(onsuccessfulcheck),
+    consume,
+    enter,
+    exit: exit2,
+    interrupt: constructFactory(onsuccessfulcheck, {
+      interrupt: true
+    })
+  };
+  const context = {
+    code: null,
+    containerState: {},
+    defineSkip,
+    events: [],
+    now,
+    parser,
+    previous: null,
+    sliceSerialize,
+    sliceStream,
+    write
+  };
+  let state = initialize.tokenize.call(context, effects);
+  let expectedCode;
+  if (initialize.resolveAll) {
+    resolveAllConstructs.push(initialize);
+  }
+  return context;
+  function write(slice) {
+    chunks = push(chunks, slice);
+    main();
+    if (chunks[chunks.length - 1] !== null) {
+      return [];
+    }
+    addResult(initialize, 0);
+    context.events = resolveAll(resolveAllConstructs, context.events, context);
+    return context.events;
+  }
+  function sliceSerialize(token, expandTabs) {
+    return serializeChunks(sliceStream(token), expandTabs);
+  }
+  function sliceStream(token) {
+    return sliceChunks(chunks, token);
+  }
+  function now() {
+    const {
+      _bufferIndex,
+      _index,
+      line,
+      column,
+      offset
+    } = point3;
+    return {
+      _bufferIndex,
+      _index,
+      line,
+      column,
+      offset
+    };
+  }
+  function defineSkip(value) {
+    columnStart[value.line] = value.column;
+    accountForPotentialSkip();
+  }
+  function main() {
+    let chunkIndex;
+    while (point3._index < chunks.length) {
+      const chunk = chunks[point3._index];
+      if (typeof chunk === "string") {
+        chunkIndex = point3._index;
+        if (point3._bufferIndex < 0) {
+          point3._bufferIndex = 0;
+        }
+        while (point3._index === chunkIndex && point3._bufferIndex < chunk.length) {
+          go(chunk.charCodeAt(point3._bufferIndex));
+        }
+      } else {
+        go(chunk);
+      }
+    }
+  }
+  function go(code) {
+    consumed = void 0;
+    expectedCode = code;
+    state = state(code);
+  }
+  function consume(code) {
+    if (markdownLineEnding(code)) {
+      point3.line++;
+      point3.column = 1;
+      point3.offset += code === -3 ? 2 : 1;
+      accountForPotentialSkip();
+    } else if (code !== -1) {
+      point3.column++;
+      point3.offset++;
+    }
+    if (point3._bufferIndex < 0) {
+      point3._index++;
+    } else {
+      point3._bufferIndex++;
+      if (point3._bufferIndex === // Points w/ non-negative `_bufferIndex` reference
+      // strings.
+      /** @type {string} */
+      chunks[point3._index].length) {
+        point3._bufferIndex = -1;
+        point3._index++;
+      }
+    }
+    context.previous = code;
+    consumed = true;
+  }
+  function enter(type, fields) {
+    const token = fields || {};
+    token.type = type;
+    token.start = now();
+    context.events.push(["enter", token, context]);
+    stack.push(token);
+    return token;
+  }
+  function exit2(type) {
+    const token = stack.pop();
+    token.end = now();
+    context.events.push(["exit", token, context]);
+    return token;
+  }
+  function onsuccessfulconstruct(construct, info) {
+    addResult(construct, info.from);
+  }
+  function onsuccessfulcheck(_, info) {
+    info.restore();
+  }
+  function constructFactory(onreturn, fields) {
+    return hook;
+    function hook(constructs2, returnState, bogusState) {
+      let listOfConstructs;
+      let constructIndex;
+      let currentConstruct;
+      let info;
+      return Array.isArray(constructs2) ? (
+        /* c8 ignore next 1 */
+        handleListOfConstructs(constructs2)
+      ) : "tokenize" in constructs2 ? (
+        // Looks like a construct.
+        handleListOfConstructs([
+          /** @type {Construct} */
+          constructs2
+        ])
+      ) : handleMapOfConstructs(constructs2);
+      function handleMapOfConstructs(map) {
+        return start;
+        function start(code) {
+          const left = code !== null && map[code];
+          const all2 = code !== null && map.null;
+          const list2 = [
+            // To do: add more extension tests.
+            /* c8 ignore next 2 */
+            ...Array.isArray(left) ? left : left ? [left] : [],
+            ...Array.isArray(all2) ? all2 : all2 ? [all2] : []
+          ];
+          return handleListOfConstructs(list2)(code);
+        }
+      }
+      function handleListOfConstructs(list2) {
+        listOfConstructs = list2;
+        constructIndex = 0;
+        if (list2.length === 0) {
+          return bogusState;
+        }
+        return handleConstruct(list2[constructIndex]);
+      }
+      function handleConstruct(construct) {
+        return start;
+        function start(code) {
+          info = store();
+          currentConstruct = construct;
+          if (!construct.partial) {
+            context.currentConstruct = construct;
+          }
+          if (construct.name && context.parser.constructs.disable.null.includes(construct.name)) {
+            return nok(code);
+          }
+          return construct.tokenize.call(
+            // If we do have fields, create an object w/ `context` as its
+            // prototype.
+            // This allows a “live binding”, which is needed for `interrupt`.
+            fields ? Object.assign(Object.create(context), fields) : context,
+            effects,
+            ok2,
+            nok
+          )(code);
+        }
+      }
+      function ok2(code) {
+        consumed = true;
+        onreturn(currentConstruct, info);
+        return returnState;
+      }
+      function nok(code) {
+        consumed = true;
+        info.restore();
+        if (++constructIndex < listOfConstructs.length) {
+          return handleConstruct(listOfConstructs[constructIndex]);
+        }
+        return bogusState;
+      }
+    }
+  }
+  function addResult(construct, from2) {
+    if (construct.resolveAll && !resolveAllConstructs.includes(construct)) {
+      resolveAllConstructs.push(construct);
+    }
+    if (construct.resolve) {
+      splice(context.events, from2, context.events.length - from2, construct.resolve(context.events.slice(from2), context));
+    }
+    if (construct.resolveTo) {
+      context.events = construct.resolveTo(context.events, context);
+    }
+  }
+  function store() {
+    const startPoint = now();
+    const startPrevious = context.previous;
+    const startCurrentConstruct = context.currentConstruct;
+    const startEventsIndex = context.events.length;
+    const startStack = Array.from(stack);
+    return {
+      from: startEventsIndex,
+      restore: restore2
+    };
+    function restore2() {
+      point3 = startPoint;
+      context.previous = startPrevious;
+      context.currentConstruct = startCurrentConstruct;
+      context.events.length = startEventsIndex;
+      stack = startStack;
+      accountForPotentialSkip();
+    }
+  }
+  function accountForPotentialSkip() {
+    if (point3.line in columnStart && point3.column < 2) {
+      point3.column = columnStart[point3.line];
+      point3.offset += columnStart[point3.line] - 1;
+    }
+  }
+}
+function sliceChunks(chunks, token) {
+  const startIndex = token.start._index;
+  const startBufferIndex = token.start._bufferIndex;
+  const endIndex = token.end._index;
+  const endBufferIndex = token.end._bufferIndex;
+  let view;
+  if (startIndex === endIndex) {
+    view = [chunks[startIndex].slice(startBufferIndex, endBufferIndex)];
+  } else {
+    view = chunks.slice(startIndex, endIndex);
+    if (startBufferIndex > -1) {
+      const head = view[0];
+      if (typeof head === "string") {
+        view[0] = head.slice(startBufferIndex);
+      } else {
+        view.shift();
+      }
+    }
+    if (endBufferIndex > 0) {
+      view.push(chunks[endIndex].slice(0, endBufferIndex));
+    }
+  }
+  return view;
+}
+function serializeChunks(chunks, expandTabs) {
+  let index2 = -1;
+  const result = [];
+  let atTab;
+  while (++index2 < chunks.length) {
+    const chunk = chunks[index2];
+    let value;
+    if (typeof chunk === "string") {
+      value = chunk;
+    } else switch (chunk) {
+      case -5: {
+        value = "\r";
+        break;
+      }
+      case -4: {
+        value = "\n";
+        break;
+      }
+      case -3: {
+        value = "\r\n";
+        break;
+      }
+      case -2: {
+        value = expandTabs ? " " : "	";
+        break;
+      }
+      case -1: {
+        if (!expandTabs && atTab) continue;
+        value = " ";
+        break;
+      }
+      default: {
+        value = String.fromCharCode(chunk);
+      }
+    }
+    atTab = chunk === -2;
+    result.push(value);
+  }
+  return result.join("");
+}
+
+// node_modules/micromark/lib/parse.js
+function parse(options) {
+  const settings = options || {};
+  const constructs2 = (
+    /** @type {FullNormalizedExtension} */
+    combineExtensions([constructs_exports, ...settings.extensions || []])
+  );
+  const parser = {
+    constructs: constructs2,
+    content: create(content),
+    defined: [],
+    document: create(document),
+    flow: create(flow),
+    lazy: {},
+    string: create(string),
+    text: create(text2)
+  };
+  return parser;
+  function create(initial) {
+    return creator;
+    function creator(from) {
+      return createTokenizer(parser, initial, from);
+    }
+  }
+}
+
+// node_modules/micromark/lib/postprocess.js
+function postprocess(events) {
+  while (!subtokenize(events)) {
+  }
+  return events;
+}
+
+// node_modules/micromark/lib/preprocess.js
+var search = /[\0\t\n\r]/g;
+function preprocess() {
+  let column = 1;
+  let buffer = "";
+  let start = true;
+  let atCarriageReturn;
+  return preprocessor;
+  function preprocessor(value, encoding, end) {
+    const chunks = [];
+    let match;
+    let next;
+    let startPosition;
+    let endPosition;
+    let code;
+    value = buffer + (typeof value === "string" ? value.toString() : new TextDecoder(encoding || void 0).decode(value));
+    startPosition = 0;
+    buffer = "";
+    if (start) {
+      if (value.charCodeAt(0) === 65279) {
+        startPosition++;
+      }
+      start = void 0;
+    }
+    while (startPosition < value.length) {
+      search.lastIndex = startPosition;
+      match = search.exec(value);
+      endPosition = match && match.index !== void 0 ? match.index : value.length;
+      code = value.charCodeAt(endPosition);
+      if (!match) {
+        buffer = value.slice(startPosition);
+        break;
+      }
+      if (code === 10 && startPosition === endPosition && atCarriageReturn) {
+        chunks.push(-3);
+        atCarriageReturn = void 0;
+      } else {
+        if (atCarriageReturn) {
+          chunks.push(-5);
+          atCarriageReturn = void 0;
+        }
+        if (startPosition < endPosition) {
+          chunks.push(value.slice(startPosition, endPosition));
+          column += endPosition - startPosition;
+        }
+        switch (code) {
+          case 0: {
+            chunks.push(65533);
+            column++;
+            break;
+          }
+          case 9: {
+            next = Math.ceil(column / 4) * 4;
+            chunks.push(-2);
+            while (column++ < next) chunks.push(-1);
+            break;
+          }
+          case 10: {
+            chunks.push(-4);
+            column = 1;
+            break;
+          }
+          default: {
+            atCarriageReturn = true;
+            column = 1;
+          }
+        }
+      }
+      startPosition = endPosition + 1;
+    }
+    if (end) {
+      if (atCarriageReturn) chunks.push(-5);
+      if (buffer) chunks.push(buffer);
+      chunks.push(null);
+    }
+    return chunks;
+  }
+}
+
+// node_modules/micromark-util-decode-string/index.js
+var characterEscapeOrReference = /\\([!-/:-@[-`{-~])|&(#(?:\d{1,7}|x[\da-f]{1,6})|[\da-z]{1,31});/gi;
+function decodeString(value) {
+  return value.replace(characterEscapeOrReference, decode);
+}
+function decode($0, $1, $2) {
+  if ($1) {
+    return $1;
+  }
+  const head = $2.charCodeAt(0);
+  if (head === 35) {
+    const head2 = $2.charCodeAt(1);
+    const hex = head2 === 120 || head2 === 88;
+    return decodeNumericCharacterReference($2.slice(hex ? 2 : 1), hex ? 16 : 10);
+  }
+  return decodeNamedCharacterReference($2) || $0;
+}
+
+// node_modules/unist-util-stringify-position/lib/index.js
+function stringifyPosition(value) {
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+  if ("position" in value || "type" in value) {
+    return position(value.position);
+  }
+  if ("start" in value || "end" in value) {
+    return position(value);
+  }
+  if ("line" in value || "column" in value) {
+    return point(value);
+  }
+  return "";
+}
+function point(point3) {
+  return index(point3 && point3.line) + ":" + index(point3 && point3.column);
+}
+function position(pos) {
+  return point(pos && pos.start) + "-" + point(pos && pos.end);
+}
+function index(value) {
+  return value && typeof value === "number" ? value : 1;
+}
+
+// node_modules/mdast-util-from-markdown/lib/index.js
+var own2 = {}.hasOwnProperty;
+function fromMarkdown(value, encoding, options) {
+  if (encoding && typeof encoding === "object") {
+    options = encoding;
+    encoding = void 0;
+  }
+  return compiler(options)(postprocess(parse(options).document().write(preprocess()(value, encoding, true))));
+}
+function compiler(options) {
+  const config = {
+    transforms: [],
+    canContainEols: ["emphasis", "fragment", "heading", "paragraph", "strong"],
+    enter: {
+      autolink: opener(link),
+      autolinkProtocol: onenterdata,
+      autolinkEmail: onenterdata,
+      atxHeading: opener(heading),
+      blockQuote: opener(blockQuote2),
+      characterEscape: onenterdata,
+      characterReference: onenterdata,
+      codeFenced: opener(codeFlow),
+      codeFencedFenceInfo: buffer,
+      codeFencedFenceMeta: buffer,
+      codeIndented: opener(codeFlow, buffer),
+      codeText: opener(codeText2, buffer),
+      codeTextData: onenterdata,
+      data: onenterdata,
+      codeFlowValue: onenterdata,
+      definition: opener(definition2),
+      definitionDestinationString: buffer,
+      definitionLabelString: buffer,
+      definitionTitleString: buffer,
+      emphasis: opener(emphasis),
+      hardBreakEscape: opener(hardBreak),
+      hardBreakTrailing: opener(hardBreak),
+      htmlFlow: opener(html, buffer),
+      htmlFlowData: onenterdata,
+      htmlText: opener(html, buffer),
+      htmlTextData: onenterdata,
+      image: opener(image),
+      label: buffer,
+      link: opener(link),
+      listItem: opener(listItem),
+      listItemValue: onenterlistitemvalue,
+      listOrdered: opener(list2, onenterlistordered),
+      listUnordered: opener(list2),
+      paragraph: opener(paragraph),
+      reference: onenterreference,
+      referenceString: buffer,
+      resourceDestinationString: buffer,
+      resourceTitleString: buffer,
+      setextHeading: opener(heading),
+      strong: opener(strong),
+      thematicBreak: opener(thematicBreak2)
+    },
+    exit: {
+      atxHeading: closer(),
+      atxHeadingSequence: onexitatxheadingsequence,
+      autolink: closer(),
+      autolinkEmail: onexitautolinkemail,
+      autolinkProtocol: onexitautolinkprotocol,
+      blockQuote: closer(),
+      characterEscapeValue: onexitdata,
+      characterReferenceMarkerHexadecimal: onexitcharacterreferencemarker,
+      characterReferenceMarkerNumeric: onexitcharacterreferencemarker,
+      characterReferenceValue: onexitcharacterreferencevalue,
+      characterReference: onexitcharacterreference,
+      codeFenced: closer(onexitcodefenced),
+      codeFencedFence: onexitcodefencedfence,
+      codeFencedFenceInfo: onexitcodefencedfenceinfo,
+      codeFencedFenceMeta: onexitcodefencedfencemeta,
+      codeFlowValue: onexitdata,
+      codeIndented: closer(onexitcodeindented),
+      codeText: closer(onexitcodetext),
+      codeTextData: onexitdata,
+      data: onexitdata,
+      definition: closer(),
+      definitionDestinationString: onexitdefinitiondestinationstring,
+      definitionLabelString: onexitdefinitionlabelstring,
+      definitionTitleString: onexitdefinitiontitlestring,
+      emphasis: closer(),
+      hardBreakEscape: closer(onexithardbreak),
+      hardBreakTrailing: closer(onexithardbreak),
+      htmlFlow: closer(onexithtmlflow),
+      htmlFlowData: onexitdata,
+      htmlText: closer(onexithtmltext),
+      htmlTextData: onexitdata,
+      image: closer(onexitimage),
+      label: onexitlabel,
+      labelText: onexitlabeltext,
+      lineEnding: onexitlineending,
+      link: closer(onexitlink),
+      listItem: closer(),
+      listOrdered: closer(),
+      listUnordered: closer(),
+      paragraph: closer(),
+      referenceString: onexitreferencestring,
+      resourceDestinationString: onexitresourcedestinationstring,
+      resourceTitleString: onexitresourcetitlestring,
+      resource: onexitresource,
+      setextHeading: closer(onexitsetextheading),
+      setextHeadingLineSequence: onexitsetextheadinglinesequence,
+      setextHeadingText: onexitsetextheadingtext,
+      strong: closer(),
+      thematicBreak: closer()
+    }
+  };
+  configure(config, (options || {}).mdastExtensions || []);
+  const data = {};
+  return compile;
+  function compile(events) {
+    let tree = {
+      type: "root",
+      children: []
+    };
+    const context = {
+      stack: [tree],
+      tokenStack: [],
+      config,
+      enter,
+      exit: exit2,
+      buffer,
+      resume,
+      data
+    };
+    const listStack = [];
+    let index2 = -1;
+    while (++index2 < events.length) {
+      if (events[index2][1].type === "listOrdered" || events[index2][1].type === "listUnordered") {
+        if (events[index2][0] === "enter") {
+          listStack.push(index2);
+        } else {
+          const tail = listStack.pop();
+          index2 = prepareList(events, tail, index2);
+        }
+      }
+    }
+    index2 = -1;
+    while (++index2 < events.length) {
+      const handler = config[events[index2][0]];
+      if (own2.call(handler, events[index2][1].type)) {
+        handler[events[index2][1].type].call(Object.assign({
+          sliceSerialize: events[index2][2].sliceSerialize
+        }, context), events[index2][1]);
+      }
+    }
+    if (context.tokenStack.length > 0) {
+      const tail = context.tokenStack[context.tokenStack.length - 1];
+      const handler = tail[1] || defaultOnError;
+      handler.call(context, void 0, tail[0]);
+    }
+    tree.position = {
+      start: point2(events.length > 0 ? events[0][1].start : {
+        line: 1,
+        column: 1,
+        offset: 0
+      }),
+      end: point2(events.length > 0 ? events[events.length - 2][1].end : {
+        line: 1,
+        column: 1,
+        offset: 0
+      })
+    };
+    index2 = -1;
+    while (++index2 < config.transforms.length) {
+      tree = config.transforms[index2](tree) || tree;
+    }
+    return tree;
+  }
+  function prepareList(events, start, length) {
+    let index2 = start - 1;
+    let containerBalance = -1;
+    let listSpread = false;
+    let listItem2;
+    let lineIndex;
+    let firstBlankLineIndex;
+    let atMarker;
+    while (++index2 <= length) {
+      const event = events[index2];
+      switch (event[1].type) {
+        case "listUnordered":
+        case "listOrdered":
+        case "blockQuote": {
+          if (event[0] === "enter") {
+            containerBalance++;
+          } else {
+            containerBalance--;
+          }
+          atMarker = void 0;
+          break;
+        }
+        case "lineEndingBlank": {
+          if (event[0] === "enter") {
+            if (listItem2 && !atMarker && !containerBalance && !firstBlankLineIndex) {
+              firstBlankLineIndex = index2;
+            }
+            atMarker = void 0;
+          }
+          break;
+        }
+        case "linePrefix":
+        case "listItemValue":
+        case "listItemMarker":
+        case "listItemPrefix":
+        case "listItemPrefixWhitespace": {
+          break;
+        }
+        default: {
+          atMarker = void 0;
+        }
+      }
+      if (!containerBalance && event[0] === "enter" && event[1].type === "listItemPrefix" || containerBalance === -1 && event[0] === "exit" && (event[1].type === "listUnordered" || event[1].type === "listOrdered")) {
+        if (listItem2) {
+          let tailIndex = index2;
+          lineIndex = void 0;
+          while (tailIndex--) {
+            const tailEvent = events[tailIndex];
+            if (tailEvent[1].type === "lineEnding" || tailEvent[1].type === "lineEndingBlank") {
+              if (tailEvent[0] === "exit") continue;
+              if (lineIndex) {
+                events[lineIndex][1].type = "lineEndingBlank";
+                listSpread = true;
+              }
+              tailEvent[1].type = "lineEnding";
+              lineIndex = tailIndex;
+            } else if (tailEvent[1].type === "linePrefix" || tailEvent[1].type === "blockQuotePrefix" || tailEvent[1].type === "blockQuotePrefixWhitespace" || tailEvent[1].type === "blockQuoteMarker" || tailEvent[1].type === "listItemIndent") {
+            } else {
+              break;
+            }
+          }
+          if (firstBlankLineIndex && (!lineIndex || firstBlankLineIndex < lineIndex)) {
+            listItem2._spread = true;
+          }
+          listItem2.end = Object.assign({}, lineIndex ? events[lineIndex][1].start : event[1].end);
+          events.splice(lineIndex || index2, 0, ["exit", listItem2, event[2]]);
+          index2++;
+          length++;
+        }
+        if (event[1].type === "listItemPrefix") {
+          const item = {
+            type: "listItem",
+            _spread: false,
+            start: Object.assign({}, event[1].start),
+            // @ts-expect-error: we’ll add `end` in a second.
+            end: void 0
+          };
+          listItem2 = item;
+          events.splice(index2, 0, ["enter", item, event[2]]);
+          index2++;
+          length++;
+          firstBlankLineIndex = void 0;
+          atMarker = true;
+        }
+      }
+    }
+    events[start][1]._spread = listSpread;
+    return length;
+  }
+  function opener(create, and) {
+    return open6;
+    function open6(token) {
+      enter.call(this, create(token), token);
+      if (and) and.call(this, token);
+    }
+  }
+  function buffer() {
+    this.stack.push({
+      type: "fragment",
+      children: []
+    });
+  }
+  function enter(node2, token, errorHandler) {
+    const parent = this.stack[this.stack.length - 1];
+    const siblings = parent.children;
+    siblings.push(node2);
+    this.stack.push(node2);
+    this.tokenStack.push([token, errorHandler || void 0]);
+    node2.position = {
+      start: point2(token.start),
+      // @ts-expect-error: `end` will be patched later.
+      end: void 0
+    };
+  }
+  function closer(and) {
+    return close;
+    function close(token) {
+      if (and) and.call(this, token);
+      exit2.call(this, token);
+    }
+  }
+  function exit2(token, onExitError) {
+    const node2 = this.stack.pop();
+    const open6 = this.tokenStack.pop();
+    if (!open6) {
+      throw new Error("Cannot close `" + token.type + "` (" + stringifyPosition({
+        start: token.start,
+        end: token.end
+      }) + "): it’s not open");
+    } else if (open6[0].type !== token.type) {
+      if (onExitError) {
+        onExitError.call(this, token, open6[0]);
+      } else {
+        const handler = open6[1] || defaultOnError;
+        handler.call(this, token, open6[0]);
+      }
+    }
+    node2.position.end = point2(token.end);
+  }
+  function resume() {
+    return toString(this.stack.pop());
+  }
+  function onenterlistordered() {
+    this.data.expectingFirstListItemValue = true;
+  }
+  function onenterlistitemvalue(token) {
+    if (this.data.expectingFirstListItemValue) {
+      const ancestor = this.stack[this.stack.length - 2];
+      ancestor.start = Number.parseInt(this.sliceSerialize(token), 10);
+      this.data.expectingFirstListItemValue = void 0;
+    }
+  }
+  function onexitcodefencedfenceinfo() {
+    const data2 = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    node2.lang = data2;
+  }
+  function onexitcodefencedfencemeta() {
+    const data2 = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    node2.meta = data2;
+  }
+  function onexitcodefencedfence() {
+    if (this.data.flowCodeInside) return;
+    this.buffer();
+    this.data.flowCodeInside = true;
+  }
+  function onexitcodefenced() {
+    const data2 = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    node2.value = data2.replace(/^(\r?\n|\r)|(\r?\n|\r)$/g, "");
+    this.data.flowCodeInside = void 0;
+  }
+  function onexitcodeindented() {
+    const data2 = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    node2.value = data2.replace(/(\r?\n|\r)$/g, "");
+  }
+  function onexitdefinitionlabelstring(token) {
+    const label = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    node2.label = label;
+    node2.identifier = normalizeIdentifier(this.sliceSerialize(token)).toLowerCase();
+  }
+  function onexitdefinitiontitlestring() {
+    const data2 = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    node2.title = data2;
+  }
+  function onexitdefinitiondestinationstring() {
+    const data2 = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    node2.url = data2;
+  }
+  function onexitatxheadingsequence(token) {
+    const node2 = this.stack[this.stack.length - 1];
+    if (!node2.depth) {
+      const depth = this.sliceSerialize(token).length;
+      node2.depth = depth;
+    }
+  }
+  function onexitsetextheadingtext() {
+    this.data.setextHeadingSlurpLineEnding = true;
+  }
+  function onexitsetextheadinglinesequence(token) {
+    const node2 = this.stack[this.stack.length - 1];
+    node2.depth = this.sliceSerialize(token).codePointAt(0) === 61 ? 1 : 2;
+  }
+  function onexitsetextheading() {
+    this.data.setextHeadingSlurpLineEnding = void 0;
+  }
+  function onenterdata(token) {
+    const node2 = this.stack[this.stack.length - 1];
+    const siblings = node2.children;
+    let tail = siblings[siblings.length - 1];
+    if (!tail || tail.type !== "text") {
+      tail = text4();
+      tail.position = {
+        start: point2(token.start),
+        // @ts-expect-error: we’ll add `end` later.
+        end: void 0
+      };
+      siblings.push(tail);
+    }
+    this.stack.push(tail);
+  }
+  function onexitdata(token) {
+    const tail = this.stack.pop();
+    tail.value += this.sliceSerialize(token);
+    tail.position.end = point2(token.end);
+  }
+  function onexitlineending(token) {
+    const context = this.stack[this.stack.length - 1];
+    if (this.data.atHardBreak) {
+      const tail = context.children[context.children.length - 1];
+      tail.position.end = point2(token.end);
+      this.data.atHardBreak = void 0;
+      return;
+    }
+    if (!this.data.setextHeadingSlurpLineEnding && config.canContainEols.includes(context.type)) {
+      onenterdata.call(this, token);
+      onexitdata.call(this, token);
+    }
+  }
+  function onexithardbreak() {
+    this.data.atHardBreak = true;
+  }
+  function onexithtmlflow() {
+    const data2 = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    node2.value = data2;
+  }
+  function onexithtmltext() {
+    const data2 = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    node2.value = data2;
+  }
+  function onexitcodetext() {
+    const data2 = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    node2.value = data2;
+  }
+  function onexitlink() {
+    const node2 = this.stack[this.stack.length - 1];
+    if (this.data.inReference) {
+      const referenceType = this.data.referenceType || "shortcut";
+      node2.type += "Reference";
+      node2.referenceType = referenceType;
+      delete node2.url;
+      delete node2.title;
+    } else {
+      delete node2.identifier;
+      delete node2.label;
+    }
+    this.data.referenceType = void 0;
+  }
+  function onexitimage() {
+    const node2 = this.stack[this.stack.length - 1];
+    if (this.data.inReference) {
+      const referenceType = this.data.referenceType || "shortcut";
+      node2.type += "Reference";
+      node2.referenceType = referenceType;
+      delete node2.url;
+      delete node2.title;
+    } else {
+      delete node2.identifier;
+      delete node2.label;
+    }
+    this.data.referenceType = void 0;
+  }
+  function onexitlabeltext(token) {
+    const string3 = this.sliceSerialize(token);
+    const ancestor = this.stack[this.stack.length - 2];
+    ancestor.label = decodeString(string3);
+    ancestor.identifier = normalizeIdentifier(string3).toLowerCase();
+  }
+  function onexitlabel() {
+    const fragment = this.stack[this.stack.length - 1];
+    const value = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    this.data.inReference = true;
+    if (node2.type === "link") {
+      const children = fragment.children;
+      node2.children = children;
+    } else {
+      node2.alt = value;
+    }
+  }
+  function onexitresourcedestinationstring() {
+    const data2 = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    node2.url = data2;
+  }
+  function onexitresourcetitlestring() {
+    const data2 = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    node2.title = data2;
+  }
+  function onexitresource() {
+    this.data.inReference = void 0;
+  }
+  function onenterreference() {
+    this.data.referenceType = "collapsed";
+  }
+  function onexitreferencestring(token) {
+    const label = this.resume();
+    const node2 = this.stack[this.stack.length - 1];
+    node2.label = label;
+    node2.identifier = normalizeIdentifier(this.sliceSerialize(token)).toLowerCase();
+    this.data.referenceType = "full";
+  }
+  function onexitcharacterreferencemarker(token) {
+    this.data.characterReferenceType = token.type;
+  }
+  function onexitcharacterreferencevalue(token) {
+    const data2 = this.sliceSerialize(token);
+    const type = this.data.characterReferenceType;
+    let value;
+    if (type) {
+      value = decodeNumericCharacterReference(data2, type === "characterReferenceMarkerNumeric" ? 10 : 16);
+      this.data.characterReferenceType = void 0;
+    } else {
+      const result = decodeNamedCharacterReference(data2);
+      value = result;
+    }
+    const tail = this.stack[this.stack.length - 1];
+    tail.value += value;
+  }
+  function onexitcharacterreference(token) {
+    const tail = this.stack.pop();
+    tail.position.end = point2(token.end);
+  }
+  function onexitautolinkprotocol(token) {
+    onexitdata.call(this, token);
+    const node2 = this.stack[this.stack.length - 1];
+    node2.url = this.sliceSerialize(token);
+  }
+  function onexitautolinkemail(token) {
+    onexitdata.call(this, token);
+    const node2 = this.stack[this.stack.length - 1];
+    node2.url = "mailto:" + this.sliceSerialize(token);
+  }
+  function blockQuote2() {
+    return {
+      type: "blockquote",
+      children: []
+    };
+  }
+  function codeFlow() {
+    return {
+      type: "code",
+      lang: null,
+      meta: null,
+      value: ""
+    };
+  }
+  function codeText2() {
+    return {
+      type: "inlineCode",
+      value: ""
+    };
+  }
+  function definition2() {
+    return {
+      type: "definition",
+      identifier: "",
+      label: null,
+      title: null,
+      url: ""
+    };
+  }
+  function emphasis() {
+    return {
+      type: "emphasis",
+      children: []
+    };
+  }
+  function heading() {
+    return {
+      type: "heading",
+      // @ts-expect-error `depth` will be set later.
+      depth: 0,
+      children: []
+    };
+  }
+  function hardBreak() {
+    return {
+      type: "break"
+    };
+  }
+  function html() {
+    return {
+      type: "html",
+      value: ""
+    };
+  }
+  function image() {
+    return {
+      type: "image",
+      title: null,
+      url: "",
+      alt: null
+    };
+  }
+  function link() {
+    return {
+      type: "link",
+      title: null,
+      url: "",
+      children: []
+    };
+  }
+  function list2(token) {
+    return {
+      type: "list",
+      ordered: token.type === "listOrdered",
+      start: null,
+      spread: token._spread,
+      children: []
+    };
+  }
+  function listItem(token) {
+    return {
+      type: "listItem",
+      spread: token._spread,
+      checked: null,
+      children: []
+    };
+  }
+  function paragraph() {
+    return {
+      type: "paragraph",
+      children: []
+    };
+  }
+  function strong() {
+    return {
+      type: "strong",
+      children: []
+    };
+  }
+  function text4() {
+    return {
+      type: "text",
+      value: ""
+    };
+  }
+  function thematicBreak2() {
+    return {
+      type: "thematicBreak"
+    };
+  }
+}
+function point2(d) {
+  return {
+    line: d.line,
+    column: d.column,
+    offset: d.offset
+  };
+}
+function configure(combined, extensions) {
+  let index2 = -1;
+  while (++index2 < extensions.length) {
+    const value = extensions[index2];
+    if (Array.isArray(value)) {
+      configure(combined, value);
+    } else {
+      extension(combined, value);
+    }
+  }
+}
+function extension(combined, extension2) {
+  let key;
+  for (key in extension2) {
+    if (own2.call(extension2, key)) {
+      switch (key) {
+        case "canContainEols": {
+          const right = extension2[key];
+          if (right) {
+            combined[key].push(...right);
+          }
+          break;
+        }
+        case "transforms": {
+          const right = extension2[key];
+          if (right) {
+            combined[key].push(...right);
+          }
+          break;
+        }
+        case "enter":
+        case "exit": {
+          const right = extension2[key];
+          if (right) {
+            Object.assign(combined[key], right);
+          }
+          break;
+        }
+      }
+    }
+  }
+}
+function defaultOnError(left, right) {
+  if (left) {
+    throw new Error("Cannot close `" + left.type + "` (" + stringifyPosition({
+      start: left.start,
+      end: left.end
+    }) + "): a different token (`" + right.type + "`, " + stringifyPosition({
+      start: right.start,
+      end: right.end
+    }) + ") is open");
+  } else {
+    throw new Error("Cannot close document, a token (`" + right.type + "`, " + stringifyPosition({
+      start: right.start,
+      end: right.end
+    }) + ") is still open");
+  }
+}
+
+// scripts/lib/markdown-links.mjs
+var positioned = (node2) => Number.isInteger(node2?.position?.start?.offset) && Number.isInteger(node2?.position?.end?.offset);
+var collectNodes = (node2, collected) => {
+  if (positioned(node2)) {
+    if (node2.type === "link" || node2.type === "image") collected.links.push(node2);
+    if (node2.type === "html") collected.html.push(node2);
+  }
+  for (const child of node2.children ?? []) collectNodes(child, collected);
+};
+var inlineCodeRanges = (source, htmlNodes) => {
+  const events = [];
+  for (const node2 of htmlNodes) {
+    if (/^\s*<!--/u.test(node2.value)) continue;
+    const tags = /<\/?code\b(?:[^"'<>]|"[^"]*"|'[^']*')*>/giu;
+    for (const match of node2.value.matchAll(tags)) {
+      events.push({
+        closing: /^<\//u.test(match[0]),
+        start: node2.position.start.offset + match.index,
+        end: node2.position.start.offset + match.index + match[0].length
+      });
+    }
+  }
+  events.sort((left, right) => left.start - right.start);
+  const openings = [];
+  const ranges = [];
+  for (const event of events) {
+    if (!event.closing) openings.push(event.start);
+    else if (openings.length > 0) ranges.push({ start: openings.pop(), end: event.end });
+  }
+  return ranges;
+};
+var inside5 = (node2, ranges) => ranges.some(({ start, end }) => node2.position.start.offset >= start && node2.position.end.offset <= end);
+var destinationSpan = (source) => {
+  const labelStart = source.startsWith("![") ? 1 : 0;
+  if (source[labelStart] !== "[") return null;
+  let depth = 1;
+  let cursor = labelStart + 1;
+  for (; cursor < source.length && depth > 0; cursor += 1) {
+    if (source[cursor] === "\\") cursor += 1;
+    else if (source[cursor] === "[") depth += 1;
+    else if (source[cursor] === "]") depth -= 1;
+  }
+  if (depth !== 0 || source[cursor] !== "(") return null;
+  cursor += 1;
+  while (/[ \t\r\n]/u.test(source[cursor])) cursor += 1;
+  if (source[cursor] === "<") {
+    const start2 = cursor + 1;
+    for (cursor = start2; cursor < source.length; cursor += 1) {
+      if (source[cursor] === "\\") cursor += 1;
+      else if (source[cursor] === ">") return { start: start2, end: cursor };
+    }
+    return null;
+  }
+  const start = cursor;
+  let parentheses = 0;
+  for (; cursor < source.length; cursor += 1) {
+    if (source[cursor] === "\\") cursor += 1;
+    else if (source[cursor] === "(") parentheses += 1;
+    else if (source[cursor] === ")") {
+      if (parentheses === 0) return { start, end: cursor };
+      parentheses -= 1;
+    } else if (/[ \t\r\n]/u.test(source[cursor]) && parentheses === 0) {
+      return { start, end: cursor };
+    }
+  }
+  return null;
+};
+var destinationReplacement = (source, node2, rewrite) => {
+  const nodeSource = source.slice(node2.position.start.offset, node2.position.end.offset);
+  const span = destinationSpan(nodeSource);
+  if (!span) return null;
+  const url = nodeSource.slice(span.start, span.end);
+  const prefix = "[target](";
+  const probe = `${prefix}${url})`;
+  const rewrittenProbe = rewrite(probe);
+  if (!rewrittenProbe.startsWith(prefix) || !rewrittenProbe.endsWith(")")) return null;
+  const rewrittenUrl = rewrittenProbe.slice(prefix.length, -1);
+  if (rewrittenUrl === url) return null;
+  const start = node2.position.start.offset + span.start;
+  return { start, end: node2.position.start.offset + span.end, content: rewrittenUrl };
+};
+var rewriteMarkdownOutsideCode = (source, rewrite) => {
+  const collected = { links: [], html: [] };
+  collectNodes(fromMarkdown(source), collected);
+  const codeRanges = inlineCodeRanges(source, collected.html);
+  const replacements = collected.links.filter((node2) => !inside5(node2, codeRanges)).map((node2) => destinationReplacement(source, node2, rewrite)).filter(Boolean).sort((left, right) => left.start - right.start);
+  let rewritten = source;
+  for (const replacement of replacements.reverse()) {
+    rewritten = `${rewritten.slice(0, replacement.start)}${replacement.content}${rewritten.slice(replacement.end)}`;
+  }
+  return rewritten;
+};
+
+// scripts/knowledge/layout-transaction.mjs
+import { createHash as createHash3 } from "node:crypto";
+import {
+  cp,
+  lstat as lstat7,
+  mkdir as mkdir2,
+  mkdtemp,
+  open as open4,
+  opendir as opendir4,
+  readFile as readFile7,
+  readdir as readdir2,
+  readlink,
+  realpath as realpath8,
+  rename as rename2,
+  rm,
+  rmdir,
+  stat,
+  utimes
+} from "node:fs/promises";
+import { dirname as dirname4, isAbsolute as isAbsolute9, join as join7, relative as relative7, resolve as resolve6, sep as sep7 } from "node:path";
+var hash = (content3) => createHash3("sha256").update(content3).digest("hex");
+var MAX_SNAPSHOT_ENTRIES = 1e4;
+var MAX_SNAPSHOT_DEPTH = 16;
+var MAX_SNAPSHOT_FILE_BYTES = 4194304;
+var MAX_SNAPSHOT_TOTAL_BYTES = 67108864;
+var failure8 = (code, path, message) => fail([createError(code, path, message)]);
+var inside6 = (root, candidate) => {
+  const fromRoot = relative7(root, candidate);
+  return fromRoot === "" || fromRoot !== ".." && !fromRoot.startsWith(`..${sep7}`) && !isAbsolute9(fromRoot);
+};
+var fileState = async (path) => {
+  try {
+    return await lstat7(path);
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+};
+var pathError2 = (code) => Object.assign(new Error(code), { code });
+var lifecyclePaths = async (repositoryRoot, { allowMissing = false } = {}) => {
+  if (typeof repositoryRoot !== "string" || !isAbsolute9(repositoryRoot)) throw pathError2("LAYOUT_ROOT_INVALID");
+  const lexicalRoot = resolve6(repositoryRoot);
+  const rootState = await lstat7(lexicalRoot);
+  const physicalRoot = await realpath8(lexicalRoot);
+  if (!rootState.isDirectory() || rootState.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
+  const docsLexical = join7(physicalRoot, "docs");
+  const docsState = await lstat7(docsLexical);
+  const docsRoot = await realpath8(docsLexical);
+  if (!docsState.isDirectory() || docsState.isSymbolicLink() || !inside6(physicalRoot, docsRoot)) {
+    throw pathError2("PATH_SYMLINK_ESCAPE");
+  }
+  const lifecycleLexical = join7(docsRoot, "project-lifecycle");
+  const lifecycleState = await fileState(lifecycleLexical);
+  if (lifecycleState === null && allowMissing) {
+    return {
+      projectRoot: physicalRoot,
+      docsRoot,
+      lifecycleRoot: lifecycleLexical,
+      exists: false
+    };
+  }
+  if (lifecycleState === null) throw pathError2("LAYOUT_ROOT_INVALID");
+  const lifecycleRoot = await realpath8(lifecycleLexical);
+  if (!lifecycleState.isDirectory() || lifecycleState.isSymbolicLink() || !inside6(physicalRoot, lifecycleRoot)) {
+    throw pathError2("PATH_SYMLINK_ESCAPE");
+  }
+  return { projectRoot: physicalRoot, docsRoot, lifecycleRoot, exists: true };
+};
+var snapshotTree = async (lifecycleRoot, operationOverrides = {}) => {
+  const rootState = await lstat7(lifecycleRoot);
+  const rootReal = await realpath8(lifecycleRoot);
+  if (!rootState.isDirectory() || rootState.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
+  const operations = { lstat: lstat7, open: open4, opendir: opendir4, readlink, realpath: realpath8, ...operationOverrides };
+  const entries = [];
+  let discoveredEntries = 0;
+  let totalBytes = 0;
+  const readBoundedFile2 = async (path) => {
+    const handle = await operations.open(path, "r");
+    try {
+      const buffer = Buffer.alloc(MAX_SNAPSHOT_FILE_BYTES + 1);
+      let bytesRead = 0;
+      while (bytesRead < buffer.length) {
+        const result = await handle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);
+        if (result.bytesRead === 0) break;
+        bytesRead += result.bytesRead;
+      }
+      if (bytesRead > MAX_SNAPSHOT_FILE_BYTES || totalBytes + bytesRead > MAX_SNAPSHOT_TOTAL_BYTES) {
+        throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+      }
+      totalBytes += bytesRead;
+      return buffer.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+  };
+  const visit = async (directory, prefix = "", depth = 0) => {
+    if (depth > MAX_SNAPSHOT_DEPTH) throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+    const children = [];
+    for await (const child of await operations.opendir(directory)) {
+      discoveredEntries += 1;
+      if (discoveredEntries > MAX_SNAPSHOT_ENTRIES) throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+      children.push(child);
+    }
+    children.sort((left, right) => compareCodePoints(left.name, right.name));
+    for (const child of children) {
+      const absolute = join7(directory, child.name);
+      const locator = prefix ? `${prefix}/${child.name}` : child.name;
+      const state = await operations.lstat(absolute);
+      if (state.isDirectory() && !state.isSymbolicLink()) {
+        const physical = await operations.realpath(absolute);
+        if (!inside6(rootReal, physical)) throw pathError2("PATH_SYMLINK_ESCAPE");
+        entries.push({ locator: `${locator}/`, type: "directory" });
+        await visit(physical, locator, depth + 1);
+      } else if (state.isFile()) {
+        if (state.size > MAX_SNAPSHOT_FILE_BYTES) throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+        entries.push({ locator, type: "file", hash: hash(await readBoundedFile2(absolute)) });
+      } else if (state.isSymbolicLink()) {
+        let physical;
+        try {
+          physical = await operations.realpath(absolute);
+        } catch {
+          throw pathError2("PATH_SYMLINK_ESCAPE");
+        }
+        if (!inside6(rootReal, physical)) throw pathError2("PATH_SYMLINK_ESCAPE");
+        entries.push({ locator, type: "symlink", target: await operations.readlink(absolute) });
+      } else {
+        throw pathError2("LAYOUT_ROOT_INVALID");
+      }
+    }
+  };
+  await visit(rootReal);
+  const fingerprint = hash(JSON.stringify(entries));
+  return { fingerprint, entries };
+};
+var inspectLifecycleTree = async ({ repositoryRoot, snapshotOperations } = {}) => {
+  try {
+    const { lifecycleRoot } = await lifecyclePaths(repositoryRoot);
+    return ok(await snapshotTree(lifecycleRoot, snapshotOperations));
+  } catch (error) {
+    return failure8(
+      error?.code ?? "LAYOUT_ROOT_INVALID",
+      "/",
+      "The lifecycle tree must be a bounded regular directory."
+    );
+  }
+};
+var validateInputs = ({
+  repositoryRoot,
+  candidateFiles,
+  candidateDirectories = [],
+  pruneDirectories = [],
+  deleteLocators,
+  validateCandidate
+}) => {
+  if (typeof repositoryRoot !== "string" || !isAbsolute9(repositoryRoot) || !Array.isArray(candidateFiles) || !Array.isArray(candidateDirectories) || !Array.isArray(deleteLocators) || !Array.isArray(pruneDirectories) || typeof validateCandidate !== "function") {
+    return failure8("LAYOUT_INPUT_INVALID", "/", "A bounded repository transaction input is required.");
+  }
+  const locators = /* @__PURE__ */ new Set();
+  const repositoryIds = /* @__PURE__ */ new Set();
+  try {
+    for (const [index2, entry2] of candidateFiles.entries()) {
+      if (!entry2 || typeof entry2 !== "object" || Array.isArray(entry2) || !(entry2.repository_id === null || typeof entry2.repository_id === "string") || typeof entry2.content !== "string" || typeof entry2.validate !== "function") {
+        return failure8("LAYOUT_INPUT_INVALID", `/candidateFiles/${index2}`, "Every candidate file requires repository ownership, content, and validation.");
+      }
+      assertBoundedRelativePath(entry2.locator);
+      if (locators.has(entry2.locator)) return failure8("LAYOUT_INPUT_INVALID", `/candidateFiles/${index2}/locator`, "Candidate locators must be unique.");
+      locators.add(entry2.locator);
+      repositoryIds.add(entry2.repository_id ?? "<governance>");
+    }
+    for (const [index2, locator] of deleteLocators.entries()) {
+      assertBoundedRelativePath(locator);
+      if (locators.has(locator)) return failure8("LAYOUT_INPUT_INVALID", `/deleteLocators/${index2}`, "A locator cannot be written and deleted together.");
+      if (deleteLocators.indexOf(locator) !== index2) return failure8("LAYOUT_INPUT_INVALID", `/deleteLocators/${index2}`, "Delete locators must be unique.");
+    }
+    for (const [index2, locator] of candidateDirectories.entries()) {
+      assertBoundedRelativePath(locator);
+      if (candidateDirectories.indexOf(locator) !== index2) return failure8("LAYOUT_INPUT_INVALID", `/candidateDirectories/${index2}`, "Candidate directories must be unique.");
+      if (locators.has(locator) || deleteLocators.includes(locator)) {
+        return failure8("LAYOUT_INPUT_INVALID", `/candidateDirectories/${index2}`, "Candidate directories cannot overlap file writes or deletes.");
+      }
+    }
+    for (const [index2, locator] of pruneDirectories.entries()) {
+      assertBoundedRelativePath(locator);
+      if (pruneDirectories.indexOf(locator) !== index2 || candidateDirectories.includes(locator) || locators.has(locator) || deleteLocators.includes(locator)) {
+        return failure8("LAYOUT_INPUT_INVALID", `/pruneDirectories/${index2}`, "Pruned directories must be unique and separate from candidate paths.");
+      }
+    }
+  } catch {
+    return failure8("PATH_ESCAPE", "/", "Every layout locator must be a bounded portable relative path.");
+  }
+  if (repositoryIds.size > 1) {
+    return failure8("LAYOUT_INPUT_INVALID", "/candidateFiles", "One transaction may publish only one repository shard.");
+  }
+  return ok();
+};
+var rollbackInitialization = async ({ lifecycleRoot, stagingRoot, candidateFingerprint }) => {
+  try {
+    if (await fingerprintAt(lifecycleRoot, candidateFingerprint)) {
+      if (await fileState(stagingRoot)) return recoveryFailure({ lifecycleRoot, stagingRoot });
+      try {
+        await rename2(lifecycleRoot, stagingRoot);
+      } catch {
+        if (await fileState(lifecycleRoot) || !await fingerprintAt(stagingRoot, candidateFingerprint)) {
+          return recoveryFailure({ lifecycleRoot, stagingRoot });
+        }
+      }
+    } else if (await fileState(lifecycleRoot)) {
+      return recoveryFailure({ lifecycleRoot, stagingRoot });
+    }
+    await cleanupStage(stagingRoot);
+    return ok();
+  } catch {
+    return recoveryFailure({ lifecycleRoot, stagingRoot });
+  }
+};
+var ensureParentDirectories = async (root, locator) => {
+  const parent = dirname4(locator);
+  if (parent === ".") return;
+  let current = root;
+  for (const segment of parent.split("/")) {
+    current = join7(current, segment);
+    const state = await fileState(current);
+    if (state === null) await mkdir2(current);
+    else if (!state.isDirectory() || state.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
+    const physical = await realpath8(current);
+    if (!inside6(root, physical)) throw pathError2("PATH_SYMLINK_ESCAPE");
+  }
+};
+var fingerprintAt = async (path, expected) => {
+  try {
+    return (await snapshotTree(path)).fingerprint === expected;
+  } catch {
+    return false;
+  }
+};
+var cleanupStage = async (stage) => {
+  if (stage && await fileState(stage)) await rm(stage, { recursive: true, force: true });
+};
+var preserveTreeTimestamps = async (sourceRoot, targetRoot, entries) => {
+  const ordinary = entries.filter(({ type }) => type === "file" || type === "directory").sort((left, right) => right.locator.length - left.locator.length);
+  for (const entry2 of ordinary) {
+    const locator = entry2.type === "directory" ? entry2.locator.slice(0, -1) : entry2.locator;
+    const source = await stat(join7(sourceRoot, locator), { bigint: true });
+    await utimes(
+      join7(targetRoot, locator),
+      Number(source.atimeNs) / 1e9,
+      Number(source.mtimeNs) / 1e9
+    );
+  }
+};
+var recoveryFailure = async ({ lifecycleRoot, stagingRoot, backupRoot }) => {
+  const labels = [];
+  for (const [label, path] of [["backup", backupRoot], ["live", lifecycleRoot], ["stage", stagingRoot]]) {
+    if (path && await fileState(path).catch(() => true)) labels.push(label);
+  }
+  return failure8(
+    "LAYOUT_RESTORE_FAILED",
+    "/recovery",
+    `Recovery required; preserved artifacts: ${labels.join(", ") || "unknown"}.`
+  );
+};
+var restoreOriginal = async ({
+  lifecycleRoot,
+  stagingRoot,
+  backupRoot,
+  originalFingerprint,
+  candidateFingerprint,
+  restoreRename
+}) => {
+  try {
+    if (await fingerprintAt(lifecycleRoot, originalFingerprint)) {
+      await cleanupStage(stagingRoot);
+      return ok();
+    }
+    if (!backupRoot || !await fingerprintAt(backupRoot, originalFingerprint)) {
+      return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+    }
+    if (await fingerprintAt(lifecycleRoot, candidateFingerprint)) {
+      if (await fileState(stagingRoot)) return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+      await rename2(lifecycleRoot, stagingRoot);
+      if (await fileState(lifecycleRoot) || !await fingerprintAt(stagingRoot, candidateFingerprint)) {
+        return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+      }
+    } else if (await fileState(lifecycleRoot)) {
+      return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+    }
+    try {
+      await restoreRename(backupRoot, lifecycleRoot);
+    } catch {
+      if (!await fingerprintAt(lifecycleRoot, originalFingerprint) || await fileState(backupRoot)) {
+        return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+      }
+    }
+    if (!await fingerprintAt(lifecycleRoot, originalFingerprint) || await fileState(backupRoot)) {
+      return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+    }
+    await cleanupStage(stagingRoot);
+    return ok();
+  } catch {
+    return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+  }
+};
+var applyLayoutTransaction = async (input = {}, operations = {}) => {
+  const inputValidation = validateInputs(input);
+  if (!inputValidation.ok) return inputValidation;
+  const write = operations.atomicWriteValidated ?? atomicWriteValidated;
+  const publishRename = operations.rename ?? rename2;
+  const restoreRename = operations.restoreRename ?? rename2;
+  const copyTree = operations.copy ?? cp;
+  const afterPublish = operations.afterPublish ?? (async () => {
+  });
+  const inspectTransition = operations.inspectTransition ?? (async () => ({ ok: true }));
+  const removeBackup = operations.removeBackup ?? ((path) => rm(path, { recursive: true, force: true }));
+  let paths;
+  let current;
+  try {
+    paths = await lifecyclePaths(input.repositoryRoot, { allowMissing: input.initialize === true });
+    current = paths.exists ? await snapshotTree(paths.lifecycleRoot) : { fingerprint: hash(JSON.stringify([])), entries: [] };
+  } catch (error) {
+    return failure8(error?.code ?? "LAYOUT_ROOT_INVALID", "/", "The lifecycle tree could not be inspected safely.");
+  }
+  if (input.expectedFingerprint && input.expectedFingerprint !== current.fingerprint) {
+    return failure8("LAYOUT_FINGERPRINT_STALE", "/expectedFingerprint", "The lifecycle tree changed before publication.");
+  }
+  const currentByLocator = new Map(current.entries.map((entry2) => [entry2.locator, entry2]));
+  const candidateDirectories = input.candidateDirectories ?? [];
+  const writes = input.candidateFiles.filter((entry2) => currentByLocator.get(entry2.locator)?.hash !== hash(entry2.content)).sort((left, right) => compareCodePoints(left.locator, right.locator));
+  const deletes = input.deleteLocators.filter((locator) => currentByLocator.has(locator) || currentByLocator.has(`${locator}/`)).sort(compareCodePoints);
+  const directoriesToCreate = candidateDirectories.filter((locator) => currentByLocator.get(`${locator}/`)?.type !== "directory").sort(compareCodePoints);
+  const directoriesToPrune = (input.pruneDirectories ?? []).filter((locator) => currentByLocator.get(`${locator}/`)?.type === "directory").sort((left, right) => right.length - left.length || compareCodePoints(left, right));
+  const unchanged = [
+    ...input.candidateFiles.filter((entry2) => !writes.includes(entry2)).map(({ locator }) => locator),
+    ...input.deleteLocators.filter((locator) => !deletes.includes(locator)),
+    ...candidateDirectories.filter((locator) => !directoriesToCreate.includes(locator)).map((locator) => `${locator}/`),
+    ...(input.pruneDirectories ?? []).filter((locator) => !directoriesToPrune.includes(locator)).map((locator) => `${locator}/`)
+  ].sort(compareCodePoints);
+  if (writes.length === 0 && deletes.length === 0 && directoriesToCreate.length === 0 && directoriesToPrune.length === 0) {
+    try {
+      const validation = await input.validateCandidate({ lifecycleRoot: paths.lifecycleRoot });
+      if (validation?.ok !== true) return failure8("LAYOUT_CANDIDATE_INVALID", "/", "The complete lifecycle candidate is invalid.");
+      return ok({ changed: [], unchanged, cleanup_pending: false, recovery_artifacts: [] });
+    } catch {
+      return failure8("LAYOUT_CANDIDATE_INVALID", "/", "The complete lifecycle candidate is invalid.");
+    }
+  }
+  let stagingRoot;
+  let backupRoot;
+  let candidateFingerprint;
+  let publicationStarted = false;
+  let initializationPublished = false;
+  try {
+    stagingRoot = await mkdtemp(join7(paths.docsRoot, ".project-lifecycle-layout-stage-"));
+    if (paths.exists) {
+      await copyTree(paths.lifecycleRoot, stagingRoot, {
+        recursive: true,
+        dereference: false,
+        preserveTimestamps: true,
+        force: false,
+        verbatimSymlinks: true
+      });
+      await preserveTreeTimestamps(paths.lifecycleRoot, stagingRoot, current.entries);
+    }
+    await snapshotTree(stagingRoot);
+    for (const locator of directoriesToCreate) {
+      await ensureParentDirectories(stagingRoot, `${locator}/placeholder`);
+      const target = join7(stagingRoot, locator);
+      const state = await fileState(target);
+      if (state === null) await mkdir2(target);
+      else if (!state.isDirectory() || state.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
+    }
+    for (const locator of deletes) {
+      const target = await resolveInside(stagingRoot, locator);
+      await rm(target, { recursive: true, force: true });
+    }
+    for (const locator of directoriesToPrune) {
+      const target = await resolveInside(stagingRoot, locator);
+      await rmdir(target);
+    }
+    for (const entry2 of writes) {
+      await ensureParentDirectories(stagingRoot, entry2.locator);
+      await write({ root: stagingRoot, target: entry2.locator, content: entry2.content, validate: entry2.validate });
+    }
+    const candidateValidation = await input.validateCandidate({ lifecycleRoot: stagingRoot });
+    if (candidateValidation?.ok !== true) {
+      await cleanupStage(stagingRoot);
+      return failure8("LAYOUT_CANDIDATE_INVALID", "/", "The complete lifecycle candidate is invalid.");
+    }
+    candidateFingerprint = (await snapshotTree(stagingRoot)).fingerprint;
+    const originalIsCurrent = paths.exists ? await fingerprintAt(paths.lifecycleRoot, current.fingerprint) : await fileState(paths.lifecycleRoot) === null;
+    if (!originalIsCurrent) {
+      await cleanupStage(stagingRoot);
+      return failure8("LAYOUT_FINGERPRINT_STALE", "/expectedFingerprint", "The lifecycle tree changed before publication.");
+    }
+    if (!paths.exists) {
+      try {
+        await publishRename(stagingRoot, paths.lifecycleRoot);
+      } catch {
+        if (await fileState(stagingRoot) || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) {
+          throw pathError2("LAYOUT_TRANSACTION_FAILED");
+        }
+      }
+      publicationStarted = true;
+      initializationPublished = true;
+      const liveValidation2 = await input.validateCandidate({ lifecycleRoot: paths.lifecycleRoot });
+      if (liveValidation2?.ok !== true || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) {
+        throw pathError2("LAYOUT_TRANSACTION_FAILED");
+      }
+      await afterPublish({ lifecycleRoot: paths.lifecycleRoot });
+      return ok({
+        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+        unchanged,
+        cleanup_pending: false,
+        recovery_artifacts: []
+      });
+    }
+    backupRoot = await mkdtemp(join7(paths.docsRoot, ".project-lifecycle-layout-backup-"));
+    await rmdir(backupRoot);
+    try {
+      await publishRename(paths.lifecycleRoot, backupRoot);
+    } catch {
+      if (await fileState(paths.lifecycleRoot) || !await fingerprintAt(backupRoot, current.fingerprint)) throw pathError2("LAYOUT_TRANSACTION_FAILED");
+    }
+    publicationStarted = true;
+    if (await fileState(paths.lifecycleRoot) || !await fingerprintAt(backupRoot, current.fingerprint)) {
+      throw pathError2("LAYOUT_TRANSACTION_FAILED");
+    }
+    if ((await inspectTransition({
+      phase: "backup-moved",
+      lifecycleRoot: paths.lifecycleRoot,
+      stagingRoot,
+      backupRoot
+    }))?.ok !== true) throw pathError2("LAYOUT_TRANSACTION_FAILED");
+    try {
+      await publishRename(stagingRoot, paths.lifecycleRoot);
+    } catch {
+      if (await fileState(stagingRoot) || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) throw pathError2("LAYOUT_TRANSACTION_FAILED");
+    }
+    if ((await inspectTransition({
+      phase: "candidate-moved",
+      lifecycleRoot: paths.lifecycleRoot,
+      stagingRoot,
+      backupRoot
+    }))?.ok !== true) throw pathError2("LAYOUT_TRANSACTION_FAILED");
+    const liveValidation = await input.validateCandidate({ lifecycleRoot: paths.lifecycleRoot });
+    if (liveValidation?.ok !== true || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) {
+      throw pathError2("LAYOUT_TRANSACTION_FAILED");
+    }
+    await afterPublish({ lifecycleRoot: paths.lifecycleRoot });
+    if (operations.retainBackup === true) {
+      return ok({
+        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+        unchanged,
+        cleanup_pending: true,
+        recovery_artifacts: ["backup"],
+        retained_publication: {
+          lifecycle_root: paths.lifecycleRoot,
+          backup_root: backupRoot,
+          original_fingerprint: current.fingerprint,
+          candidate_fingerprint: candidateFingerprint
+        }
+      });
+    }
+    try {
+      await removeBackup(backupRoot);
+    } catch {
+    }
+    if (await fileState(backupRoot)) {
+      return ok({
+        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+        unchanged,
+        cleanup_pending: true,
+        recovery_artifacts: ["backup"]
+      });
+    }
+    backupRoot = null;
+    return ok({
+      changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+      unchanged,
+      cleanup_pending: false,
+      recovery_artifacts: []
+    });
+  } catch (error) {
+    if (publicationStarted) {
+      const restored = initializationPublished ? await rollbackInitialization({
+        lifecycleRoot: paths.lifecycleRoot,
+        stagingRoot,
+        candidateFingerprint
+      }) : await restoreOriginal({
+        lifecycleRoot: paths.lifecycleRoot,
+        stagingRoot,
+        backupRoot,
+        originalFingerprint: current.fingerprint,
+        candidateFingerprint,
+        restoreRename
+      });
+      if (!restored.ok) return restored;
+    } else {
+      await cleanupStage(stagingRoot).catch(() => {
+      });
+    }
+    return failure8(
+      error?.code === "PATH_ESCAPE" || error?.code === "PATH_SYMLINK_ESCAPE" ? error.code : "LAYOUT_TRANSACTION_FAILED",
+      "/",
+      "The lifecycle layout transaction could not be completed."
+    );
+  }
+};
+var finalizeRetainedLayout = async ({ retained_publication: publication } = {}, operations = {}) => {
+  if (!publication?.backup_root) return failure8("LAYOUT_INPUT_INVALID", "/retained_publication", "A retained publication is required.");
+  try {
+    const removeBackup = operations.removeBackup ?? ((path) => rm(path, { recursive: true, force: true }));
+    if (!await fingerprintAt(publication.lifecycle_root, publication.candidate_fingerprint)) {
+      return failure8("LAYOUT_FINGERPRINT_STALE", "/retained_publication", "The published candidate changed before finalization.");
+    }
+    await removeBackup(publication.backup_root);
+    return await fileState(publication.backup_root) ? failure8("LAYOUT_TRANSACTION_FAILED", "/retained_publication", "The retained backup could not be finalized.") : ok(null);
+  } catch {
+    return failure8("LAYOUT_TRANSACTION_FAILED", "/retained_publication", "The retained backup could not be finalized.");
+  }
+};
+var rollbackRetainedLayout = async ({ retained_publication: publication } = {}, operations = {}) => {
+  if (!publication?.backup_root) return failure8("LAYOUT_INPUT_INVALID", "/retained_publication", "A retained publication is required.");
+  let stagingRoot;
+  try {
+    stagingRoot = await mkdtemp(join7(dirname4(publication.lifecycle_root), ".project-lifecycle-layout-rollback-"));
+    await rmdir(stagingRoot);
+  } catch {
+    return failure8("LAYOUT_RESTORE_FAILED", "/recovery", "Recovery staging could not be initialized.");
+  }
+  return restoreOriginal({
+    lifecycleRoot: publication.lifecycle_root,
+    stagingRoot,
+    backupRoot: publication.backup_root,
+    originalFingerprint: publication.original_fingerprint,
+    candidateFingerprint: publication.candidate_fingerprint,
+    restoreRename: operations.restoreRename ?? rename2
+  });
+};
+
+// scripts/delivery/delivery-layout-migration.mjs
+var MAX_FILES = 2e3;
+var MAX_BYTES = 262144;
+var ID5 = /^[a-z][a-z0-9-]*$/u;
+var LANGUAGES = ["en", "zh-CN"];
+var ROOT_KINDS2 = /* @__PURE__ */ new Set(["prd", "non-prd-delivery"]);
+var failure9 = (code, path, message) => fail([createError(code, path, message)]);
+var hash2 = (value) => `sha256:${createHash4("sha256").update(value).digest("hex")}`;
+var freeze2 = (value) => {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) freeze2(child);
+  }
+  return value;
+};
+var inside7 = (root, candidate) => {
+  const path = relative8(root, candidate);
+  return path === "" || path !== ".." && !path.startsWith(`..${sep8}`) && !isAbsolute10(path);
+};
+var canonical = (value) => JSON.stringify(value);
+var renderDocument = (frontmatter, body) => `---
+${(0, import_yaml2.stringify)(frontmatter, { lineWidth: 0 }).trimEnd()}
+---
+${body.startsWith("\n") ? body : `
+${body}`}`;
+var parseDocument2 = (source) => {
+  const normalized = source.replaceAll("\r\n", "\n");
+  if (!normalized.startsWith("---\n")) return null;
+  const closing = normalized.indexOf("\n---\n", 4);
+  if (closing === -1) return null;
+  const parsed = parseRestrictedYaml(normalized.slice(4, closing), "/frontmatter");
+  if (!parsed.ok || !validateJson("delivery-frontmatter", parsed.value).ok || parsed.value.schema_version !== 1) return null;
+  return { frontmatter: parsed.value, source: normalized, body: normalized.slice(closing + 5) };
+};
+var rootsFor = async (rootValue) => {
+  if (typeof rootValue !== "string" || !isAbsolute10(rootValue)) throw new Error("Absolute root required.");
+  const projectState = await lstat8(resolve7(rootValue));
+  const projectRoot = await realpath9(resolve7(rootValue));
+  const docsState = await lstat8(join8(projectRoot, "docs"));
+  const docsRoot = await realpath9(join8(projectRoot, "docs"));
+  const lifecycleState = await lstat8(join8(docsRoot, "project-lifecycle"));
+  const lifecycleRoot = await realpath9(join8(docsRoot, "project-lifecycle"));
+  if (!projectState.isDirectory() || projectState.isSymbolicLink() || !docsState.isDirectory() || docsState.isSymbolicLink() || !lifecycleState.isDirectory() || lifecycleState.isSymbolicLink() || !inside7(projectRoot, lifecycleRoot)) throw new Error("Bounded lifecycle root required.");
+  return { projectRoot, lifecycleRoot };
+};
+var readLegacyRoot = async (lifecycleRoot, rootLocator, issues, operations, inventoryState) => {
+  if (inventoryState.exceeded) return [];
+  const path = join8(lifecycleRoot, rootLocator);
+  try {
+    const state = await lstat8(path);
+    const physical = await realpath9(path);
+    if (!state.isDirectory() || state.isSymbolicLink() || !inside7(lifecycleRoot, physical)) throw new Error();
+    const files = [];
+    for await (const entry2 of await operations.opendir(physical)) {
+      inventoryState.entries += 1;
+      if (inventoryState.entries > MAX_FILES) {
+        inventoryState.exceeded = true;
+        break;
+      }
+      const locator = `${rootLocator}/${entry2.name}`;
+      if (entry2.isDirectory() || entry2.isSymbolicLink() || !entry2.isFile()) {
+        issues.push({ code: "MIXED_LAYOUT", artifact_id: null, locator });
+        continue;
+      }
+      files.push({ path: join8(physical, entry2.name), locator, name: entry2.name, archived: rootLocator.startsWith("archive/") });
+    }
+    return files;
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+};
+var linksFrom = (body, source) => [...body.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/gu)].map((match) => match[1]).filter((href) => /^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith("//")).map((href) => {
+  const scheme = /^([a-z][a-z0-9+.-]*):/iu.exec(href)?.[1]?.toLowerCase() ?? "https";
+  let authority = null;
+  try {
+    authority = new URL(href, "https://external.invalid").host || null;
+  } catch {
+  }
+  return { source, scheme, authority, href_hash: hash2(href) };
+});
+var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], legacyOperations = {} } = {}) => {
+  if (!Array.isArray(mappings) || mappings.length > 200) {
+    return failure9("DELIVERY_MIGRATION_INPUT_INVALID", "/owner_mappings", "Owner mappings must be one bounded array.");
+  }
+  let projectRoot;
+  let lifecycleRoot;
+  let tree;
+  try {
+    ({ projectRoot, lifecycleRoot } = await rootsFor(root));
+    tree = await inspectLifecycleTree({ repositoryRoot: projectRoot });
+    if (!tree.ok) throw new Error();
+  } catch {
+    return failure9("DELIVERY_MIGRATION_ROOT_INVALID", "/root", "Migration preview requires one bounded regular project root.");
+  }
+  const needsUser = [];
+  let files;
+  try {
+    const operations = { opendir: opendir5, ...legacyOperations };
+    const inventoryState = { entries: 0, exceeded: false };
+    files = [
+      ...await readLegacyRoot(lifecycleRoot, "delivery", needsUser, operations, inventoryState),
+      ...await readLegacyRoot(lifecycleRoot, "archive/delivery", needsUser, operations, inventoryState)
+    ];
+    if (inventoryState.exceeded) {
+      needsUser.push({ code: "INVENTORY_LIMIT", artifact_id: null, locator: "delivery" });
+      files = [];
+    }
+  } catch {
+    return failure9("DELIVERY_MIGRATION_INVENTORY_INVALID", "/delivery", "Legacy delivery inventory is unsafe.");
+  }
+  const grouped = /* @__PURE__ */ new Map();
+  const views = {};
+  for (const file of files.slice(0, MAX_FILES + 1).sort((a, b) => compareCodePoints(a.locator, b.locator))) {
+    const state = await lstat8(file.path);
+    if (state.size > MAX_BYTES) {
+      needsUser.push({ code: "DOCUMENT_TOO_LARGE", artifact_id: null, locator: file.locator });
+      continue;
+    }
+    if (["alignment-review-en.md", "alignment-review.md"].includes(file.name)) {
+      views[file.name.endsWith("-en.md") ? "en" : "zh-CN"] = file;
+      continue;
+    }
+    if (!file.name.endsWith(".md")) {
+      needsUser.push({ code: "MIXED_LAYOUT", artifact_id: null, locator: file.locator });
+      continue;
+    }
+    const bytes = await readFile8(file.path);
+    const document3 = parseDocument2(bytes.toString("utf8"));
+    if (!document3) {
+      needsUser.push({ code: "FRONTMATTER_INVALID", artifact_id: null, locator: file.locator });
+      continue;
+    }
+    const id = document3.frontmatter.artifact_id;
+    const language = file.name === `${id}-en.md` ? "en" : file.name === `${id}.md` ? "zh-CN" : null;
+    if (language === null) {
+      needsUser.push({ code: "LOCATOR_INVALID", artifact_id: id, locator: file.locator });
+      continue;
+    }
+    const key = `${file.archived ? "archive" : "active"}:${id}`;
+    const pair = grouped.get(key) ?? {};
+    if (pair[language]) needsUser.push({ code: "DUPLICATE_ID", artifact_id: id, locator: file.locator });
+    pair[language] = { ...file, ...document3, body_hash: hash2(bytes) };
+    grouped.set(key, pair);
+  }
+  const supplied = /* @__PURE__ */ new Map();
+  for (const mapping of mappings) {
+    if (!mapping || Object.keys(mapping).sort().join(",") !== "artifact_id,owner_artifact_id" || !ID5.test(mapping.artifact_id ?? "") || !ID5.test(mapping.owner_artifact_id ?? "") || supplied.has(mapping.artifact_id) && supplied.get(mapping.artifact_id) !== mapping.owner_artifact_id) {
+      needsUser.push({ code: "OWNER_MAPPING_CONTRADICTORY", artifact_id: mapping?.artifact_id ?? null, locator: null });
+    } else supplied.set(mapping.artifact_id, mapping.owner_artifact_id);
+  }
+  const complete = [];
+  const ownerKinds = /* @__PURE__ */ new Map();
+  const completeIds = /* @__PURE__ */ new Set();
+  for (const [key, pair] of grouped) {
+    const id = key.slice(key.indexOf(":") + 1);
+    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual5(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
+      needsUser.push({ code: "PAIR_INCOMPLETE", artifact_id: id, locator: pair.en?.locator ?? pair["zh-CN"]?.locator ?? null });
+      continue;
+    }
+    if (completeIds.has(id)) {
+      needsUser.push({ code: "DUPLICATE_ID", artifact_id: id, locator: pair.en.locator });
+      continue;
+    }
+    completeIds.add(id);
+    complete.push({ key, pair, archived: key.startsWith("archive:") });
+    if (ROOT_KINDS2.has(pair.en.frontmatter.artifact_kind)) ownerKinds.set(id, pair.en.frontmatter.artifact_kind);
+  }
+  const moves = [];
+  const unresolvedExternalLinks = [];
+  for (const { pair, archived } of complete) {
+    const frontmatter = pair.en.frontmatter;
+    const id = frontmatter.artifact_id;
+    let ownerId = null;
+    if (ROOT_KINDS2.has(frontmatter.artifact_kind)) ownerId = id;
+    else if (frontmatter.artifact_kind !== "feedback") {
+      const candidates = frontmatter.relationships.prd_ids.filter((candidate) => ownerKinds.has(candidate));
+      if (candidates.length === 1) ownerId = candidates[0];
+      const mapped = supplied.get(id);
+      if (mapped !== void 0) {
+        if (!ownerKinds.has(mapped) || ownerId !== null && ownerId !== mapped) {
+          needsUser.push({ code: "OWNER_MAPPING_CONTRADICTORY", artifact_id: id, locator: pair.en.locator });
+          continue;
+        }
+        ownerId = mapped;
+      }
+      if (ownerId === null) {
+        needsUser.push({ code: candidates.length > 1 ? "OWNER_AMBIGUOUS" : "OWNER_MISSING", artifact_id: id, locator: pair.en.locator });
+        continue;
+      }
+    }
+    const next = {
+      ...frontmatter,
+      schema_version: 2,
+      ...ownerId === null ? {} : { owner_artifact_id: ownerId }
+    };
+    const ownerKind = ownerId === null ? null : ownerKinds.get(ownerId);
+    const to = archived ? archivedDeliveryPair(next, { ownerKind }) : activeDeliveryPair(next, { ownerKind });
+    moves.push({
+      artifact_id: id,
+      artifact_kind: frontmatter.artifact_kind,
+      owner_artifact_id: ownerId,
+      from: { en: pair.en.locator, "zh-CN": pair["zh-CN"].locator },
+      to,
+      body_hashes: { en: pair.en.body_hash, "zh-CN": pair["zh-CN"].body_hash }
+    });
+    unresolvedExternalLinks.push(...linksFrom(pair.en.body, pair.en.locator), ...linksFrom(pair["zh-CN"].body, pair["zh-CN"].locator));
+  }
+  if (views.en || views["zh-CN"]) {
+    if (!views.en || !views["zh-CN"]) needsUser.push({ code: "PAIR_INCOMPLETE", artifact_id: "alignment-review", locator: views.en?.locator ?? views["zh-CN"]?.locator });
+    else moves.push({
+      artifact_id: "alignment-review",
+      artifact_kind: "generated-view",
+      owner_artifact_id: null,
+      from: { en: views.en.locator, "zh-CN": views["zh-CN"].locator },
+      to: alignmentReviewPair(),
+      body_hashes: { en: hash2(await readFile8(views.en.path)), "zh-CN": hash2(await readFile8(views["zh-CN"].path)) }
+    });
+  }
+  moves.sort((a, b) => compareCodePoints(a.artifact_id, b.artifact_id));
+  const targetBySource = new Map(moves.flatMap(({ from, to }) => LANGUAGES.map((language) => [from[language], to[language]])));
+  const managedReferenceRewrites = [];
+  for (const { pair } of complete) {
+    for (const language of LANGUAGES) {
+      const movedSource = targetBySource.get(pair[language].locator);
+      if (!movedSource) continue;
+      for (const match of pair[language].body.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/gu)) {
+        const href = match[1];
+        if (/^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith("//") || href.startsWith("#")) continue;
+        const [path, fragment] = href.split("#");
+        const resolved = posix4.normalize(posix4.join(posix4.dirname(pair[language].locator), path));
+        if (resolved.startsWith("../") || posix4.isAbsolute(resolved)) {
+          needsUser.push({ code: "LINK_UNSAFE", artifact_id: pair[language].frontmatter.artifact_id, locator: pair[language].locator });
+          continue;
+        }
+        const target = targetBySource.get(resolved) ?? resolved;
+        const rewritten = posix4.relative(posix4.dirname(movedSource), target);
+        managedReferenceRewrites.push({
+          source: pair[language].locator,
+          href,
+          rewritten_href: `${rewritten || "."}${fragment ? `#${fragment}` : ""}`
+        });
+      }
+    }
+  }
+  managedReferenceRewrites.sort((a, b) => compareCodePoints(`${a.source}:${a.href}`, `${b.source}:${b.href}`));
+  needsUser.sort((a, b) => compareCodePoints(`${a.code}:${a.artifact_id ?? ""}:${a.locator ?? ""}`, `${b.code}:${b.artifact_id ?? ""}:${b.locator ?? ""}`));
+  unresolvedExternalLinks.sort((a, b) => compareCodePoints(`${a.source}:${a.href}`, `${b.source}:${b.href}`));
+  const candidateDirectories = [...new Set(moves.flatMap(({ to }) => LANGUAGES.map((language) => dirname5(to[language]))))].sort(compareCodePoints);
+  const ownerRoots = moves.filter(({ artifact_kind: kind }) => ROOT_KINDS2.has(kind));
+  const generatedWrites = [
+    "delivery/INDEX-en.md",
+    "delivery/INDEX.md",
+    "delivery/layout.json",
+    ...ownerRoots.flatMap(({ artifact_id: id, artifact_kind: kind }) => {
+      const root2 = kind === "prd" ? `delivery/prds/${id}` : `delivery/non-prd/${id}`;
+      return [`${root2}/INDEX-en.md`, `${root2}/INDEX.md`];
+    })
+  ].sort(compareCodePoints);
+  const targets = new Set(moves.flatMap(({ to }) => Object.values(to)));
+  const removals = [...new Set(moves.flatMap(({ from }) => Object.values(from)))].filter((locator) => !targets.has(locator)).sort(compareCodePoints);
+  const result = {
+    route: needsUser.length > 0 ? "NEEDS_USER" : "NON_PRD_DELIVERY",
+    selected_solution_id: "solution-owner-centric-delivery-layout-v2",
+    source_fingerprint: hash2(canonical(tree.value.entries)),
+    moves,
+    managed_reference_rewrites: managedReferenceRewrites,
+    unresolved_external_links: unresolvedExternalLinks,
+    needs_user: needsUser,
+    candidate_directories: candidateDirectories,
+    generated_writes: generatedWrites,
+    removals
+  };
+  result.plan_hash = hash2(canonical(result));
+  return ok(freeze2(result));
+};
+var replaceManagedLinks = (source, rewrites) => rewriteMarkdownOutsideCode(source, (text4) => {
+  const byHref = new Map(rewrites.map(({ href, rewritten_href: target }) => [href, target]));
+  return text4.replace(
+    /(\[[^\]]*\]\()([^)\s]+)((?:\s+[^)]*)?\))/gu,
+    (whole, prefix, href, suffix) => byHref.has(href) ? `${prefix}${byHref.get(href)}${suffix}` : whole
+  );
+});
+var inventoryForCandidate = (items) => {
+  const active = items.filter(({ archived: archived2 }) => !archived2);
+  const archived = items.filter(({ archived: value }) => value);
+  const owners = active.filter(({ artifact_kind: kind }) => ROOT_KINDS2.has(kind)).sort((left, right) => compareCodePoints(left.artifact_id, right.artifact_id));
+  const byOwner = {};
+  const archivedByOwner = {};
+  for (const owner of owners) byOwner[owner.artifact_id] = { owner, assets: [] };
+  for (const item of active) {
+    if (item.owner_artifact_id && byOwner[item.owner_artifact_id]) byOwner[item.owner_artifact_id].assets.push(item);
+  }
+  for (const item of archived) {
+    if (!item.owner_artifact_id) continue;
+    archivedByOwner[item.owner_artifact_id] ??= { owner_artifact_id: item.owner_artifact_id, assets: [] };
+    archivedByOwner[item.owner_artifact_id].assets.push(item);
+  }
+  for (const value of [...Object.values(byOwner), ...Object.values(archivedByOwner)]) {
+    value.assets.sort((left, right) => compareCodePoints(left.artifact_id, right.artifact_id));
+  }
+  return {
+    layout_version: 2,
+    feedbacks: active.filter(({ artifact_kind: kind }) => kind === "feedback"),
+    owners,
+    closed_summaries: [...active, ...archived].filter(({ artifact_kind: kind }) => kind === "closure-summary"),
+    views: [],
+    by_owner: byOwner,
+    archived_by_owner: archivedByOwner,
+    pairs: [],
+    archived_pairs: []
+  };
+};
+var buildDeliveryMigrationCandidate = async ({ root, preview } = {}) => {
+  if (!preview || preview.route !== "NON_PRD_DELIVERY" || !Array.isArray(preview.moves)) {
+    return failure9("DELIVERY_MIGRATION_INPUT_INVALID", "/preview", "One complete migration preview is required.");
+  }
+  let lifecycleRoot;
+  let tree;
+  try {
+    ({ lifecycleRoot } = await rootsFor(root));
+    tree = await inspectLifecycleTree({ repositoryRoot: root });
+    if (!tree.ok || `sha256:${tree.value.fingerprint}` !== preview.source_fingerprint) {
+      return failure9("DELIVERY_MIGRATION_STALE", "/source_fingerprint", "Migration preview no longer matches the source tree.");
+    }
+  } catch {
+    return failure9("DELIVERY_MIGRATION_ROOT_INVALID", "/root", "Migration candidate requires one bounded regular project root.");
+  }
+  const files = [];
+  const items = [];
+  try {
+    for (const move of preview.moves) {
+      for (const language of LANGUAGES) {
+        const source = await readFile8(join8(lifecycleRoot, move.from[language]));
+        if (hash2(source) !== move.body_hashes[language]) {
+          return failure9("DELIVERY_MIGRATION_STALE", `/moves/${move.artifact_id}`, "A migration source changed after preview.");
+        }
+        let content3 = source.toString("utf8").replaceAll("\r\n", "\n");
+        if (move.artifact_kind !== "generated-view") {
+          const document3 = parseDocument2(content3);
+          if (!document3) return failure9("DELIVERY_MIGRATION_CANDIDATE_INVALID", `/moves/${move.artifact_id}`, "A migration source document is invalid.");
+          const frontmatter = {
+            ...document3.frontmatter,
+            schema_version: 2,
+            ...move.owner_artifact_id === null ? {} : { owner_artifact_id: move.owner_artifact_id }
+          };
+          const rewrites = preview.managed_reference_rewrites.filter(({ source: locator }) => locator === move.from[language]);
+          content3 = renderDocument(frontmatter, replaceManagedLinks(document3.body, rewrites));
+          if (language === "en") {
+            items.push({
+              artifact_id: move.artifact_id,
+              artifact_kind: move.artifact_kind,
+              ...move.owner_artifact_id === null ? {} : { owner_artifact_id: move.owner_artifact_id },
+              retention_tier: frontmatter.retention_tier,
+              frontmatter,
+              locators: move.to,
+              archived: move.to.en.startsWith("archive/")
+            });
+          }
+        }
+        files.push({
+          repository_id: null,
+          locator: move.to[language],
+          content: content3,
+          validate: async (candidate) => candidate === content3 ? ok(candidate) : failure9("DELIVERY_MIGRATION_CANDIDATE_INVALID", `/${move.to[language]}`, "Staged migration content changed.")
+        });
+      }
+    }
+    const indexes = await generateDeliveryIndexes({ inventory: inventoryForCandidate(items) });
+    if (!indexes.ok) return indexes;
+    files.push(...indexes.value.files.map(({ locator, content: content3 }) => ({
+      repository_id: null,
+      locator,
+      content: content3,
+      validate: async (candidate) => candidate === content3 ? ok(candidate) : failure9("DELIVERY_MIGRATION_CANDIDATE_INVALID", `/${locator}`, "Staged delivery index changed.")
+    })));
+    const marker = deliveryLayoutContent();
+    files.push({
+      repository_id: null,
+      locator: "delivery/layout.json",
+      content: marker,
+      validate: async (candidate) => candidate === marker ? ok(candidate) : failure9("DELIVERY_MIGRATION_CANDIDATE_INVALID", "/delivery/layout.json", "Staged delivery marker changed.")
+    });
+  } catch {
+    return failure9("DELIVERY_MIGRATION_CANDIDATE_INVALID", "/", "Migration candidate could not be built safely.");
+  }
+  const targetLocators = new Set(files.map(({ locator }) => locator));
+  const deleteLocators = [...new Set(preview.moves.flatMap(({ from }) => Object.values(from)))].filter((locator) => !targetLocators.has(locator)).sort(compareCodePoints);
+  const candidateDirectories = [.../* @__PURE__ */ new Set([
+    ...preview.candidate_directories,
+    ...files.map(({ locator }) => dirname5(locator))
+  ])].filter((locator) => locator !== ".").sort(compareCodePoints);
+  return ok({
+    transaction: {
+      repositoryRoot: root,
+      expectedFingerprint: preview.source_fingerprint.replace(/^sha256:/u, ""),
+      candidateDirectories,
+      candidateFiles: files.sort((left, right) => compareCodePoints(left.locator, right.locator)),
+      deleteLocators,
+      validateCandidate: async ({ lifecycleRoot: candidateRoot }) => {
+        const inventory = await collectDeliveryInventory({ lifecycleRoot: candidateRoot });
+        if (!inventory.ok) return inventory;
+        const present = new Set([
+          ...inventory.value.pairs,
+          ...inventory.value.archived_pairs
+        ].map(({ locator }) => locator));
+        return preview.moves.every(({ to }) => Object.values(to).every((locator) => locator.includes("/views/") || present.has(locator))) ? ok(inventory.value) : failure9("DELIVERY_MIGRATION_CANDIDATE_INVALID", "/", "Candidate inventory is incomplete.");
+      }
+    }
+  });
+};
+var validatePublishedDeliveryV2 = async ({ root, preview } = {}) => {
+  let lifecycleRoot;
+  try {
+    ({ lifecycleRoot } = await rootsFor(root));
+  } catch {
+    return failure9("DELIVERY_MIGRATION_ROOT_INVALID", "/root", "Published delivery validation requires one bounded regular project root.");
+  }
+  const inventory = await collectDeliveryInventory({ lifecycleRoot });
+  if (!inventory.ok) return inventory;
+  const present = new Set([
+    ...inventory.value.pairs,
+    ...inventory.value.archived_pairs,
+    ...inventory.value.views.flatMap(({ locators }) => Object.values(locators))
+  ].map((entry2) => typeof entry2 === "string" ? entry2 : entry2.locator));
+  for (const move of preview?.moves ?? []) {
+    if (!Object.values(move.to).every((locator) => present.has(locator))) {
+      return failure9("DELIVERY_MIGRATION_VALIDATION_FAILED", `/moves/${move.artifact_id}`, "A published migration target is missing.");
+    }
+    for (const locator of Object.values(move.from)) {
+      if (Object.values(move.to).includes(locator)) continue;
+      try {
+        await lstat8(join8(lifecycleRoot, locator));
+        return failure9("DELIVERY_MIGRATION_VALIDATION_FAILED", `/moves/${move.artifact_id}`, "A legacy migration source remains published.");
+      } catch (error) {
+        if (error.code !== "ENOENT") return failure9("DELIVERY_MIGRATION_VALIDATION_FAILED", "/", "Published migration paths could not be verified.");
+      }
+    }
+  }
+  return ok({
+    layout_version: 2,
+    validation_ref: hash2(canonical({
+      moves: preview?.moves ?? [],
+      owners: inventory.value.owners.map(({ artifact_id: id }) => id),
+      feedbacks: inventory.value.feedbacks.map(({ artifact_id: id }) => id)
+    }))
+  });
+};
+var migrateDeliveryLayout = async (input = {}, operations = {}) => {
+  if (!isSafeReference(input.approval_ref) || !isSafeReference(input.backup_ref)) {
+    return failure9("DELIVERY_MIGRATION_APPROVAL_REQUIRED", "/approval_ref", "Migration requires explicit approval and a recoverable backup reference.");
+  }
+  const inspection = await inspectLegacyDeliveryLayout(input);
+  if (!inspection.ok) return inspection;
+  if (inspection.value.route === "NEEDS_USER") {
+    return failure9("DELIVERY_MIGRATION_NEEDS_USER", "/owner_mappings", "Migration ownership must be resolved before publication.");
+  }
+  if (input.selected_solution_id !== inspection.value.selected_solution_id) {
+    return failure9("DELIVERY_MIGRATION_SOLUTION_REQUIRED", "/selected_solution_id", "Migration requires the exact selected solution from the approved preview.");
+  }
+  if (inspection.value.plan_hash !== input.plan_hash || inspection.value.source_fingerprint !== input.source_fingerprint) {
+    return failure9("DELIVERY_MIGRATION_STALE", "/plan_hash", "Migration preview no longer matches the source tree.");
+  }
+  const candidate = await buildDeliveryMigrationCandidate({ root: input.root, preview: inspection.value });
+  if (!candidate.ok) return candidate;
+  const publication = await applyLayoutTransaction(candidate.value.transaction, {
+    ...operations,
+    retainBackup: true
+  });
+  if (!publication.ok) return publication;
+  const validation = await (operations.validatePublished ?? validatePublishedDeliveryV2)({ root: input.root, preview: inspection.value });
+  if (!validation.ok) {
+    const rollback = await rollbackRetainedLayout(publication.value, operations);
+    return rollback.ok ? validation : rollback;
+  }
+  const finalized = await finalizeRetainedLayout(publication.value, operations);
+  if (!finalized.ok) {
+    const rollback = await rollbackRetainedLayout(publication.value, operations);
+    return rollback.ok ? finalized : rollback;
+  }
+  return ok({
+    layout_version: 2,
+    backup_ref: input.backup_ref,
+    moved_locators: inspection.value.moves,
+    validation_ref: validation.value.validation_ref
+  });
+};
+
+// scripts/delivery/materialize-asset.mjs
+var import_yaml3 = __toESM(require_dist(), 1);
+import { createHash as createHash5 } from "node:crypto";
+import { lstat as lstat9, mkdir as mkdir3, readFile as readFile9, realpath as realpath10, rmdir as rmdir2, unlink as unlink3 } from "node:fs/promises";
+import { dirname as dirname6, isAbsolute as isAbsolute11, join as join9, relative as relative9, sep as sep9 } from "node:path";
+import { isDeepStrictEqual as isDeepStrictEqual6 } from "node:util";
+var MAX_BODY_BYTES = 131072;
+var MAX_DOCUMENT_BYTES2 = MAX_BODY_BYTES * 2;
+var FEEDBACK_SOURCE_SECTIONS = ["original_problem", "scenario", "expectation"];
+var FEEDBACK_MUTABLE_SECTIONS = ["marking", "coverage"];
+var FEEDBACK_HASH_MARKER = /^<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n?/u;
+var failure10 = (code, path, message) => fail([createError(code, path, message)]);
+var record5 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var hash3 = (value) => createHash5("sha256").update(value).digest("hex");
+var boundedText = (value) => typeof value === "string" && value.trim().length > 0 && value.length <= 500 && !/[\p{Cc}\p{Cf}]/u.test(value);
+var inside8 = (root, candidate) => {
+  const path = relative9(root, candidate);
+  return path === "" || path !== ".." && !path.startsWith(`..${sep9}`) && !isAbsolute11(path);
+};
+var requireRegularDirectory = async (path, rootReal = null) => {
+  const state = await lstat9(path);
+  if (!state.isDirectory() || state.isSymbolicLink()) throw new Error("Unsafe delivery directory.");
+  const physical = await realpath10(path);
+  if (rootReal !== null && !inside8(rootReal, physical)) throw new Error("Delivery directory escapes project root.");
+  return physical;
+};
+var resolveLifecycleRoot2 = async (root) => {
+  const projectRoot = await requireRegularDirectory(root);
+  const docsRoot = await requireRegularDirectory(join9(root, "docs"), projectRoot);
+  const lifecycleRoot = await requireRegularDirectory(join9(root, "docs", "project-lifecycle"), projectRoot);
+  if (!inside8(docsRoot, lifecycleRoot)) throw new Error("Lifecycle root escapes docs root.");
+  const deliveryRoot = await requireRegularDirectory(join9(root, "docs", "project-lifecycle", "delivery"), lifecycleRoot);
+  if (!inside8(lifecycleRoot, deliveryRoot)) throw new Error("Delivery root escapes lifecycle root.");
+  return lifecycleRoot;
+};
+var headingLevels2 = (source) => [...source.matchAll(/^(#{1,6})[ \t]+\S.*$/gm)].map((match) => match[1].length);
+var sectionPattern2 = (id) => new RegExp(
+  `<!-- project-lifecycle:section ${id} -->\\n([\\s\\S]*?)\\n<!-- /project-lifecycle:section -->`,
+  "u"
+);
+var extractFeedbackSections = (body) => {
+  const normalized = withoutManagedFeedbackHash(body);
+  const visible = maskFencedMarkdown(normalized);
+  const sections = {};
+  for (const id of [...FEEDBACK_SOURCE_SECTIONS, ...FEEDBACK_MUTABLE_SECTIONS]) {
+    const matches = [...visible.matchAll(new RegExp(sectionPattern2(id).source, "gu"))];
+    if (matches.length !== 1 || matches[0][1].trim().length === 0) return null;
+    const opening = `<!-- project-lifecycle:section ${id} -->
+`;
+    const closing = "\n<!-- /project-lifecycle:section -->";
+    const start = matches[0].index + opening.length;
+    const end = matches[0].index + matches[0][0].length - closing.length;
+    sections[id] = normalized.slice(start, end).trim();
+  }
+  return sections;
+};
+var sourceHashes = (sections) => Object.fromEntries(
+  FEEDBACK_SOURCE_SECTIONS.map((id) => [id, hash3(sections[id])])
+);
+var feedbackHashMarker = (hashes) => `<!-- project-lifecycle:feedback-source-hashes ${FEEDBACK_SOURCE_SECTIONS.map((id) => `${id}=${hashes[id]}`).join(" ")} -->`;
+var withoutManagedFeedbackHash = (body) => {
+  const normalized = body.replaceAll("\r\n", "\n").replace(/^\n/u, "");
+  if (FEEDBACK_HASH_MARKER.test(normalized)) return normalized.replace(FEEDBACK_HASH_MARKER, "");
+  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(normalized);
+  if (title) {
+    const rest2 = normalized.slice(title[0].length);
+    return FEEDBACK_HASH_MARKER.test(rest2) ? `${title[0]}${rest2.replace(FEEDBACK_HASH_MARKER, "")}` : normalized;
+  }
+  const legacyPrefix = /^(<!-- project-lifecycle:section original_problem -->\n\n)/u.exec(normalized);
+  if (!legacyPrefix) return normalized;
+  const rest = normalized.slice(legacyPrefix[0].length);
+  return FEEDBACK_HASH_MARKER.test(rest) ? `${legacyPrefix[0]}${rest.replace(FEEDBACK_HASH_MARKER, "")}` : normalized;
+};
+var addFeedbackHashes = (body, hashes) => {
+  const withoutMarker = withoutManagedFeedbackHash(body);
+  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(withoutMarker);
+  if (!title) return `${feedbackHashMarker(hashes)}
+${withoutMarker}`;
+  return `${title[0]}${feedbackHashMarker(hashes)}
+${withoutMarker.slice(title[0].length)}`;
+};
+var feedbackSkeleton = (body) => {
+  let output = withoutManagedFeedbackHash(body);
+  for (const id of FEEDBACK_MUTABLE_SECTIONS) {
+    output = output.replace(sectionPattern2(id), `<!-- project-lifecycle:section ${id} -->
+[MUTABLE]
+<!-- /project-lifecycle:section -->`);
+  }
+  return output.replaceAll("\r\n", "\n").replace(/^\n/u, "");
+};
+var withoutDocumentTitle = (body) => body.replaceAll("\r\n", "\n").replace(/^\n/u, "").replace(/^#[ \t]+[^\n]+\n(?:\n)?/u, "");
+var hasExactCoverageReference = (coverage, reference) => {
+  const tokens = coverage.split(/[\s;,；，]+/u).filter((token) => token.length > 0);
+  return tokens.includes(reference);
+};
+var feedbackFrame = (body) => {
+  let output = withoutManagedFeedbackHash(withoutDocumentTitle(body));
+  for (const id of [...FEEDBACK_SOURCE_SECTIONS, ...FEEDBACK_MUTABLE_SECTIONS]) {
+    output = output.replace(sectionPattern2(id), `<!-- project-lifecycle:section-frame ${id} -->`);
+  }
+  return output.replace(/\s+/gu, " ").trim();
+};
+var splitDocument = (source) => {
+  const normalized = source.replaceAll("\r\n", "\n");
+  if (!normalized.startsWith("---\n")) return null;
+  const closing = normalized.indexOf("\n---\n", 4);
+  if (closing === -1) return null;
+  const parsed = parseRestrictedYaml(normalized.slice(4, closing), "/frontmatter");
+  if (!parsed.ok) return null;
+  return { frontmatter: parsed.value, body: normalized.slice(closing + 5) };
+};
+var renderDocument2 = (frontmatter, body) => `---
+${(0, import_yaml3.stringify)(frontmatter, { lineWidth: 0 }).trimEnd()}
+---
+${body.startsWith("\n") ? body : `
+${body}`}`;
+var validateRendered = (source, expectedFrontmatter, expectedBody) => {
+  const parsed = splitDocument(source);
+  if (!parsed || !isDeepStrictEqual6(parsed.frontmatter, expectedFrontmatter) || parsed.body !== (expectedBody.startsWith("\n") ? expectedBody : `
+${expectedBody}`)) {
+    return failure10("DELIVERY_DOCUMENT_INVALID", "/", "Rendered delivery document does not match its validated request.");
+  }
+  return validateJson("delivery-frontmatter", parsed.frontmatter);
+};
+var compatibleRoute = ({ artifact_kind: kind, primary_route: route }) => {
+  if (route === "KNOWLEDGE_UPDATE") return kind === "feedback";
+  if (route === "OUTSIDE_PLUGIN") return false;
+  if (kind === "prd") return route === "PRD_DELIVERY";
+  if (kind === "non-prd-delivery") return route === "NON_PRD_DELIVERY";
+  return ["PRD_DELIVERY", "NON_PRD_DELIVERY"].includes(route);
+};
+var validateMaterializationRequest = (input = {}) => {
+  if (!record5(input) || !record5(input.frontmatter) || !record5(input.body) || typeof input.body.en !== "string" || typeof input.body["zh-CN"] !== "string" || !boundedText(input.reason)) {
+    return failure10("ASSET_REQUEST_INVALID", "/", "A bounded explicit delivery asset request is required.");
+  }
+  if (input.frontmatter.schema_version !== 2) {
+    return failure10("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/frontmatter/schema_version", "Delivery layout v2 is required before durable writes.");
+  }
+  if (["prd", "non-prd-delivery"].includes(input.frontmatter.artifact_kind) && Object.hasOwn(input.frontmatter, "owner_artifact_id")) {
+    const rootOwnership = validatePhysicalOwner(input.frontmatter);
+    if (!rootOwnership.ok) return rootOwnership;
+  }
+  const frontmatter = validateJson("delivery-frontmatter", input.frontmatter);
+  if (!frontmatter.ok) return failure10("ASSET_FRONTMATTER_INVALID", "/frontmatter", "Delivery Frontmatter must satisfy the shared contract.");
+  const ownership = validatePhysicalOwner(input.frontmatter);
+  if (!ownership.ok) return ownership;
+  if (input.canonical_purpose_satisfied === true) {
+    return failure10("ASSET_REDUNDANT", "/canonical_purpose_satisfied", "An active owner already satisfies this canonical purpose.");
+  }
+  if (input.frontmatter.artifact_kind === "prd") {
+    if (!["explicit_user", "agent_inferred"].includes(input.creation_origin)) {
+      return failure10("ASSET_REQUEST_INVALID", "/creation_origin", "PRD creation origin must be explicit.");
+    }
+    if (input.creation_origin === "agent_inferred" && !isSafeReference(input.creation_approval_ref)) {
+      return failure10("PRD_APPROVAL_REQUIRED", "/creation_approval_ref", "Agent-inferred PRD creation requires explicit confirmation.");
+    }
+  }
+  if (input.frontmatter.artifact_kind === "architecture" && !isSafeReference(input.changed_contract_ref)) {
+    return failure10("ARCHITECTURE_DECLARATION_REQUIRED", "/changed_contract_ref", "Architecture requires an exact changed-contract declaration.");
+  }
+  for (const language of ["en", "zh-CN"]) {
+    const body = input.body[language];
+    if (body.trim().length === 0 || Buffer.byteLength(body) > MAX_BODY_BYTES) {
+      return failure10("ASSET_BODY_INVALID", `/body/${language}`, "Localized delivery body must be non-empty and bounded.");
+    }
+    if (Buffer.byteLength(renderDocument2(input.frontmatter, body)) > MAX_DOCUMENT_BYTES2) {
+      return failure10("ASSET_BODY_INVALID", `/body/${language}`, "Complete localized delivery document must remain bounded.");
+    }
+  }
+  if (!isDeepStrictEqual6(headingLevels2(input.body.en), headingLevels2(input.body["zh-CN"]))) {
+    return failure10("PAIR_SECTION_MISMATCH", "/body", "Localized delivery bodies require matching heading structure.");
+  }
+  if (input.frontmatter.artifact_kind === "feedback") {
+    for (const language of ["en", "zh-CN"]) {
+      if (!extractFeedbackSections(input.body[language])) {
+        return failure10("FEEDBACK_STRUCTURE_INVALID", `/body/${language}`, "Feedback requires exact source, marking, and coverage sections.");
+      }
+    }
+    const alignment = validateAlignmentFeedbackPair({
+      frontmatter: input.frontmatter,
+      bodies: input.body
+    });
+    if (!alignment.ok) return alignment;
+    if (alignment.value.marker !== null && input.frontmatter.retention_tier !== "active") {
+      return failure10(
+        "ALIGNMENT_RETENTION_INVALID",
+        "/frontmatter/retention_tier",
+        "Feedback with an active alignment marker must remain active until validated marker removal."
+      );
+    }
+  }
+  if (input.frontmatter.artifact_kind === "closure-summary") {
+    const managedHashes = ["en", "zh-CN"].map((language) => extractClosureSummaryHash(input.body[language]));
+    if (input.closure_summary === void 0 && managedHashes.some((digest) => digest !== null)) {
+      return failure10("CLOSURE_SUMMARY_INVALID", "/closure_summary", "Managed closure proof cannot be supplied as body text.");
+    }
+    const summary = input.closure_summary;
+    const feedbackIds = summary?.feedback_coverage?.map(({ feedback_id: feedbackId }) => feedbackId).sort();
+    if (summary !== void 0 && (!validateClosureSummary(summary).ok || summary.artifact_id !== input.frontmatter.artifact_id || summary.owner_artifact_id !== input.frontmatter.owner_artifact_id || !isDeepStrictEqual6(feedbackIds, [...input.frontmatter.relationships.feedback_ids].sort()) || summary.owner_artifact_id.startsWith("prd-") && !input.frontmatter.relationships.prd_ids.includes(summary.owner_artifact_id))) {
+      return failure10("CLOSURE_SUMMARY_INVALID", "/closure_summary", "Persisted closure proof must match the closure-summary asset identity.");
+    }
+  } else if (input.closure_summary !== void 0) {
+    return failure10("CLOSURE_SUMMARY_INVALID", "/closure_summary", "Persisted closure proof requires a closure-summary asset.");
+  }
+  if (!compatibleRoute(input.frontmatter)) {
+    return failure10("ROUTE_ASSET_MISMATCH", "/frontmatter/primary_route", "The supplied route cannot own this durable asset kind.");
+  }
+  return ok(input);
+};
+var existingFile = async (path, lifecycleRoot) => {
+  try {
+    const stats = await lstat9(path);
+    if (stats.isSymbolicLink() || !stats.isFile()) throw Object.assign(new Error("Unsafe existing delivery target."), { code: "ASSET_PATH_INVALID" });
+    if (!inside8(lifecycleRoot, await realpath10(path))) {
+      throw Object.assign(new Error("Existing delivery target escapes lifecycle root."), { code: "ASSET_PATH_INVALID" });
+    }
+    return await readFile9(path, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+};
+var ensureManagedDirectory = async (lifecycleRoot, locator) => {
+  const rootReal = await realpath10(lifecycleRoot);
+  const created = [];
+  try {
+    let current = lifecycleRoot;
+    for (const segment of dirname6(locator).split("/")) {
+      current = join9(current, segment);
+      try {
+        const state = await lstat9(current);
+        if (!state.isDirectory() || state.isSymbolicLink()) throw new Error("Unsafe managed delivery directory.");
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+        await mkdir3(current);
+        created.push(current);
+      }
+      if (!inside8(rootReal, await realpath10(current))) throw new Error("Managed delivery directory escapes lifecycle root.");
+    }
+    return created;
+  } catch (error) {
+    await cleanupManagedDirectories(created);
+    throw error;
+  }
+};
+var cleanupManagedDirectories = async (directories) => {
+  for (const directory of [...directories].reverse()) {
+    try {
+      await rmdir2(directory);
+    } catch (error) {
+      if (!["ENOENT", "ENOTEMPTY"].includes(error.code)) throw error;
+    }
+  }
+};
+var discoverAlignmentResolutionInventory = async (lifecycleRoot, feedbackId) => {
+  const collected = await collectDeliveryInventory({ lifecycleRoot });
+  if (!collected.ok) throw new Error("Delivery owner inventory is invalid.");
+  const owners = [...collected.value.pairs, ...collected.value.archived_pairs].filter(({ language, frontmatter }) => language === "en" && ["prd", "non-prd-delivery"].includes(frontmatter.artifact_kind) && frontmatter.relationships.feedback_ids.includes(feedbackId)).map(({ frontmatter }) => frontmatter);
+  const closureIds = /* @__PURE__ */ new Set();
+  for (const closure of collected.value.closed_summaries.filter(({ frontmatter }) => frontmatter.relationships.feedback_ids.includes(feedbackId))) {
+    const hashes = [];
+    for (const language of ["en", "zh-CN"]) {
+      const source = await existingFile(join9(lifecycleRoot, closure.locators[language]), lifecycleRoot);
+      if (source === null || Buffer.byteLength(source) > MAX_DOCUMENT_BYTES2) {
+        throw new Error("Closure inventory contains an invalid file.");
+      }
+      const document3 = splitDocument(source);
+      if (!document3 || !isDeepStrictEqual6(document3.frontmatter, closure.frontmatter)) {
+        throw new Error("Closure inventory changed after validation.");
+      }
+      hashes.push(extractClosureSummaryHash(document3.body));
+    }
+    if (hashes[0] !== null && hashes[0] === hashes[1]) {
+      closureIds.add(`${closure.artifact_id}:${hashes[0]}`);
+    }
+  }
+  return { owners, closureIds };
+};
+var rollbackFirstWrite = async ({ write, lifecycleRoot, locator, original }) => {
+  const path = join9(lifecycleRoot, locator);
+  if (original === null) {
+    await unlink3(path);
+    try {
+      await lstat9(path);
+      throw new Error("New delivery file still exists after rollback.");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    return;
+  }
+  await write({
+    root: lifecycleRoot,
+    target: locator,
+    content: original,
+    validate: async (source) => {
+      const parsed = splitDocument(source);
+      return parsed ? ok(source) : failure10("DELIVERY_DOCUMENT_INVALID", "/", "Original delivery document could not be restored.");
+    }
+  });
+  if (await readFile9(path, "utf8") !== original) throw new Error("Original delivery file was not restored.");
+};
+async function materializeAsset(input = {}, operations = {}) {
+  const request = validateMaterializationRequest(input);
+  if (!request.ok) return request;
+  if (typeof input.root !== "string" || !isAbsolute11(input.root)) {
+    return failure10("ASSET_ROOT_INVALID", "/root", "Delivery materialization requires an absolute project root.");
+  }
+  let lifecycleRoot;
+  try {
+    lifecycleRoot = await resolveLifecycleRoot2(input.root);
+  } catch {
+    return failure10("ASSET_PATH_INVALID", "/root", "Delivery targets must be regular files beneath the fixed lifecycle root.");
+  }
+  const layout = await detectDeliveryLayout({ root: input.root });
+  if (!layout.ok || layout.value.kind !== "V2") {
+    return failure10("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/root", "Delivery layout v2 is required before durable writes.");
+  }
+  let owner = await resolvePhysicalOwner({ lifecycleRoot, frontmatter: input.frontmatter });
+  if (!owner.ok && input.frontmatter.artifact_kind === "closure-summary") {
+    const inventory = await collectDeliveryInventory({ lifecycleRoot });
+    if (inventory.ok) {
+      const retainedOwners = inventory.value.archived_pairs.filter(({ language, frontmatter }) => language === "en" && frontmatter.artifact_id === input.frontmatter.owner_artifact_id && frontmatter.owner_artifact_id === frontmatter.artifact_id && ["prd", "non-prd-delivery"].includes(frontmatter.artifact_kind));
+      if (retainedOwners.length === 1) {
+        owner = ok({
+          artifact_kind: retainedOwners[0].frontmatter.artifact_kind,
+          artifact_id: retainedOwners[0].frontmatter.artifact_id
+        });
+      }
+    }
+  }
+  if (!owner.ok) return owner;
+  const id = input.frontmatter.artifact_id;
+  const locators = activeDeliveryPair(input.frontmatter, { ownerKind: owner.value.artifact_kind });
+  const paths = Object.fromEntries(Object.entries(locators).map(([language, locator]) => [language, join9(lifecycleRoot, locator)]));
+  let existing;
+  try {
+    existing = {
+      en: await existingFile(paths.en, lifecycleRoot),
+      "zh-CN": await existingFile(paths["zh-CN"], lifecycleRoot)
+    };
+  } catch {
+    return failure10("ASSET_PATH_INVALID", "/root", "Delivery targets must be regular files beneath the fixed lifecycle root.");
+  }
+  if (existing.en === null !== (existing["zh-CN"] === null)) {
+    return failure10("PAIR_INCOMPLETE", "/delivery", "Delivery asset pairs must be created and updated together.");
+  }
+  const updating = existing.en !== null;
+  if (updating && input.frontmatter.artifact_kind !== "feedback") {
+    return failure10("ASSET_REDUNDANT", "/frontmatter/artifact_id", "An existing delivery owner cannot be recreated by materialization.");
+  }
+  const bodies = { ...input.body };
+  if (input.frontmatter.artifact_kind === "closure-summary" && input.closure_summary !== void 0) {
+    const digest = closureSummaryHash(input.closure_summary);
+    for (const language of ["en", "zh-CN"]) bodies[language] = addClosureSummaryHash(bodies[language], digest);
+  }
+  if (input.frontmatter.artifact_kind === "feedback") {
+    const nextAlignment = validateAlignmentFeedbackPair({
+      frontmatter: input.frontmatter,
+      bodies
+    });
+    if (!nextAlignment.ok) return nextAlignment;
+    let priorAlignment = null;
+    if (updating) {
+      const priorDocuments = {
+        en: splitDocument(existing.en),
+        "zh-CN": splitDocument(existing["zh-CN"])
+      };
+      if (!priorDocuments.en || !priorDocuments["zh-CN"]) {
+        return failure10("HISTORY_BODY_CHANGED", "/body", "Existing Feedback pair is malformed.");
+      }
+      priorAlignment = validateAlignmentFeedbackPair({
+        frontmatter: priorDocuments.en.frontmatter,
+        bodies: {
+          en: priorDocuments.en.body,
+          "zh-CN": priorDocuments["zh-CN"].body
+        }
+      });
+      if (!priorAlignment.ok) return priorAlignment;
+    }
+    const removingAlignment = priorAlignment?.value.marker !== null && priorAlignment?.value.marker !== void 0 && nextAlignment.value.marker === null;
+    if (Object.hasOwn(input, "alignment_resolution") && !removingAlignment) {
+      return failure10("ALIGNMENT_RESOLUTION_UNEXPECTED", "/alignment_resolution", "Resolution is allowed only while removing an active marker.");
+    }
+    if (removingAlignment) {
+      const suppliedOwners = input.alignment_owners ?? [];
+      if (!Array.isArray(suppliedOwners) || suppliedOwners.some((owner2) => {
+        const validation = validateJson("delivery-frontmatter", owner2);
+        return !validation.ok || !["prd", "non-prd-delivery"].includes(owner2.artifact_kind);
+      })) {
+        return failure10("ALIGNMENT_RESOLUTION_INVALID", "/alignment_owners", "Marker exit requires validated delivery owners.");
+      }
+      let inventory;
+      try {
+        inventory = await discoverAlignmentResolutionInventory(lifecycleRoot, input.frontmatter.artifact_id);
+      } catch {
+        return failure10("ALIGNMENT_OWNER_INVENTORY_INCOMPLETE", "/alignment_owners", "Marker exit requires a complete valid owner inventory from authoritative delivery assets.");
+      }
+      const suppliedOwnerById = new Map(suppliedOwners.map((owner2) => [owner2.artifact_id, owner2]));
+      if (suppliedOwnerById.size !== suppliedOwners.length || suppliedOwnerById.size !== inventory.owners.length || inventory.owners.some((owner2) => !isDeepStrictEqual6(
+        suppliedOwnerById.get(owner2.artifact_id),
+        owner2
+      ))) {
+        return failure10("ALIGNMENT_OWNER_INVENTORY_INCOMPLETE", "/alignment_owners", "Marker exit requires the exact persisted bilingual delivery-owner inventory.");
+      }
+      const linkedOwnerIds = new Set(inventory.owners.map(({ artifact_id: ownerId }) => ownerId));
+      const suppliedClosures = input.alignment_closures ?? [];
+      if (!Array.isArray(suppliedClosures) || suppliedClosures.some((closure) => !validateClosureSummary(closure).ok)) {
+        return failure10("ALIGNMENT_RESOLUTION_INVALID", "/alignment_closures", "Marker exit requires validated closure summaries.");
+      }
+      const suppliedClosureIds = new Set(Array.isArray(suppliedClosures) ? suppliedClosures.map(({ artifact_id: closureId }) => closureId) : []);
+      let suppliedClosureProofs;
+      try {
+        suppliedClosureProofs = new Set(suppliedClosures.map((closure) => `${closure.artifact_id}:${closureSummaryHash(closure)}`));
+      } catch {
+        return failure10("ALIGNMENT_RESOLUTION_INVALID", "/alignment_closures", "Marker exit requires serializable closure summaries.");
+      }
+      const authoritativeClosureProofs = new Set([...inventory.closureIds].filter((proof) => {
+        const closureId = proof.slice(0, proof.indexOf(":"));
+        return closureId.startsWith("closure-") && linkedOwnerIds.has(closureId.slice("closure-".length));
+      }));
+      if (suppliedClosureIds.size !== suppliedClosureProofs.size || suppliedClosureProofs.size !== authoritativeClosureProofs.size || [...suppliedClosureProofs].some((proof) => !authoritativeClosureProofs.has(proof))) {
+        return failure10("ALIGNMENT_CLOSURE_INVENTORY_INCOMPLETE", "/alignment_closures", "Marker exit requires exact persisted bilingual closure-summary evidence.");
+      }
+      const exit2 = validateAlignmentExit({
+        feedbackId: input.frontmatter.artifact_id,
+        feedbackProjectId: input.frontmatter.current_project_id ?? input.frontmatter.project_id_at_creation,
+        resolution: input.alignment_resolution,
+        owners: inventory.owners,
+        closures: suppliedClosures,
+        knowledgeResults: input.alignment_knowledge_results ?? [],
+        ownerInventoryComplete: true
+      });
+      if (!exit2.ok) return exit2;
+      const requiredEvidence = exit2.value.disposition === "NO_REMEDIATION_ACCEPTED" ? [
+        exit2.value.disposition,
+        exit2.value.human_approval_ref,
+        ...exit2.value.knowledge_resolution_refs
+      ] : [
+        exit2.value.disposition,
+        ...exit2.value.closure_refs,
+        ...exit2.value.knowledge_resolution_refs
+      ];
+      for (const language of ["en", "zh-CN"]) {
+        const coverage = extractFeedbackSections(bodies[language])?.coverage;
+        if (!coverage || requiredEvidence.some((reference) => !hasExactCoverageReference(coverage, reference))) {
+          return failure10(
+            "ALIGNMENT_RESOLUTION_EVIDENCE_MISSING",
+            `/body/${language}/coverage`,
+            "Alignment exit must retain its disposition, closure or approval, and knowledge resolution references in Feedback coverage."
+          );
+        }
+      }
+    } else if (!updating && input.frontmatter.primary_route === "KNOWLEDGE_UPDATE" && nextAlignment.value.marker === null) {
+      return failure10("ROUTE_ASSET_MISMATCH", "/frontmatter/primary_route", "Knowledge-controlled Feedback requires an active alignment marker.");
+    }
+    for (const language of ["en", "zh-CN"]) {
+      const sections = extractFeedbackSections(bodies[language]);
+      bodies[language] = addFeedbackHashes(bodies[language], sourceHashes(sections));
+      if (updating) {
+        const prior = splitDocument(existing[language]);
+        if (!prior || !isDeepStrictEqual6(prior.frontmatter, input.frontmatter)) {
+          return failure10("HISTORY_BODY_CHANGED", `/body/${language}`, "Feedback identity and source history cannot be rewritten.");
+        }
+        const priorSections = extractFeedbackSections(prior.body);
+        const nextSections = extractFeedbackSections(bodies[language]);
+        const titleMigration = priorAlignment.value.marker === null && nextAlignment.value.marker !== null && priorAlignment.value.titles[language] === null;
+        const priorSkeleton = feedbackSkeleton(prior.body);
+        const nextSkeleton = feedbackSkeleton(
+          titleMigration ? withoutDocumentTitle(bodies[language]) : bodies[language]
+        );
+        const skeletonMatches = titleMigration ? feedbackFrame(prior.body) === feedbackFrame(bodies[language]) : priorSkeleton === nextSkeleton;
+        if (!priorSections || !nextSections || !isDeepStrictEqual6(sourceHashes(priorSections), sourceHashes(nextSections)) || !skeletonMatches) {
+          return failure10("HISTORY_BODY_CHANGED", `/body/${language}`, "Feedback source history cannot change without an erratum or successor.");
+        }
+      }
+    }
+  }
+  const documents = {
+    en: renderDocument2(input.frontmatter, bodies.en),
+    "zh-CN": renderDocument2(input.frontmatter, bodies["zh-CN"])
+  };
+  for (const language of ["en", "zh-CN"]) {
+    if (Buffer.byteLength(documents[language]) > MAX_DOCUMENT_BYTES2) {
+      return failure10("ASSET_BODY_INVALID", `/body/${language}`, "Complete localized delivery document must remain bounded.");
+    }
+  }
+  const write = operations.atomicWriteValidated ?? atomicWriteValidated;
+  let createdDirectories = [];
+  try {
+    createdDirectories = await ensureManagedDirectory(lifecycleRoot, locators.en);
+  } catch {
+    return failure10("ASSET_PATH_INVALID", "/root", "Delivery targets must be regular files beneath the fixed lifecycle root.");
+  }
+  try {
+    await write({
+      root: lifecycleRoot,
+      target: locators.en,
+      content: documents.en,
+      validate: (source) => validateRendered(source, input.frontmatter, bodies.en)
+    });
+    try {
+      await write({
+        root: lifecycleRoot,
+        target: locators["zh-CN"],
+        content: documents["zh-CN"],
+        validate: (source) => validateRendered(source, input.frontmatter, bodies["zh-CN"])
+      });
+    } catch (error) {
+      try {
+        await rollbackFirstWrite({
+          write,
+          lifecycleRoot,
+          locator: locators.en,
+          original: existing.en
+        });
+      } catch {
+        return failure10("ASSET_ROLLBACK_FAILED", "/delivery", "Delivery pair rollback failed; manual recovery is required.");
+      }
+      throw error;
+    }
+  } catch {
+    try {
+      await cleanupManagedDirectories(createdDirectories);
+    } catch {
+      return failure10("ASSET_ROLLBACK_FAILED", "/delivery", "Delivery pair rollback failed; manual recovery is required.");
+    }
+    return failure10("ASSET_WRITE_FAILED", "/delivery", "Delivery pair could not be written and validated.");
+  }
+  return ok({
+    artifact_id: id,
+    locators,
+    status: updating ? "updated" : "created"
+  });
+}
+
 // scripts/bin/project-lifecycle-source.mjs
-var version = "0.4.0";
+var version = "0.5.0";
 var MAX_ALIGNMENT_DOCUMENT_BYTES = 262144;
 var command = process.argv[2] ?? "help";
 var cliFailure = (code, path, message) => fail([createError(code, path, message)]);
@@ -18684,10 +28464,10 @@ var emit = (result, status = result.ok ? 0 : 1) => {
 };
 var readInput = async (file, path = "/file", maximumBytes = null) => {
   try {
-    if (maximumBytes === null) return { ok: true, value: await readFile5(file, "utf8") };
-    const pathState = await stat(file);
+    if (maximumBytes === null) return { ok: true, value: await readFile10(file, "utf8") };
+    const pathState = await stat2(file);
     if (!pathState.isFile()) return cliFailure("CLI_READ_ERROR", path, "Bounded input must be a regular file.");
-    const handle = await open3(file, "r");
+    const handle = await open5(file, "r");
     try {
       const state = await handle.stat();
       if (!state.isFile()) return cliFailure("CLI_READ_ERROR", path, "Bounded input must be a regular file.");
@@ -18714,9 +28494,9 @@ var readInput = async (file, path = "/file", maximumBytes = null) => {
 };
 var samePhysicalFile = async (left, right) => {
   try {
-    const [leftReal, rightReal] = await Promise.all([realpath6(left), realpath6(right)]);
+    const [leftReal, rightReal] = await Promise.all([realpath11(left), realpath11(right)]);
     if (leftReal === rightReal) return { ok: true, value: true };
-    const [leftState, rightState] = await Promise.all([stat(leftReal), stat(rightReal)]);
+    const [leftState, rightState] = await Promise.all([stat2(leftReal), stat2(rightReal)]);
     return {
       ok: true,
       value: leftState.dev === rightState.dev && leftState.ino === rightState.ino
@@ -18744,10 +28524,10 @@ var resolvePointerMap = async (pointerFile, locator) => {
       "Unable to resolve governance locator."
     );
   }
-  const mapFile = resolve4(dirname4(resolve4(pointerFile)), locator);
+  const mapFile = resolve8(dirname7(resolve8(pointerFile)), locator);
   let source;
   try {
-    source = await readFile5(mapFile, "utf8");
+    source = await readFile10(mapFile, "utf8");
   } catch {
     return cliFailure(
       ERROR_CODES.REFERENCE_MISSING,
@@ -18769,9 +28549,9 @@ var hasStringGovernanceLocator = (value) => value !== null && typeof value === "
 var parseNamedOptions = (args, names) => {
   const allowed = new Set(names);
   const values = {};
-  for (let index = 0; index < args.length; index += 2) {
-    const name = args[index];
-    const value = args[index + 1];
+  for (let index2 = 0; index2 < args.length; index2 += 2) {
+    const name = args[index2];
+    const value = args[index2 + 1];
     if (!allowed.has(name) || typeof value !== "string" || value.startsWith("--") || Object.hasOwn(values, name)) {
       return null;
     }
@@ -18780,18 +28560,35 @@ var parseNamedOptions = (args, names) => {
   return Object.keys(values).length === names.length ? values : null;
 };
 var isInside = (base, candidate) => {
-  const fromBase = relative5(base, candidate);
-  return fromBase === "" || !fromBase.startsWith(`..${sep5}`) && fromBase !== ".." && !isAbsolute6(fromBase);
+  const fromBase = relative10(base, candidate);
+  return fromBase === "" || !fromBase.startsWith(`..${sep10}`) && fromBase !== ".." && !isAbsolute12(fromBase);
 };
 var validAlignmentState = (value) => value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 3 && ["feedbacks", "owners", "closures"].every((field) => Array.isArray(value[field]) && value[field].length <= 1e3);
+var readBoundedEnvelope = async (file) => {
+  const source = await readInput(file, "/input", 1048576);
+  if (!source.ok) return source;
+  const parsed = parseJsonInput(source.value, "/input");
+  return parsed.ok && (parsed.value === null || typeof parsed.value !== "object" || Array.isArray(parsed.value)) ? cliFailure("CLI_INPUT_INVALID", "/input", "Input envelope must be one JSON object.") : parsed;
+};
+var deliveryOptions = () => {
+  const options = parseNamedOptions(process.argv.slice(3), ["--root", "--input"]);
+  return options && isAbsolute12(options["--root"]) && isAbsolute12(options["--input"]) ? options : null;
+};
 if (command === "help") {
   emit(ok({
     version,
     commands: [
       "collect-evidence",
+      "close-delivery",
+      "generate-delivery-indexes",
+      "inspect-delivery-layout",
+      "materialize-delivery-asset",
+      "migrate-delivery-layout",
       "parse-facts",
+      "preview-delivery-layout-migration",
       "sync-alignment-review",
       "validate-alignment-feedback",
+      "validate-delivery-layout",
       "validate-fixtures",
       "validate-json",
       "validate-pair"
@@ -18807,12 +28604,12 @@ if (command === "help") {
       "/arguments",
       "Usage: collect-evidence --root <absolute-path> --output <absolute-path>."
     ), 2);
-  } else if (!isAbsolute6(options["--root"]) || !isAbsolute6(options["--output"])) {
+  } else if (!isAbsolute12(options["--root"]) || !isAbsolute12(options["--output"])) {
     emit(cliFailure("CLI_PATH_INVALID", "/arguments", "Root and output paths must be absolute."), 2);
   } else {
     try {
-      const lexicalLifecycleRoot = resolve4(options["--root"], "docs/project-lifecycle");
-      const lexicalOutput = resolve4(options["--output"]);
+      const lexicalLifecycleRoot = resolve8(options["--root"], "docs/project-lifecycle");
+      const lexicalOutput = resolve8(options["--output"]);
       if (isInside(lexicalLifecycleRoot, lexicalOutput)) {
         emit(cliFailure(
           "CLI_OUTPUT_FORBIDDEN",
@@ -18820,14 +28617,14 @@ if (command === "help") {
           "Evidence output must remain outside docs/project-lifecycle."
         ), 2);
       } else {
-        const root = await realpath6(options["--root"]);
-        const outputParent = await realpath6(dirname4(options["--output"]));
+        const root = await realpath11(options["--root"]);
+        const outputParent = await realpath11(dirname7(options["--output"]));
         const outputName = basename3(options["--output"]);
-        const output = resolve4(outputParent, outputName);
-        const lifecycleRoot = resolve4(root, "docs/project-lifecycle");
+        const output = resolve8(outputParent, outputName);
+        const lifecycleRoot = resolve8(root, "docs/project-lifecycle");
         const physicalLifecycleRoots = [lifecycleRoot];
         try {
-          physicalLifecycleRoots.push(await realpath6(lifecycleRoot));
+          physicalLifecycleRoots.push(await realpath11(lifecycleRoot));
         } catch (error) {
           if (error.code !== "ENOENT") throw error;
         }
@@ -18839,17 +28636,17 @@ if (command === "help") {
           ), 2);
         } else {
           const pack = await collectEvidence({ root });
-          const content = `${JSON.stringify(pack, null, 2)}
+          const content3 = `${JSON.stringify(pack, null, 2)}
 `;
           await atomicWriteValidated({
             root: outputParent,
             target: outputName,
-            content,
-            validate: async (candidate) => candidate === content ? ok(candidate) : cliFailure("CLI_WRITE_ERROR", "/output", "Evidence output validation failed.")
+            content: content3,
+            validate: async (candidate) => candidate === content3 ? ok(candidate) : cliFailure("CLI_WRITE_ERROR", "/output", "Evidence output validation failed.")
           });
           emit(ok({
             entry_count: pack.entries.length,
-            content_hash: `sha256:${createHash3("sha256").update(content).digest("hex")}`
+            content_hash: `sha256:${createHash6("sha256").update(content3).digest("hex")}`
           }));
         }
       }
@@ -18896,7 +28693,7 @@ if (command === "help") {
   }
 } else if (command === "sync-alignment-review") {
   const options = parseNamedOptions(process.argv.slice(3), ["--root", "--input"]);
-  if (!options || !isAbsolute6(options["--root"]) || !isAbsolute6(options["--input"])) {
+  if (!options || !isAbsolute12(options["--root"]) || !isAbsolute12(options["--input"])) {
     emit(cliFailure("CLI_USAGE", "/arguments", "Usage: sync-alignment-review --root <absolute-project-root> --input <absolute-json-envelope>."), 2);
   } else {
     const source = await readInput(options["--input"], "/input", 1048576);
@@ -18913,6 +28710,97 @@ if (command === "help") {
           phases: result.value.phases,
           locators: result.value.locators
         }) : result);
+      }
+    }
+  }
+} else if (command === "inspect-delivery-layout") {
+  const options = parseNamedOptions(process.argv.slice(3), ["--root"]);
+  if (!options || !isAbsolute12(options["--root"])) {
+    emit(cliFailure("CLI_USAGE", "/arguments", "Usage: inspect-delivery-layout --root <absolute-project-root>."), 2);
+  } else emit(await detectDeliveryLayout({ root: options["--root"] }));
+} else if (command === "preview-delivery-layout-migration") {
+  const options = deliveryOptions();
+  if (!options) {
+    emit(cliFailure("CLI_USAGE", "/arguments", "Usage: preview-delivery-layout-migration --root <absolute-project-root> --input <absolute-json-envelope>."), 2);
+  } else {
+    const input = await readBoundedEnvelope(options["--input"]);
+    emit(input.ok ? await inspectLegacyDeliveryLayout({ root: options["--root"], owner_mappings: input.value.owner_mappings }) : input, input.ok ? void 0 : 2);
+  }
+} else if (command === "migrate-delivery-layout") {
+  const options = deliveryOptions();
+  if (!options) {
+    emit(cliFailure("CLI_USAGE", "/arguments", "Usage: migrate-delivery-layout --root <absolute-project-root> --input <absolute-json-envelope>."), 2);
+  } else {
+    const input = await readBoundedEnvelope(options["--input"]);
+    emit(input.ok ? await migrateDeliveryLayout({ ...input.value, root: options["--root"] }) : input, input.ok ? void 0 : 2);
+  }
+} else if (command === "validate-delivery-layout") {
+  const options = parseNamedOptions(process.argv.slice(3), ["--root"]);
+  if (!options || !isAbsolute12(options["--root"])) {
+    emit(cliFailure("CLI_USAGE", "/arguments", "Usage: validate-delivery-layout --root <absolute-project-root>."), 2);
+  } else {
+    const layout = await detectDeliveryLayout({ root: options["--root"] });
+    if (!layout.ok || layout.value.kind !== "V2") {
+      emit(layout.ok ? cliFailure("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/root", "Delivery layout v2 is required.") : layout);
+    } else {
+      const inventory = await collectDeliveryInventory({ lifecycleRoot: resolve8(options["--root"], "docs/project-lifecycle") });
+      emit(inventory.ok ? ok({
+        layout_version: inventory.value.layout_version,
+        feedback_count: inventory.value.feedbacks.length,
+        owner_count: inventory.value.owners.length,
+        archived_owner_count: Object.keys(inventory.value.archived_by_owner).length
+      }) : inventory);
+    }
+  }
+} else if (command === "materialize-delivery-asset") {
+  const options = deliveryOptions();
+  if (!options) {
+    emit(cliFailure("CLI_USAGE", "/arguments", "Usage: materialize-delivery-asset --root <absolute-project-root> --input <absolute-json-envelope>."), 2);
+  } else {
+    const input = await readBoundedEnvelope(options["--input"]);
+    emit(input.ok ? await materializeAsset({ ...input.value, root: options["--root"] }) : input, input.ok ? void 0 : 2);
+  }
+} else if (command === "close-delivery") {
+  const options = deliveryOptions();
+  if (!options) {
+    emit(cliFailure("CLI_USAGE", "/arguments", "Usage: close-delivery --root <absolute-project-root> --input <absolute-json-envelope>."), 2);
+  } else {
+    const input = await readBoundedEnvelope(options["--input"]);
+    emit(input.ok ? closeDelivery(input.value) : input, input.ok ? void 0 : 2);
+  }
+} else if (command === "generate-delivery-indexes") {
+  const options = parseNamedOptions(process.argv.slice(3), ["--root"]);
+  if (!options || !isAbsolute12(options["--root"])) {
+    emit(cliFailure("CLI_USAGE", "/arguments", "Usage: generate-delivery-indexes --root <absolute-project-root>."), 2);
+  } else {
+    const lifecycleRoot = resolve8(options["--root"], "docs/project-lifecycle");
+    const [inventory, tree] = await Promise.all([
+      collectDeliveryInventory({ lifecycleRoot }),
+      inspectLifecycleTree({ repositoryRoot: options["--root"] })
+    ]);
+    if (!inventory.ok || !tree.ok) emit(!inventory.ok ? inventory : tree);
+    else {
+      const indexes = await generateDeliveryIndexes({ inventory: inventory.value });
+      if (!indexes.ok) emit(indexes);
+      else {
+        const published = await applyLayoutTransaction({
+          repositoryRoot: options["--root"],
+          expectedFingerprint: tree.value.fingerprint,
+          candidateFiles: indexes.value.files.map(({ locator, content: content3 }) => ({
+            repository_id: null,
+            locator,
+            content: content3,
+            validate: async (candidate) => candidate === content3 ? ok(candidate) : cliFailure("DELIVERY_INDEX_INVALID", `/${locator}`, "Generated index changed.")
+          })),
+          candidateDirectories: [],
+          deleteLocators: [],
+          validateCandidate: ({ lifecycleRoot: candidateRoot }) => collectDeliveryInventory({ lifecycleRoot: candidateRoot })
+        });
+        emit(published.ok ? ok({
+          layout_version: 2,
+          locators: indexes.value.files.map(({ locator }) => locator),
+          changed: published.value.changed
+        }) : published);
       }
     }
   }

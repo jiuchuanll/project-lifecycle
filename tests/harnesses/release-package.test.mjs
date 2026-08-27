@@ -29,12 +29,12 @@ test('builds a deterministic private candidate with the complete explicit releas
   const firstBytes = await readFile(first.value.archive_path);
   assert.deepEqual(
     firstBytes,
-    await readFile(join(repositoryRoot, 'dist/project-lifecycle-0.4.0.zip')),
+    await readFile(join(repositoryRoot, 'dist/project-lifecycle-0.5.0.zip')),
     'checked-in archive must equal a clean deterministic rebuild',
   );
   assert.equal(
-    await readFile(join(repositoryRoot, 'dist/project-lifecycle-0.4.0.zip.sha256'), 'utf8'),
-    `${first.value.sha256}  project-lifecycle-0.4.0.zip\n`,
+    await readFile(join(repositoryRoot, 'dist/project-lifecycle-0.5.0.zip.sha256'), 'utf8'),
+    `${first.value.sha256}  project-lifecycle-0.5.0.zip\n`,
   );
   const second = await buildReleasePackage(options);
   assert.equal(second.ok, true, JSON.stringify(second));
@@ -44,7 +44,7 @@ test('builds a deterministic private candidate with the complete explicit releas
   const archive = inspectReleaseZip(firstBytes);
   assert.equal(archive.ok, true, JSON.stringify(archive));
   const names = [...archive.value.keys()];
-  const prefix = 'project-lifecycle-0.4.0/';
+  const prefix = 'project-lifecycle-0.5.0/';
   for (const required of [
     'skills/maintain-project-knowledge/SKILL.md',
     'skills/run-prd-lifecycle/SKILL.md',
@@ -118,7 +118,7 @@ test('refuses to follow an existing release output symlink', async (context) => 
   const outputDirectory = await mkdtemp(join(tmpdir(), 'project-lifecycle-release-output-'));
   context.after(() => rm(outputDirectory, { recursive: true, force: true }));
   const sentinel = join(outputDirectory, 'sentinel.txt');
-  const archivePath = join(outputDirectory, 'project-lifecycle-0.4.0.zip');
+  const archivePath = join(outputDirectory, 'project-lifecycle-0.5.0.zip');
   await writeFile(sentinel, 'sentinel\n');
   await symlink(sentinel, archivePath);
 
