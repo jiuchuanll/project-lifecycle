@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { inspectLegacyDeliveryLayout } from '../../scripts/delivery/delivery-layout-migration.mjs';
+import {
+  inspectLegacyDeliveryLayout,
+  migrateDeliveryLayout,
+} from '../../scripts/delivery/delivery-layout-migration.mjs';
 import { inspectLifecycleTree } from '../../scripts/knowledge/layout-transaction.mjs';
 
 const frontmatter = (id, kind, overrides = {}) => ({
@@ -29,7 +32,7 @@ const writePair = async (root, metadata, { archived = false, external = false } 
   for (const language of ['en', 'zh-CN']) {
     const name = `${metadata.artifact_id}${language === 'en' ? '-en' : ''}.md`;
     const link = external && language === 'en'
-      ? '\n[Architecture](architecture-shared-en.md)\n[External](https://example.test/spec)\n'
+      ? '\n[Architecture](architecture-shared-en.md "canonical")\n[External](https://example.test/spec)\n'
       : '';
     await writeFile(join(directory, name), `---\n${JSON.stringify(metadata)}\n---\n# ${metadata.artifact_id}${link}`);
   }
@@ -111,4 +114,95 @@ test('returns NEEDS_USER for ambiguous ownership, incomplete pairs, mixed layout
   });
   assert.equal(contradictory.value.route, 'NEEDS_USER');
   assert.ok(contradictory.value.needs_user.some(({ code }) => code === 'OWNER_MAPPING_CONTRADICTORY'));
+});
+
+test('requires exact approval and backup references before migration', async (context) => {
+  const root = await createLegacy(context);
+  const owner_mappings = [{ artifact_id: 'architecture-shared', owner_artifact_id: 'prd-wiki-v1' }];
+  const preview = await inspectLegacyDeliveryLayout({ root, owner_mappings });
+  const result = await migrateDeliveryLayout({
+    root,
+    owner_mappings,
+    plan_hash: preview.value.plan_hash,
+    source_fingerprint: preview.value.source_fingerprint,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'DELIVERY_MIGRATION_APPROVAL_REQUIRED');
+});
+
+test('restores the legacy tree when publication fails late', async (context) => {
+  const root = await createLegacy(context);
+  const owner_mappings = [{ artifact_id: 'architecture-shared', owner_artifact_id: 'prd-wiki-v1' }];
+  const preview = await inspectLegacyDeliveryLayout({ root, owner_mappings });
+  const before = await inspectLifecycleTree({ repositoryRoot: root });
+  const result = await migrateDeliveryLayout({
+    root,
+    owner_mappings,
+    plan_hash: preview.value.plan_hash,
+    source_fingerprint: preview.value.source_fingerprint,
+    approval_ref: 'approval:delivery-layout-v2',
+    backup_ref: 'backup:delivery-layout-v1',
+  }, {
+    afterPublish: async () => { throw new Error('injected late failure'); },
+  });
+  const after = await inspectLifecycleTree({ repositoryRoot: root });
+  assert.equal(result.ok, false);
+  assert.deepEqual(after, before);
+  await assert.rejects(readFile(join(root, 'docs/project-lifecycle/delivery/layout.json')), { code: 'ENOENT' });
+});
+
+test('rolls back a retained publication when live v2 validation fails', async (context) => {
+  const root = await createLegacy(context);
+  const owner_mappings = [{ artifact_id: 'architecture-shared', owner_artifact_id: 'prd-wiki-v1' }];
+  const preview = await inspectLegacyDeliveryLayout({ root, owner_mappings });
+  const before = await inspectLifecycleTree({ repositoryRoot: root });
+  const result = await migrateDeliveryLayout({
+    root,
+    owner_mappings,
+    plan_hash: preview.value.plan_hash,
+    source_fingerprint: preview.value.source_fingerprint,
+    approval_ref: 'approval:delivery-layout-v2',
+    backup_ref: 'backup:delivery-layout-v1',
+  }, {
+    validatePublished: async () => ({
+      ok: false,
+      value: null,
+      errors: [{ code: 'INJECTED_VALIDATION_FAILURE', path: '/', message: 'Injected.' }],
+    }),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'INJECTED_VALIDATION_FAILURE');
+  assert.deepEqual(await inspectLifecycleTree({ repositoryRoot: root }), before);
+});
+
+test('atomically publishes v2 documents and generated indexes', async (context) => {
+  const root = await createLegacy(context);
+  const owner_mappings = [{ artifact_id: 'architecture-shared', owner_artifact_id: 'prd-wiki-v1' }];
+  const preview = await inspectLegacyDeliveryLayout({ root, owner_mappings });
+  const result = await migrateDeliveryLayout({
+    root,
+    owner_mappings,
+    plan_hash: preview.value.plan_hash,
+    source_fingerprint: preview.value.source_fingerprint,
+    approval_ref: 'approval:delivery-layout-v2',
+    backup_ref: 'backup:delivery-layout-v1',
+  });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.value.layout_version, 2);
+  assert.equal(result.value.backup_ref, 'backup:delivery-layout-v1');
+  assert.deepEqual(result.value.moved_locators, preview.value.moves);
+  assert.match(result.value.validation_ref, /^sha256:[0-9a-f]{64}$/u);
+  assert.deepEqual(JSON.parse(await readFile(join(root, 'docs/project-lifecycle/delivery/layout.json'), 'utf8')), {
+    schema_version: 1,
+    layout_version: 2,
+  });
+  const architecture = await readFile(join(root, 'docs/project-lifecycle/delivery/prds/prd-wiki-v1/architecture/architecture-shared-en.md'), 'utf8');
+  assert.match(architecture, /schema_version: 2/u);
+  assert.match(architecture, /owner_artifact_id: prd-wiki-v1/u);
+  assert.match(architecture, /# architecture-shared/u);
+  const owner = await readFile(join(root, 'docs/project-lifecycle/delivery/prds/prd-wiki-v1/prd-wiki-v1-en.md'), 'utf8');
+  assert.match(owner, /\[Architecture\]\(architecture\/architecture-shared-en\.md "canonical"\)/u);
+  assert.match(await readFile(join(root, 'docs/project-lifecycle/delivery/INDEX-en.md'), 'utf8'), /prd-wiki-v1/u);
+  assert.match(await readFile(join(root, 'docs/project-lifecycle/delivery/prds/prd-wiki-v1/INDEX-en.md'), 'utf8'), /architecture-shared/u);
+  await assert.rejects(readFile(join(root, 'docs/project-lifecycle/delivery/prd-wiki-v1-en.md')), { code: 'ENOENT' });
 });

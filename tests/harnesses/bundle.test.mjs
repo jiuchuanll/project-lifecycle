@@ -146,6 +146,67 @@ Open.
   assert.equal(sync.status, 0);
   assert.equal(envelope(sync).value.row_count, 1);
   assert.match(await readFile(join(project, 'docs', 'project-lifecycle', 'delivery', 'views', 'alignment-review-en.md'), 'utf8'), /feedback-retire-legacy/u);
+
+  const expectedDeliveryCommands = [
+    'inspect-delivery-layout',
+    'preview-delivery-layout-migration',
+    'migrate-delivery-layout',
+    'validate-delivery-layout',
+    'materialize-delivery-asset',
+    'close-delivery',
+    'generate-delivery-indexes',
+  ];
+  assert.ok(expectedDeliveryCommands.every((name) => envelope(help).value.commands.includes(name)));
+  for (const [name, args] of [
+    ['inspect-delivery-layout', ['--root', project]],
+    ['validate-delivery-layout', ['--root', project]],
+    ['generate-delivery-indexes', ['--root', project]],
+  ]) {
+    const result = run(join(install, 'bin/project-lifecycle'), [name, ...args], install);
+    assert.equal(result.status, 0, `${name}: ${result.stdout}${result.stderr}`);
+    assert.equal(envelope(result).ok, true);
+  }
+
+  const invalidEnvelope = join(fixtures, 'invalid-delivery-command.json');
+  await writeFile(invalidEnvelope, '{}\n');
+  for (const name of ['materialize-delivery-asset', 'close-delivery']) {
+    const result = run(join(install, 'bin/project-lifecycle'), [
+      name, '--root', project, '--input', invalidEnvelope,
+    ], install);
+    assert.equal(result.status, 1);
+    assert.equal(envelope(result).ok, false);
+  }
+
+  const legacy = join(install, 'legacy-project');
+  const legacyDelivery = join(legacy, 'docs/project-lifecycle/delivery');
+  await mkdir(legacyDelivery, { recursive: true });
+  const legacyFrontmatter = { ...alignmentFrontmatter, schema_version: 1 };
+  for (const language of ['en', 'zh-CN']) {
+    await writeFile(
+      join(legacyDelivery, `feedback-retire-legacy${language === 'en' ? '-en' : ''}.md`),
+      `---\n${JSON.stringify(legacyFrontmatter)}\n---\n# ${language}\n`,
+    );
+  }
+  const previewInput = join(fixtures, 'delivery-preview.json');
+  await writeFile(previewInput, '{"owner_mappings":[]}\n');
+  const previewCommand = run(join(install, 'bin/project-lifecycle'), [
+    'preview-delivery-layout-migration', '--root', legacy, '--input', previewInput,
+  ], install);
+  assert.equal(previewCommand.status, 0, previewCommand.stdout);
+  const previewValue = envelope(previewCommand).value;
+  const migrationInput = join(fixtures, 'delivery-migration.json');
+  await writeFile(migrationInput, JSON.stringify({
+    owner_mappings: [],
+    plan_hash: previewValue.plan_hash,
+    source_fingerprint: previewValue.source_fingerprint,
+    approval_ref: 'approval:bundle-migration',
+    backup_ref: 'backup:bundle-migration',
+  }));
+  const migrationCommand = run(join(install, 'bin/project-lifecycle'), [
+    'migrate-delivery-layout', '--root', legacy, '--input', migrationInput,
+  ], install);
+  assert.equal(migrationCommand.status, 0, migrationCommand.stdout);
+  assert.equal(envelope(migrationCommand).value.layout_version, 2);
 });
 
 test('keeps the legacy CLI path dependency-free in a managed-plugin cache', async (context) => {

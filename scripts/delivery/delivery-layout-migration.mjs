@@ -2,14 +2,29 @@ import { createHash } from 'node:crypto';
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import { stringify as stringifyYaml } from 'yaml';
 
 import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
 import { parseRestrictedYaml } from '../lib/markdown.mjs';
+import { rewriteMarkdownOutsideCode } from '../lib/markdown-links.mjs';
+import { isSafeReference } from '../lib/reference-safety.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
-import { inspectLifecycleTree } from '../knowledge/layout-transaction.mjs';
-import { activeDeliveryPair, alignmentReviewPair, archivedDeliveryPair } from './delivery-layout.mjs';
+import {
+  applyLayoutTransaction,
+  finalizeRetainedLayout,
+  inspectLifecycleTree,
+  rollbackRetainedLayout,
+} from '../knowledge/layout-transaction.mjs';
+import { collectDeliveryInventory } from './delivery-inventory.mjs';
+import { generateDeliveryIndexes } from './delivery-indexes.mjs';
+import {
+  activeDeliveryPair,
+  alignmentReviewPair,
+  archivedDeliveryPair,
+  deliveryLayoutContent,
+} from './delivery-layout.mjs';
 
 const MAX_FILES = 2000;
 const MAX_BYTES = 262_144;
@@ -30,6 +45,7 @@ const inside = (root, candidate) => {
   return path === '' || (path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path));
 };
 const canonical = (value) => JSON.stringify(value);
+const renderDocument = (frontmatter, body) => `---\n${stringifyYaml(frontmatter, { lineWidth: 0 }).trimEnd()}\n---\n${body.startsWith('\n') ? body : `\n${body}`}`;
 
 const parseDocument = (source) => {
   const normalized = source.replaceAll('\r\n', '\n');
@@ -264,4 +280,233 @@ export const inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappin
   };
   result.plan_hash = hash(canonical(result));
   return ok(freeze(result));
+};
+
+const replaceManagedLinks = (source, rewrites) => rewriteMarkdownOutsideCode(source, (text) => {
+  const byHref = new Map(rewrites.map(({ href, rewritten_href: target }) => [href, target]));
+  return text.replace(
+    /(\[[^\]]*\]\()([^)\s]+)((?:\s+[^)]*)?\))/gu,
+    (whole, prefix, href, suffix) => byHref.has(href)
+      ? `${prefix}${byHref.get(href)}${suffix}`
+      : whole,
+  );
+});
+
+const inventoryForCandidate = (items) => {
+  const active = items.filter(({ archived }) => !archived);
+  const archived = items.filter(({ archived: value }) => value);
+  const owners = active.filter(({ artifact_kind: kind }) => ROOT_KINDS.has(kind))
+    .sort((left, right) => compareCodePoints(left.artifact_id, right.artifact_id));
+  const byOwner = {};
+  const archivedByOwner = {};
+  for (const owner of owners) byOwner[owner.artifact_id] = { owner, assets: [] };
+  for (const item of active) {
+    if (item.owner_artifact_id && byOwner[item.owner_artifact_id]) byOwner[item.owner_artifact_id].assets.push(item);
+  }
+  for (const item of archived) {
+    if (!item.owner_artifact_id) continue;
+    archivedByOwner[item.owner_artifact_id] ??= { owner_artifact_id: item.owner_artifact_id, assets: [] };
+    archivedByOwner[item.owner_artifact_id].assets.push(item);
+  }
+  for (const value of [...Object.values(byOwner), ...Object.values(archivedByOwner)]) {
+    value.assets.sort((left, right) => compareCodePoints(left.artifact_id, right.artifact_id));
+  }
+  return {
+    layout_version: 2,
+    feedbacks: active.filter(({ artifact_kind: kind }) => kind === 'feedback'),
+    owners,
+    closed_summaries: [...active, ...archived].filter(({ artifact_kind: kind }) => kind === 'closure-summary'),
+    views: [],
+    by_owner: byOwner,
+    archived_by_owner: archivedByOwner,
+    pairs: [],
+    archived_pairs: [],
+  };
+};
+
+export const buildDeliveryMigrationCandidate = async ({ root, preview } = {}) => {
+  if (!preview || preview.route !== 'NON_PRD_DELIVERY' || !Array.isArray(preview.moves)) {
+    return failure('DELIVERY_MIGRATION_INPUT_INVALID', '/preview', 'One complete migration preview is required.');
+  }
+  let lifecycleRoot;
+  let tree;
+  try {
+    ({ lifecycleRoot } = await rootsFor(root));
+    tree = await inspectLifecycleTree({ repositoryRoot: root });
+    if (!tree.ok || `sha256:${tree.value.fingerprint}` !== preview.source_fingerprint) {
+      return failure('DELIVERY_MIGRATION_STALE', '/source_fingerprint', 'Migration preview no longer matches the source tree.');
+    }
+  } catch {
+    return failure('DELIVERY_MIGRATION_ROOT_INVALID', '/root', 'Migration candidate requires one bounded regular project root.');
+  }
+
+  const files = [];
+  const items = [];
+  try {
+    for (const move of preview.moves) {
+      for (const language of LANGUAGES) {
+        const source = await readFile(join(lifecycleRoot, move.from[language]));
+        if (hash(source) !== move.body_hashes[language]) {
+          return failure('DELIVERY_MIGRATION_STALE', `/moves/${move.artifact_id}`, 'A migration source changed after preview.');
+        }
+        let content = source.toString('utf8').replaceAll('\r\n', '\n');
+        if (move.artifact_kind !== 'generated-view') {
+          const document = parseDocument(content);
+          if (!document) return failure('DELIVERY_MIGRATION_CANDIDATE_INVALID', `/moves/${move.artifact_id}`, 'A migration source document is invalid.');
+          const frontmatter = {
+            ...document.frontmatter,
+            schema_version: 2,
+            ...(move.owner_artifact_id === null ? {} : { owner_artifact_id: move.owner_artifact_id }),
+          };
+          const rewrites = preview.managed_reference_rewrites.filter(({ source: locator }) => locator === move.from[language]);
+          content = renderDocument(frontmatter, replaceManagedLinks(document.body, rewrites));
+          if (language === 'en') {
+            items.push({
+              artifact_id: move.artifact_id,
+              artifact_kind: move.artifact_kind,
+              ...(move.owner_artifact_id === null ? {} : { owner_artifact_id: move.owner_artifact_id }),
+              retention_tier: frontmatter.retention_tier,
+              frontmatter,
+              locators: move.to,
+              archived: move.to.en.startsWith('archive/'),
+            });
+          }
+        }
+        files.push({
+          repository_id: null,
+          locator: move.to[language],
+          content,
+          validate: async (candidate) => candidate === content
+            ? ok(candidate)
+            : failure('DELIVERY_MIGRATION_CANDIDATE_INVALID', `/${move.to[language]}`, 'Staged migration content changed.'),
+        });
+      }
+    }
+    const indexes = await generateDeliveryIndexes({ inventory: inventoryForCandidate(items) });
+    if (!indexes.ok) return indexes;
+    files.push(...indexes.value.files.map(({ locator, content }) => ({
+      repository_id: null,
+      locator,
+      content,
+      validate: async (candidate) => candidate === content
+        ? ok(candidate)
+        : failure('DELIVERY_MIGRATION_CANDIDATE_INVALID', `/${locator}`, 'Staged delivery index changed.'),
+    })));
+    const marker = deliveryLayoutContent();
+    files.push({
+      repository_id: null,
+      locator: 'delivery/layout.json',
+      content: marker,
+      validate: async (candidate) => candidate === marker
+        ? ok(candidate)
+        : failure('DELIVERY_MIGRATION_CANDIDATE_INVALID', '/delivery/layout.json', 'Staged delivery marker changed.'),
+    });
+  } catch {
+    return failure('DELIVERY_MIGRATION_CANDIDATE_INVALID', '/', 'Migration candidate could not be built safely.');
+  }
+
+  const targetLocators = new Set(files.map(({ locator }) => locator));
+  const deleteLocators = [...new Set(preview.moves.flatMap(({ from }) => Object.values(from)))]
+    .filter((locator) => !targetLocators.has(locator))
+    .sort(compareCodePoints);
+  const candidateDirectories = [...new Set([
+    ...preview.candidate_directories,
+    ...files.map(({ locator }) => dirname(locator)),
+  ])].filter((locator) => locator !== '.').sort(compareCodePoints);
+  return ok({
+    transaction: {
+      repositoryRoot: root,
+      expectedFingerprint: preview.source_fingerprint.replace(/^sha256:/u, ''),
+      candidateDirectories,
+      candidateFiles: files.sort((left, right) => compareCodePoints(left.locator, right.locator)),
+      deleteLocators,
+      validateCandidate: async ({ lifecycleRoot: candidateRoot }) => {
+        const inventory = await collectDeliveryInventory({ lifecycleRoot: candidateRoot });
+        if (!inventory.ok) return inventory;
+        const present = new Set([
+          ...inventory.value.pairs,
+          ...inventory.value.archived_pairs,
+        ].map(({ locator }) => locator));
+        return preview.moves.every(({ to }) => Object.values(to).every((locator) => (
+          locator.includes('/views/') || present.has(locator)
+        ))) ? ok(inventory.value) : failure('DELIVERY_MIGRATION_CANDIDATE_INVALID', '/', 'Candidate inventory is incomplete.');
+      },
+    },
+  });
+};
+
+export const validatePublishedDeliveryV2 = async ({ root, preview } = {}) => {
+  let lifecycleRoot;
+  try {
+    ({ lifecycleRoot } = await rootsFor(root));
+  } catch {
+    return failure('DELIVERY_MIGRATION_ROOT_INVALID', '/root', 'Published delivery validation requires one bounded regular project root.');
+  }
+  const inventory = await collectDeliveryInventory({ lifecycleRoot });
+  if (!inventory.ok) return inventory;
+  const present = new Set([
+    ...inventory.value.pairs,
+    ...inventory.value.archived_pairs,
+    ...inventory.value.views.flatMap(({ locators }) => Object.values(locators)),
+  ].map((entry) => typeof entry === 'string' ? entry : entry.locator));
+  for (const move of preview?.moves ?? []) {
+    if (!Object.values(move.to).every((locator) => present.has(locator))) {
+      return failure('DELIVERY_MIGRATION_VALIDATION_FAILED', `/moves/${move.artifact_id}`, 'A published migration target is missing.');
+    }
+    for (const locator of Object.values(move.from)) {
+      if (Object.values(move.to).includes(locator)) continue;
+      try {
+        await lstat(join(lifecycleRoot, locator));
+        return failure('DELIVERY_MIGRATION_VALIDATION_FAILED', `/moves/${move.artifact_id}`, 'A legacy migration source remains published.');
+      } catch (error) {
+        if (error.code !== 'ENOENT') return failure('DELIVERY_MIGRATION_VALIDATION_FAILED', '/', 'Published migration paths could not be verified.');
+      }
+    }
+  }
+  return ok({
+    layout_version: 2,
+    validation_ref: hash(canonical({
+      moves: preview?.moves ?? [],
+      owners: inventory.value.owners.map(({ artifact_id: id }) => id),
+      feedbacks: inventory.value.feedbacks.map(({ artifact_id: id }) => id),
+    })),
+  });
+};
+
+export const migrateDeliveryLayout = async (input = {}, operations = {}) => {
+  if (!isSafeReference(input.approval_ref) || !isSafeReference(input.backup_ref)) {
+    return failure('DELIVERY_MIGRATION_APPROVAL_REQUIRED', '/approval_ref', 'Migration requires explicit approval and a recoverable backup reference.');
+  }
+  const inspection = await inspectLegacyDeliveryLayout(input);
+  if (!inspection.ok) return inspection;
+  if (inspection.value.route === 'NEEDS_USER') {
+    return failure('DELIVERY_MIGRATION_NEEDS_USER', '/owner_mappings', 'Migration ownership must be resolved before publication.');
+  }
+  if (inspection.value.plan_hash !== input.plan_hash
+    || inspection.value.source_fingerprint !== input.source_fingerprint) {
+    return failure('DELIVERY_MIGRATION_STALE', '/plan_hash', 'Migration preview no longer matches the source tree.');
+  }
+  const candidate = await buildDeliveryMigrationCandidate({ root: input.root, preview: inspection.value });
+  if (!candidate.ok) return candidate;
+  const publication = await applyLayoutTransaction(candidate.value.transaction, {
+    ...operations,
+    retainBackup: true,
+  });
+  if (!publication.ok) return publication;
+  const validation = await (operations.validatePublished ?? validatePublishedDeliveryV2)({ root: input.root, preview: inspection.value });
+  if (!validation.ok) {
+    const rollback = await rollbackRetainedLayout(publication.value, operations);
+    return rollback.ok ? validation : rollback;
+  }
+  const finalized = await finalizeRetainedLayout(publication.value, operations);
+  if (!finalized.ok) {
+    const rollback = await rollbackRetainedLayout(publication.value, operations);
+    return rollback.ok ? finalized : rollback;
+  }
+  return ok({
+    layout_version: 2,
+    backup_ref: input.backup_ref,
+    moved_locators: inspection.value.moves,
+    validation_ref: validation.value.validation_ref,
+  });
 };
