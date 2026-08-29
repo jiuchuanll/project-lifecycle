@@ -1,8 +1,9 @@
 {
   "name": "project-lifecycle",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
+  "main": "./dsh/index.js",
   "engines": {
     "node": ">=22"
   },
@@ -20,6 +21,11 @@
     "validate:fixtures": "node scripts/bin/project-lifecycle-source.mjs validate-fixtures tests/fixtures",
     "check:privacy": "node scripts/check-privacy.mjs",
     "check": "npm test && npm run validate:fixtures && npm run check:privacy"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
   },
   "dependencies": {
     "ajv": "8.20.0",

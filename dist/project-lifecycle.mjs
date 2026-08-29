@@ -28431,7 +28431,7 @@ async function materializeAsset(input = {}, operations = {}) {
 }
 
 // scripts/bin/project-lifecycle-source.mjs
-var version = "0.5.0";
+var version = "0.6.0";
 var MAX_ALIGNMENT_DOCUMENT_BYTES = 262144;
 var command = process.argv[2] ?? "help";
 var cliFailure = (code, path, message) => fail([createError(code, path, message)]);

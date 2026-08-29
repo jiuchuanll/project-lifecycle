@@ -1,10 +1,11 @@
 {
   "schema_version": 1,
-  "plugin_version": "0.5.0",
+  "plugin_version": "0.6.0",
   "hosts": {
     "claude": { "status": "NOT_TESTED", "observed_version": null, "evidence_refs": ["availability:claude:unavailable"] },
     "codex": { "status": "FAILED", "observed_version": "0.147.0-alpha.6.5", "evidence_refs": ["invariant-failures:codex:8", "targeted-regression:codex:4of4", "trace-set:codex:ae5b5ad"] },
     "cursor": { "status": "NOT_TESTED", "observed_version": null, "evidence_refs": ["availability:cursor:unavailable"] },
+    "dsh": { "status": "NOT_TESTED", "observed_version": null, "evidence_refs": [] },
     "kimi": { "status": "FAILED", "observed_version": "0.29.2", "evidence_refs": ["invariant-failures:kimi:15", "targeted-regression:kimi:6of6", "trace-set:kimi:ae5b5ad"] },
     "zcode": { "status": "NOT_TESTED", "observed_version": null, "evidence_refs": ["availability:zcode:unavailable"] }
   }

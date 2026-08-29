@@ -17,7 +17,7 @@ test('keeps five native manifests on one plugin identity and canonical Skill sou
   for (const [host, path, explicitSkills] of manifests) {
     const manifest = await json(path);
     assert.equal(manifest.name, 'project-lifecycle', host);
-    assert.equal(manifest.version, '0.5.0', host);
+    assert.equal(manifest.version, '0.6.0', host);
     assert.equal(manifest.repository, canonicalRepository, host);
     assert.equal(manifest.author?.name, 'jiuchuanll', host);
     assert.equal(typeof manifest.description, 'string', host);
@@ -34,6 +34,23 @@ test('keeps host manifests metadata-only and free of copied lifecycle semantics'
     assert.doesNotMatch(source, /sessionStart|mcpServers|FEEDBACK_ONLY|PRD_DELIVERY|KNOWLEDGE_ONLY|QUICK_TASK/u, host);
     assert.doesNotMatch(source, /schema_version|pending-changes|knowledge-diff/iu, host);
   }
+});
+
+test('declares the DSH bundle entry without touching the five native manifests', async () => {
+  const packageJson = await json('package.json');
+  assert.equal(packageJson.main, './dsh/index.js');
+  assert.equal(packageJson.dsh?.bundle?.patch, './cordis.patch.yml');
+  assert.equal(Object.hasOwn(packageJson, 'peerDependencies'), false);
+
+  const patch = await readFile(new URL('cordis.patch.yml', root), 'utf8');
+  assert.match(patch, /- insert:/u);
+  assert.match(patch, /name: project-lifecycle/u);
+  assert.doesNotMatch(patch, /\/Users\/|[A-Za-z]:\\|token|password|api[_-]?key/iu);
+
+  const entry = await readFile(new URL('dsh/index.js', root), 'utf8');
+  assert.match(entry, /registerProvider/u);
+  assert.match(entry, /\.\.\/skills\//u);
+  assert.doesNotMatch(entry, /\/Users\/|[A-Za-z]:\\|token|password|api[_-]?key/iu);
 });
 
 test('publishes root plugin entries through Codex and Claude marketplaces', async () => {
@@ -53,7 +70,7 @@ test('publishes root plugin entries through Codex and Claude marketplaces', asyn
   assert.deepEqual(claude.plugins, [{
     name: 'project-lifecycle',
     source: './',
-    version: '0.5.0',
+    version: '0.6.0',
     description: 'Build low-noise project knowledge and run traceable PRD delivery lifecycles.',
   }]);
 });
