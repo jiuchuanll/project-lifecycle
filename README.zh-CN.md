@@ -13,7 +13,7 @@ Project Lifecycle 是一个共享、宿主中立的插件，用于构建低噪�
 ## 项目状态
 
 > [!IMPORTANT]
-> 本仓库已经开源，但版本 `0.5.0` 仍是**预发布评估候选**。它尚未发布到 npm，且目前
+> 本仓库已经开源，但版本 `0.6.0` 仍是**预发布评估候选**。它尚未发布到 npm，且目前
 > 没有任何原生宿主满足发布支持门禁。安装说明仅用于评估，不代表生产支持承诺。
 
 源代码、确定性发布压缩包和保留的一致性证据均已公开，可供检查和贡献。所有支持声明
@@ -28,8 +28,8 @@ Project Lifecycle 将两条相互关联的工作流明确分开：
 | 构建或更新长期项目知识 | `maintain-project-knowledge` | 在 `docs/project-lifecycle/` 下形成经确认的项目地图、中英文领域能力知识、有界待审变更和低噪声上下文路由 |
 | 把反馈转化为可开发、可测试的交付 | `run-prd-lifecycle` | 形成 Feedback、PRD、架构、开发指导、实现批次、测试证据、闭环记录以及显式知识差异 |
 
-共享 Skills 是权威行为来源。Codex、Claude Code、Cursor、Kimi Code 与 ZCode 的
-集成只包含安装方式和工具映射差异。
+共享 Skills 是权威行为来源。Codex、Claude Code、Cursor、DeepSeek Harness、
+Kimi Code 与 ZCode 的集成只包含安装方式和工具映射差异。
 
 核心规则：
 
@@ -50,7 +50,7 @@ Project Lifecycle 将两条相互关联的工作流明确分开：
 前置条件：
 
 - 内置验证器要求 Node.js 22 或更高版本。
-- 使用五个目标宿主之一；当前版本仍是非发布候选，建议使用一次性测试 Profile。
+- 使用六个目标宿主之一；当前版本仍是非发布候选，建议使用一次性测试 Profile。
 - 项目仓库允许创建 `docs/project-lifecycle/`。
 
 1. 按照[安装与宿主说明](#安装与宿主说明)选择对应的原生安装方式。
@@ -183,6 +183,7 @@ ID、引用、中英文配对、Fact 区块和 fixture 完整性；它不能替�
 | codex | FAILED | 0.147.0-alpha.6.5 | invariant-failures:codex:8, targeted-regression:codex:4of4, trace-set:codex:ae5b5ad |
 | claude | NOT_TESTED | — | availability:claude:unavailable |
 | cursor | NOT_TESTED | — | availability:cursor:unavailable |
+| dsh | NOT_TESTED | — |  |
 | kimi | FAILED | 0.29.2 | invariant-failures:kimi:15, targeted-regression:kimi:6of6, trace-set:kimi:ae5b5ad |
 | zcode | NOT_TESTED | — | availability:zcode:unavailable |
 
@@ -195,6 +196,7 @@ ID、引用、中英文配对、Fact 区块和 fixture 完整性；它不能替�
 - [Codex 安装与移除](integrations/codex/README.md)
 - [Claude Code 安装与移除](integrations/claude/README.md)
 - [Cursor 安装与移除](integrations/cursor/README.md)
+- [DeepSeek Harness 安装与移除](integrations/dsh/README.md)
 - [Kimi Code 安装与移除](integrations/kimi/README.md)
 - [ZCode 安装与移除](integrations/zcode/README.md)
 
@@ -239,4 +241,4 @@ Project Lifecycle 使用 [Apache License 2.0](LICENSE) 开源。
 - KnowledgeVault 消费端迁移保持只读审计，直到至少一个宿主受支持且两个共享 Skill
   均被原生发现。详见[迁移方案](docs/migrations/knowledgevault-agent-app.md)。
 
-0.5.0 候选范围与升级说明见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。
+0.6.0 候选范围与升级说明见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。

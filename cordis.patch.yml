@@ -1,0 +1,9 @@
+# project-lifecycle DSH bundle patch: register the bundled skill provider as a
+# new row over the shared `skills/` directory. The row's `name` is this package
+# itself, so `dsh plugin add <repository>` activates it and the profile
+# discovers the two authoritative Skills without any host-specific Skill copy.
+# The bundle root also carries `bin/` and `dist/`, matching the Skills' runtime
+# resolution contract.
+- insert:
+    - id: project-lifecycle
+      name: project-lifecycle

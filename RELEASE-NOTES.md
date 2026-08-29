@@ -1,11 +1,12 @@
-# Project Lifecycle 0.5.0 candidate notes
+# Project Lifecycle 0.6.0 candidate notes
 
 Publication status: **PUBLIC PRE-RELEASE EVALUATION CANDIDATE**
 
 Host support gate: **NON-RELEASE CANDIDATE**
 
-Version `0.5.0` replaces the flat delivery namespace with a fixed owner-centric
-layout. Feedback remains independent, while each PRD or non-PRD root owns one
+Version `0.6.0` adds a DeepSeek Harness bundle adapter to the `0.5.0`
+owner-centric delivery layout. Feedback remains independent, while each PRD or
+non-PRD root owns one
 stable directory containing its architecture, guidance, batches, test reports,
 and closure evidence. Existing schema-v1 delivery trees are handled through an
 explicit preview, approval-bound atomic migration, live validation, and
@@ -177,13 +178,19 @@ must complete both approved migrations.
   and temporary questions with no durable write.
 - Codex `0.147.0-alpha.6.5` and Kimi Code `0.29.2` retained traces were produced
   for `0.1.0`. Their recorded failures and bounded remediation results remain
-  historical evidence and are not relabeled as `0.5.0` runs.
-- Claude Code, Cursor, and ZCode remain `NOT_TESTED` because native executables
-  were unavailable. Structural passes never produce a `SUPPORTED` claim.
+  historical evidence and are not relabeled as `0.6.0` runs.
+- Claude Code, Cursor, DeepSeek Harness, and ZCode remain `NOT_TESTED` because
+  native executables were unavailable. Structural passes never produce a
+  `SUPPORTED` claim.
+- A DeepSeek Harness bundle adapter (`cordis.patch.yml` plus `dsh/index.js`)
+  registers the two authoritative Skills as a bundled provider, so
+  `dsh plugin add` discovers them without any host-specific Skill copy. It
+  shares the existing `bin/` and `dist/` runtime and adds no native support
+  claim.
 
 ## Release blocker
 
-A supported release tag still requires all five target hosts to be `SUPPORTED`
+A supported release tag still requires all six target hosts to be `SUPPORTED`
 for exact tested versions, with three retained independent runs for every Gold
 scenario and completed semantic review. This candidate does not meet that
 support gate.

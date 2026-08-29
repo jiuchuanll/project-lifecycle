@@ -8,7 +8,7 @@ import { compareCodePoints } from './lib/deterministic-order.mjs';
 import { createError } from './lib/errors.mjs';
 import { fail, ok } from './lib/result.mjs';
 
-const HOST_ORDER = Object.freeze(['codex', 'claude', 'cursor', 'kimi', 'zcode']);
+const HOST_ORDER = Object.freeze(['codex', 'claude', 'cursor', 'dsh', 'kimi', 'zcode']);
 const RELEASE_FILES = Object.freeze([
   ['.agents/plugins/marketplace.json', '.agents/plugins/marketplace.json'],
   ['.claude-plugin/marketplace.json', '.claude-plugin/marketplace.json'],
@@ -17,6 +17,8 @@ const RELEASE_FILES = Object.freeze([
   ['.cursor-plugin/plugin.json', '.cursor-plugin/plugin.json'],
   ['.kimi-plugin/plugin.json', '.kimi-plugin/plugin.json'],
   ['.zcode-plugin/plugin.json', '.zcode-plugin/plugin.json'],
+  ['cordis.patch.yml', 'cordis.patch.yml'],
+  ['dsh/index.js', 'dsh/index.js'],
   ['README.md', 'README.md'],
   ['README.zh-CN.md', 'README.zh-CN.md'],
   ['CONTRIBUTING.md', 'CONTRIBUTING.md'],

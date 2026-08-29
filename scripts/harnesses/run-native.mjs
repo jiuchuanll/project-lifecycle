@@ -93,7 +93,7 @@ export async function runNativeScenario(input = {}) {
       run_id: `${host}-${input.scenarioId}-${input.runNumber}`,
       scenario_id: input.scenarioId,
       run_number: input.runNumber,
-      plugin: { version: '0.5.0', commit: input.pluginCommit },
+      plugin: { version: '0.6.0', commit: input.pluginCommit },
       host: { id: host, version: input.version },
       model: input.model,
       parameters: input.parameters,

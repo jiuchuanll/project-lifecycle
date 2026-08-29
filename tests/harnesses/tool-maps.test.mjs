@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const root = new URL('../../', import.meta.url);
-const hosts = ['codex', 'claude', 'cursor', 'kimi', 'zcode'];
+const hosts = ['codex', 'claude', 'cursor', 'dsh', 'kimi', 'zcode'];
 const operations = [
   'ASK_USER', 'CREATE_REVIEW_REQUEST', 'FETCH_REMOTE', 'READ_FILE',
   'RUN_COMMAND', 'RUN_VALIDATOR', 'SEARCH_FILES', 'WRITE_FILE',
@@ -53,4 +53,5 @@ test('keeps install guides native, version-pinned, and honest about support', as
   assert.match(await read('integrations/claude/README.md'), /claude --plugin-dir <absolute-repository-path>/u);
   assert.match(await read('integrations/kimi/README.md'), /\/plugins install/u);
   assert.match(await read('integrations/zcode/README.md'), /marketplace/u);
+  assert.match(await read('integrations/dsh/README.md'), /dsh plugin/u);
 });
