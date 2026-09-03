@@ -1,6 +1,6 @@
 # DeepSeek Harness installation
 
-Candidate version: `0.6.0`. Evidence status: `NOT_TESTED` until the native matrix is complete. Retained `0.1.0` traces are historical evidence, not validation of this candidate.
+Candidate version: `0.7.0`. Evidence status: `NOT_TESTED` until the native matrix is complete. Retained `0.1.0` traces are historical evidence, not validation of this candidate.
 
 Install the repository as a DSH bundle into the target profile, then reload:
 

@@ -5,26 +5,27 @@ import test from 'node:test';
 const root = new URL('../../', import.meta.url);
 const canonicalRepository = `https://${['github', 'com'].join('.')}/${['jiuchuan', 'll'].join('')}/project-lifecycle`;
 const manifests = [
-  ['codex', '.codex-plugin/plugin.json', true],
-  ['claude', '.claude-plugin/plugin.json', false],
-  ['cursor', '.cursor-plugin/plugin.json', true],
-  ['kimi', '.kimi-plugin/plugin.json', true],
-  ['zcode', '.zcode-plugin/plugin.json', true],
+  ['codex', '.codex-plugin/plugin.json', './skills/'],
+  ['claude', '.claude-plugin/plugin.json', null],
+  ['cursor', '.cursor-plugin/plugin.json', './skills/'],
+  ['kimi', '.kimi-plugin/plugin.json', './skills/'],
+  ['zcode', '.zcode-plugin/plugin.json', 'skills'],
 ];
 const json = async (path) => JSON.parse(await readFile(new URL(path, root), 'utf8'));
 
 test('keeps five native manifests on one plugin identity and canonical Skill source', async () => {
-  for (const [host, path, explicitSkills] of manifests) {
+  for (const [host, path, skillsForm] of manifests) {
     const manifest = await json(path);
     assert.equal(manifest.name, 'project-lifecycle', host);
-    assert.equal(manifest.version, '0.6.0', host);
+    assert.equal(manifest.version, '0.7.0', host);
     assert.equal(manifest.repository, canonicalRepository, host);
     assert.equal(manifest.author?.name, 'jiuchuanll', host);
     assert.equal(typeof manifest.description, 'string', host);
     assert.ok(manifest.description.length > 0, host);
-    if (explicitSkills) assert.equal(manifest.skills, './skills/', host);
+    if (skillsForm) assert.equal(manifest.skills, skillsForm, host);
     else assert.equal(Object.hasOwn(manifest, 'skills'), false, host);
   }
+  assert.equal((await json('.zcode-plugin/plugin.json')).license, 'Apache-2.0', 'zcode');
 });
 
 test('keeps host manifests metadata-only and free of copied lifecycle semantics', async () => {
@@ -70,7 +71,7 @@ test('publishes root plugin entries through Codex and Claude marketplaces', asyn
   assert.deepEqual(claude.plugins, [{
     name: 'project-lifecycle',
     source: './',
-    version: '0.6.0',
+    version: '0.7.0',
     description: 'Build low-noise project knowledge and run traceable PRD delivery lifecycles.',
   }]);
 });

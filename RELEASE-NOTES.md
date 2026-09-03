@@ -1,11 +1,12 @@
-# Project Lifecycle 0.6.0 candidate notes
+# Project Lifecycle 0.7.0 candidate notes
 
 Publication status: **PUBLIC PRE-RELEASE EVALUATION CANDIDATE**
 
 Host support gate: **NON-RELEASE CANDIDATE**
 
-Version `0.6.0` adds a DeepSeek Harness bundle adapter to the `0.5.0`
-owner-centric delivery layout. Feedback remains independent, while each PRD or
+Version `0.7.0` aligns the ZCode integration with native plugin conventions on
+the `0.6.0` DeepSeek Harness candidate and its owner-centric delivery layout.
+Feedback remains independent, while each PRD or
 non-PRD root owns one
 stable directory containing its architecture, guidance, batches, test reports,
 and closure evidence. Existing schema-v1 delivery trees are handled through an
@@ -18,6 +19,15 @@ version bump does not upgrade any native-host support claim.
 
 ## What changed
 
+- The ZCode manifest declares the bare `skills` component form and an
+  `Apache-2.0` license, matching official ZCode plugin manifests; ZCode
+  marketplace discovery continues to resolve through
+  `.claude-plugin/marketplace.json`.
+- `integrations/zcode` now documents the host-verified native discovery
+  mechanics: GUI-only marketplace add, manifest probe order, the
+  cache/registry/enable-map install state under `~/.zcode/cli/plugins`, and
+  session-start Skill resolution. Hand-written registry or cache copies remain
+  migration rather than installation, and a partial hand copy loads nothing.
 - `delivery/layout.json` identifies delivery layout v2. Active documents live
   under `delivery/feedback/`, `delivery/prds/<owner-id>/`, or
   `delivery/non-prd/<owner-id>/`; generated views live under `delivery/views/`.
@@ -187,6 +197,10 @@ must complete both approved migrations.
   `dsh plugin add` discovers them without any host-specific Skill copy. It
   shares the existing `bin/` and `dist/` runtime and adds no native support
   claim.
+- The ZCode adaptation was verified against the installed ZCode desktop host by
+  static inspection and one GUI-driven marketplace install of the deterministic
+  archive. It covers manifest, marketplace, cache, registry, and enable-map
+  mechanics only and adds no native support claim.
 
 ## Release blocker
 
