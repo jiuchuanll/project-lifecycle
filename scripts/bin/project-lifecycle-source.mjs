@@ -25,7 +25,7 @@ import {
 import { materializeAsset } from '../delivery/materialize-asset.mjs';
 import { applyLayoutTransaction, inspectLifecycleTree } from '../knowledge/layout-transaction.mjs';
 
-const version = '0.6.0';
+const version = '0.7.0';
 const MAX_ALIGNMENT_DOCUMENT_BYTES = 262_144;
 const command = process.argv[2] ?? 'help';
 
