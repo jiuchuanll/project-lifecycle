@@ -18,6 +18,7 @@ import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 import { validateAlignmentExit, validateAlignmentFeedbackPair } from './alignment-marker.mjs';
 import { validateClosureSummary } from './close-delivery.mjs';
+import { validateDeliveryFields } from './delivery-diagnostics.mjs';
 import { collectDeliveryInventory } from './delivery-inventory.mjs';
 import {
   activeDeliveryPair,
@@ -185,8 +186,8 @@ export const validateMaterializationRequest = (input = {}) => {
     const rootOwnership = validatePhysicalOwner(input.frontmatter);
     if (!rootOwnership.ok) return rootOwnership;
   }
-  const frontmatter = validateJson('delivery-frontmatter', input.frontmatter);
-  if (!frontmatter.ok) return failure('ASSET_FRONTMATTER_INVALID', '/frontmatter', 'Delivery Frontmatter must satisfy the shared contract.');
+  const frontmatter = validateDeliveryFields(input.frontmatter, { code: 'ASSET_FRONTMATTER_INVALID' });
+  if (!frontmatter.ok) return frontmatter;
   const ownership = validatePhysicalOwner(input.frontmatter);
   if (!ownership.ok) return ownership;
   if (input.canonical_purpose_satisfied === true) {
@@ -414,7 +415,7 @@ export async function materializeAsset(input = {}, operations = {}) {
     return failure('PAIR_INCOMPLETE', '/delivery', 'Delivery asset pairs must be created and updated together.');
   }
   const updating = existing.en !== null;
-  if (updating && input.frontmatter.artifact_kind !== 'feedback') {
+  if (updating && input.frontmatter.artifact_kind !== 'feedback' && !operations.allowExactReplay) {
     return failure('ASSET_REDUNDANT', '/frontmatter/artifact_id', 'An existing delivery owner cannot be recreated by materialization.');
   }
 
@@ -450,7 +451,14 @@ export async function materializeAsset(input = {}, operations = {}) {
     const removingAlignment = priorAlignment?.value.marker !== null
       && priorAlignment?.value.marker !== undefined
       && nextAlignment.value.marker === null;
-    if (Object.hasOwn(input, 'alignment_resolution') && !removingAlignment) {
+    // A saved marker-removal request may be replayed after index publication failed.
+    // Only byte-identical rendered pairs qualify; no new transition or approval is applied.
+    const exactFeedbackReplay = operations.allowExactReplay && updating
+      && ['en', 'zh-CN'].every((language) => renderDocument(
+        input.frontmatter,
+        addFeedbackHashes(bodies[language], sourceHashes(extractFeedbackSections(bodies[language]))),
+      ) === existing[language]);
+    if (Object.hasOwn(input, 'alignment_resolution') && !removingAlignment && !exactFeedbackReplay) {
       return failure('ALIGNMENT_RESOLUTION_UNEXPECTED', '/alignment_resolution', 'Resolution is allowed only while removing an active marker.');
     }
     if (removingAlignment) {
@@ -571,6 +579,14 @@ export async function materializeAsset(input = {}, operations = {}) {
       return failure('ASSET_BODY_INVALID', `/body/${language}`, 'Complete localized delivery document must remain bounded.');
     }
   }
+  const unchanged = updating && existing.en === documents.en && existing['zh-CN'] === documents['zh-CN'];
+  if (updating && input.frontmatter.artifact_kind !== 'feedback' && !unchanged) {
+    return failure('ASSET_REDUNDANT', '/frontmatter/artifact_id', 'An existing delivery owner cannot be replaced by a different request.');
+  }
+  if (operations.preview) {
+    return ok({ artifact_id: id, locators, status: unchanged ? 'unchanged' : updating ? 'updated' : 'created', documents });
+  }
+  if (operations.allowExactReplay && unchanged) return ok({ artifact_id: id, locators, status: 'unchanged' });
   const write = operations.atomicWriteValidated ?? atomicWriteValidated;
   let createdDirectories = [];
   try {

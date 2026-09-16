@@ -7,6 +7,8 @@ import test from 'node:test';
 import { stringify as stringifyYaml } from 'yaml';
 
 import { closureSummaryHash } from '../../scripts/lib/closure-summary.mjs';
+import { materializeDeliveryWithIndexes } from '../../scripts/delivery/delivery-workflow.mjs';
+import { publishDeliveryIndexes } from '../../scripts/delivery/publish-delivery-indexes.mjs';
 import { deliveryLayoutContent } from '../../scripts/delivery/delivery-layout.mjs';
 import { parseRestrictedYaml } from '../../scripts/lib/markdown.mjs';
 import { atomicWriteValidated } from '../../scripts/lib/atomic-write.mjs';
@@ -109,9 +111,12 @@ const parseDeliveryFrontmatter = (source) => {
   return parsed.value;
 };
 
-test('ships exactly eight bilingual delivery template pairs with canonical kind markers', async () => {
+test('ships eight bilingual delivery template pairs and three explicit request examples', async () => {
   const files = (await readdir(assetRoot)).sort();
-  assert.deepEqual(files, kinds.flatMap(([name]) => [`${name}-en.md`, `${name}.md`]).sort());
+  assert.deepEqual(files, [
+    ...kinds.flatMap(([name]) => [`${name}-en.md`, `${name}.md`]),
+    'feedback-request.json', 'prd-request.json', 'architecture-request.json',
+  ].sort());
   for (const [name, kind] of kinds) {
     const en = await readFile(new URL(`${name}-en.md`, assetRoot), 'utf8');
     const zh = await readFile(new URL(`${name}.md`, assetRoot), 'utf8');
@@ -955,4 +960,45 @@ test('reports rollback failure instead of leaving a silently inconsistent feedba
 
   assert.equal(result.ok, false);
   assert.equal(result.errors[0].code, 'ASSET_ROLLBACK_FAILED');
+});
+
+
+test('retries saved Feedback alignment resolution after failed index publication without authorizing new changes', async () => {
+  const root = await rootFor();
+  const feedbackId = 'feedback-resolution-retry';
+  const frontmatter = baseFrontmatter({ artifact_id: feedbackId, artifact_kind: 'feedback', primary_route: 'KNOWLEDGE_UPDATE' });
+  assert.equal((await materializeAsset(request(root, { frontmatter, body: alignmentFeedbackBody() }))).ok, true);
+  const body = feedbackBody({ coverage: 'NO_REMEDIATION_ACCEPTED; decision:retain-divergence; knowledge-resolution:retained-divergence' });
+  body['zh-CN'] = body['zh-CN'].replace('已由 PRD 覆盖。', 'NO_REMEDIATION_ACCEPTED；decision:retain-divergence；knowledge-resolution:retained-divergence');
+  const input = request(root, {
+    frontmatter, body,
+    alignment_resolution: {
+      schema_version: 1, feedback_id: feedbackId, disposition: 'NO_REMEDIATION_ACCEPTED',
+      owner_refs: [], closure_refs: [], knowledge_resolution_refs: ['knowledge-resolution:retained-divergence'],
+      human_approval_ref: 'decision:retain-divergence',
+    },
+    alignment_knowledge_results: [knowledgeResult({ feedbackId, ref: 'knowledge-resolution:retained-divergence', status: 'RESIDUAL_DIVERGENCE_ACCEPTED' })],
+  });
+  const occupied = join(root, 'docs/project-lifecycle/delivery/INDEX.md');
+  const first = await materializeDeliveryWithIndexes(input, {
+    publishDeliveryIndexes: async () => {
+      await writeFile(occupied, '# Manual index\n');
+      return publishDeliveryIndexes({ root });
+    },
+  });
+  assert.equal(first.ok, false);
+  assert.equal(first.context.asset_saved, true);
+  assert.equal(first.context.indexes, 'failed');
+  const savedPath = join(root, 'docs/project-lifecycle', first.context.locators.en);
+  const saved = await readFile(savedPath, 'utf8');
+  await rm(occupied);
+  const replay = await materializeDeliveryWithIndexes(input);
+  assert.equal(replay.ok, true, JSON.stringify(replay));
+  assert.equal(replay.value.status, 'unchanged');
+  assert.equal(replay.value.indexes, 'updated');
+  assert.equal(await readFile(savedPath, 'utf8'), saved);
+  const changed = await materializeDeliveryWithIndexes({ ...input, body: { ...body, en: body.en + '\nDifferent content.\n' } });
+  assert.equal(changed.ok, false);
+  assert.equal(changed.errors[0].code, 'ALIGNMENT_RESOLUTION_UNEXPECTED');
+  assert.equal(await readFile(savedPath, 'utf8'), saved);
 });

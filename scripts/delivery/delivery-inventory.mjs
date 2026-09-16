@@ -8,6 +8,7 @@ import { parseRestrictedYaml } from '../lib/markdown.mjs';
 import { isSafeLocator } from '../lib/reference-safety.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
+import { validateDeliveryFields } from './delivery-diagnostics.mjs';
 import { activeDeliveryPair, archivedDeliveryPair } from './delivery-layout.mjs';
 
 const MAX_ENTRIES = 2000;
@@ -27,8 +28,6 @@ const inside = (root, candidate) => {
   const fromRoot = relative(root, candidate);
   return fromRoot === '' || (fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot));
 };
-const languageOf = (name) => name.endsWith('-en.md') ? 'en' : 'zh-CN';
-const artifactIdOf = (name) => name.replace(/-en\.md$/u, '').replace(/\.md$/u, '');
 const canonicalDirectory = (locator) => /^(?:delivery|archive\/delivery)\/(?:feedback|prds|non-prd)(?:\/[a-z][a-z0-9-]*(?:\/(?:architecture|batches|closure|guidance|test-reports))?)?$/u.test(locator)
   || locator === 'delivery/views';
 const canonicalIndex = (locator) => /^delivery\/(?:INDEX(?:-en)?\.md|(?:prds|non-prd)\/[a-z][a-z0-9-]*\/INDEX(?:-en)?\.md)$/u.test(locator);
@@ -55,14 +54,24 @@ const readPrefix = async (path) => {
   }
 };
 
-const parseFrontmatter = (source) => {
+const parseFrontmatter = (source, locator) => {
+  const path = `/${locator}/frontmatter`;
+  if (typeof source !== 'string' || Buffer.byteLength(source) > 262_144) {
+    return failure('DELIVERY_FRONTMATTER_MALFORMED', path, 'A bounded YAML Frontmatter block is required.');
+  }
   const normalized = source.replaceAll('\r\n', '\n');
   const closing = normalized.indexOf('\n---\n', 4);
-  if (!normalized.startsWith('---\n') || closing === -1) return null;
-  const parsed = parseRestrictedYaml(normalized.slice(4, closing), '/frontmatter');
-  if (!parsed.ok || !validateJson('delivery-frontmatter', parsed.value).ok
-    || parsed.value.schema_version !== 2) return null;
-  return parsed.value;
+  if (!normalized.startsWith('---\n') || closing === -1) {
+    return failure('DELIVERY_FRONTMATTER_MALFORMED', path, 'A bounded YAML Frontmatter block is required.');
+  }
+  const parsed = parseRestrictedYaml(normalized.slice(4, closing), path);
+  if (!parsed.ok) return failure('DELIVERY_FRONTMATTER_MALFORMED', path, 'Restricted YAML Frontmatter is malformed.');
+  const validation = validateDeliveryFields(parsed.value, { path });
+  if (!validation.ok) return validation;
+  if (parsed.value.schema_version !== 2) {
+    return failure('DELIVERY_LAYOUT_MIGRATION_REQUIRED', `${path}/schema_version`, 'Delivery layout v2 is required.');
+  }
+  return ok(parsed.value);
 };
 
 const classify = (locator) => {
@@ -70,14 +79,13 @@ const classify = (locator) => {
   const prefix = archived ? 'archive/delivery/' : 'delivery/';
   const rest = locator.slice(prefix.length);
   const feedback = /^feedback\/([a-z][a-z0-9-]*\.md)$/u.exec(rest);
-  if (feedback) return { archived, artifactId: artifactIdOf(feedback[1]), ownerKind: null, ownerId: null, expectedKind: 'feedback' };
+  if (feedback) return { archived, ownerKind: null, ownerId: null, expectedKind: 'feedback' };
   const owner = /^(prds|non-prd)\/([a-z][a-z0-9-]*)\/(?:([a-z-]+)\/)?([a-z][a-z0-9-]*\.md)$/u.exec(rest);
   if (!owner) return null;
   const ownerKind = owner[1] === 'prds' ? 'prd' : 'non-prd-delivery';
   const phase = owner[3] ?? null;
   return {
     archived,
-    artifactId: artifactIdOf(owner[4]),
     ownerKind,
     ownerId: owner[2],
     expectedKind: phase === null ? ownerKind : PHASE_KINDS[phase] ?? null,
@@ -179,6 +187,18 @@ export const collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overl
     return failure('DELIVERY_LAYOUT_MIGRATION_REQUIRED', '/delivery/layout.json', 'Delivery layout v2 marker is invalid.');
   }
 
+  const errors = [];
+  const invalidIds = new Set();
+  const invalidLocators = new Set();
+  let truncated = false;
+  const recordErrors = (items) => {
+    if (errors.length + items.length > 50) truncated = true;
+    errors.push(...items.slice(0, 50 - errors.length));
+  };
+  const invalidInventory = () => ({
+    ...fail(errors),
+    context: { files_changed: false, error_limit: 50, truncated },
+  });
   const ignored = new Set([
     'delivery/layout.json', 'delivery/INDEX-en.md', 'delivery/INDEX.md',
   ]);
@@ -209,7 +229,7 @@ export const collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overl
       ? await readFile(source.path, 'utf8').catch(() => null)
       : null);
     if (typeof content !== 'string' || !content.startsWith(INDEX_NOTICE)) {
-      return failure('DELIVERY_INVENTORY_INVALID', `/${locator}`, 'Delivery index locator is occupied.');
+      recordErrors(failure('DELIVERY_INDEX_OCCUPIED', `/${locator}`, 'Delivery index locator is occupied by a non-generated file; preserve or relocate it before generation.').errors);
     }
     ignored.add(locator);
   }
@@ -219,27 +239,38 @@ export const collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overl
     if (ignored.has(locator)) continue;
     const descriptor = classify(locator);
     if (!descriptor || descriptor.expectedKind === null) {
-      return failure('DELIVERY_INVENTORY_INVALID', `/${locator}`, 'Delivery contains an unknown managed file.');
+      recordErrors(failure('DELIVERY_INVENTORY_INVALID', `/${locator}`, 'Delivery contains an unknown managed file.').errors);
+      continue;
     }
     const raw = source.overlay ?? await readPrefix(source.path).catch(() => null);
-    const metadata = typeof raw === 'string' && Buffer.byteLength(raw) <= 262_144
-      ? parseFrontmatter(raw)
-      : null;
-    if (!metadata || metadata.artifact_id !== descriptor.artifactId
-      || metadata.artifact_kind !== descriptor.expectedKind
+    const parsed = parseFrontmatter(raw, locator);
+    if (!parsed.ok) {
+      recordErrors(parsed.errors);
+      invalidLocators.add(locator);
+      continue;
+    }
+    const metadata = parsed.value;
+    if (metadata.artifact_kind !== descriptor.expectedKind
       || (descriptor.ownerId !== null && metadata.owner_artifact_id !== descriptor.ownerId)) {
-      return failure('DELIVERY_INVENTORY_PATH_MISMATCH', `/${locator}`, 'Delivery path and Frontmatter ownership must match.');
+      recordErrors(failure('DELIVERY_INVENTORY_PATH_MISMATCH', `/${locator}`, 'Delivery path and Frontmatter ownership must match.').errors);
+      invalidIds.add(metadata.artifact_id);
+      continue;
     }
     const expected = descriptor.archived
       ? archivedDeliveryPair(metadata, { ownerKind: descriptor.ownerKind })
       : activeDeliveryPair(metadata, { ownerKind: descriptor.ownerKind });
     if (!Object.values(expected).includes(locator)) {
-      return failure('DELIVERY_INVENTORY_PATH_MISMATCH', `/${locator}`, 'Delivery locator is not canonical for its owner.');
+      recordErrors(failure('DELIVERY_INVENTORY_PATH_MISMATCH', `/${locator}`, 'Delivery locator is not canonical for its owner.').errors);
+      invalidIds.add(metadata.artifact_id);
+      continue;
     }
     const key = `${descriptor.archived ? 'archive' : 'active'}:${metadata.artifact_id}`;
     const pair = grouped.get(key) ?? {};
-    const language = languageOf(locator);
-    if (pair[language]) return failure('DELIVERY_INVENTORY_DUPLICATE', `/${locator}`, 'Delivery artifact language is duplicated.');
+    const language = expected.en === locator ? 'en' : 'zh-CN';
+    if (pair[language]) {
+      recordErrors(failure('DELIVERY_INVENTORY_DUPLICATE', `/${locator}`, 'Delivery artifact language is duplicated.').errors);
+      continue;
+    }
     pair[language] = { language, locator, frontmatter: metadata };
     grouped.set(key, pair);
   }
@@ -251,11 +282,16 @@ export const collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overl
   const artifactIds = new Set();
   for (const [key, pair] of grouped) {
     if (!pair.en || !pair['zh-CN'] || !isDeepStrictEqual(pair.en.frontmatter, pair['zh-CN'].frontmatter)) {
-      return failure('DELIVERY_INVENTORY_PAIR_INVALID', `/${key}`, 'Delivery artifacts require one matching bilingual pair.');
+      const counterpart = pair.en ? pair.en.locator.replace(/-en\.md$/u, '.md') : pair['zh-CN'].locator.replace(/\.md$/u, '-en.md');
+      if (!invalidLocators.has(counterpart) && !invalidIds.has(pair.en?.frontmatter.artifact_id ?? pair['zh-CN']?.frontmatter.artifact_id)) {
+        recordErrors(failure('DELIVERY_INVENTORY_PAIR_INVALID', `/${key}`, 'Delivery artifacts require one matching bilingual pair.').errors);
+      }
+      continue;
     }
     const item = itemFromPair(pair);
     if (artifactIds.has(item.artifact_id)) {
-      return failure('DELIVERY_INVENTORY_DUPLICATE', `/${item.artifact_id}`, 'Delivery artifact IDs must be globally unique.');
+      recordErrors(failure('DELIVERY_INVENTORY_DUPLICATE', `/${item.artifact_id}`, 'Delivery artifact IDs must be globally unique.').errors);
+      continue;
     }
     artifactIds.add(item.artifact_id);
     if (key.startsWith('archive:')) {
@@ -266,6 +302,7 @@ export const collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overl
       activePairs.push(pair.en, pair['zh-CN']);
     }
   }
+  if (errors.length > 0) return invalidInventory();
   const sortItems = (values) => values.sort((left, right) => compareCodePoints(left.artifact_id, right.artifact_id));
   sortItems(activeItems);
   sortItems(archivedItems);
@@ -296,12 +333,15 @@ export const collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overl
           && ['prd', 'non-prd-delivery'].includes(candidate.artifact_kind)
         ));
         if (retainedOwner && !ownerKindMismatch(item, retainedOwner)) continue;
-        return failure('DELIVERY_INVENTORY_OWNER_MISMATCH', `/${item.artifact_id}`, 'Closure summary and retained physical owner kinds must match.');
+        recordErrors(failure('DELIVERY_INVENTORY_OWNER_MISMATCH', `/${item.artifact_id}`, 'Closure summary and retained physical owner kinds must match.').errors);
+        continue;
       }
-      return failure('DELIVERY_INVENTORY_OWNER_MISSING', `/${item.artifact_id}`, 'Every active owned asset requires one active physical owner.');
+      recordErrors(failure('DELIVERY_INVENTORY_OWNER_MISSING', `/${item.artifact_id}`, 'Every active owned asset requires one active physical owner.').errors);
+      continue;
     }
     if (ownerKindMismatch(item, byOwner[item.owner_artifact_id].owner)) {
-      return failure('DELIVERY_INVENTORY_OWNER_MISMATCH', `/${item.artifact_id}`, 'Owned asset and physical owner kinds must match.');
+      recordErrors(failure('DELIVERY_INVENTORY_OWNER_MISMATCH', `/${item.artifact_id}`, 'Owned asset and physical owner kinds must match.').errors);
+      continue;
     }
     byOwner[item.owner_artifact_id].assets.push(item);
   }
@@ -311,9 +351,10 @@ export const collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overl
     ));
     const owner = byOwner[entry.owner_artifact_id]?.owner ?? retainedOwner;
     if (owner && entry.assets.some((item) => ownerKindMismatch(item, owner))) {
-      return failure('DELIVERY_INVENTORY_OWNER_MISMATCH', `/${entry.owner_artifact_id}`, 'Archived assets and physical owner kinds must match.');
+      recordErrors(failure('DELIVERY_INVENTORY_OWNER_MISMATCH', `/${entry.owner_artifact_id}`, 'Archived assets and physical owner kinds must match.').errors);
     }
   }
+  if (errors.length > 0) return invalidInventory();
   for (const entry of Object.values(byOwner)) sortItems(entry.assets);
   for (const entry of Object.values(archivedByOwner)) sortItems(entry.assets);
   return ok({

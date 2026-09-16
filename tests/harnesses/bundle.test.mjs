@@ -153,6 +153,7 @@ Open.
     'migrate-delivery-layout',
     'validate-delivery-layout',
     'materialize-delivery-asset',
+    'preview-delivery-asset',
     'close-delivery',
     'generate-delivery-indexes',
   ];
@@ -169,7 +170,7 @@ Open.
 
   const invalidEnvelope = join(fixtures, 'invalid-delivery-command.json');
   await writeFile(invalidEnvelope, '{}\n');
-  for (const name of ['materialize-delivery-asset', 'close-delivery']) {
+  for (const name of ['materialize-delivery-asset', 'preview-delivery-asset', 'close-delivery']) {
     const result = run(join(install, 'bin/project-lifecycle'), [
       name, '--root', project, '--input', invalidEnvelope,
     ], install);

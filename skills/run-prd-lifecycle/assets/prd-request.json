@@ -1,0 +1,29 @@
+{
+  "frontmatter": {
+    "schema_version": 2,
+    "artifact_id": "prd-template",
+    "owner_artifact_id": "prd-template",
+    "artifact_kind": "prd",
+    "primary_route": "PRD_DELIVERY",
+    "project_id_at_creation": "sample-project",
+    "current_project_id": "sample-project",
+    "domain_ids": [
+      "sample-domain"
+    ],
+    "knowledge_baseline": "replace-with-baseline",
+    "relationships": {
+      "feedback_ids": [],
+      "prd_ids": [],
+      "legacy_artifact_refs": []
+    },
+    "retention_tier": "active",
+    "reclassified_from_refs": [],
+    "obligations": []
+  },
+  "body": {
+    "en": "# PRD title\n\n## Product intent\nState the bounded outcome and why it matters.\n\n## Scope and non-goals\nDefine included behavior and explicit exclusions.\n\n## Success criteria\nState observable acceptance criteria.\n\n## Starting baseline and impact\nReference the accepted baseline, domains, facts, constraints, and Feedback.\n",
+    "zh-CN": "# PRD 标题\n\n## 产品意图\n说明限定结果及其价值。\n\n## 范围与非目标\n定义包含行为和明确排除项。\n\n## 成功标准\n说明可观察的验收标准。\n\n## 起始基线与影响\n引用已接受基线、领域、事实、约束与反馈。\n"
+  },
+  "reason": "Replace with the reason for this confirmed delivery asset",
+  "creation_origin": "explicit_user"
+}

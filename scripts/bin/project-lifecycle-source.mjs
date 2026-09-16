@@ -16,22 +16,45 @@ import { validateAlignmentFeedbackDocuments } from '../delivery/alignment-marker
 import { syncAlignmentReview } from '../delivery/alignment-review.mjs';
 import { closeDelivery } from '../delivery/close-delivery.mjs';
 import { collectDeliveryInventory } from '../delivery/delivery-inventory.mjs';
-import { generateDeliveryIndexes } from '../delivery/delivery-indexes.mjs';
+import { FIELD_DIAGNOSTICS } from '../delivery/delivery-diagnostics.mjs';
+import { previewDeliveryAsset, materializeDeliveryWithIndexes } from '../delivery/delivery-workflow.mjs';
+import { publishDeliveryIndexes } from '../delivery/publish-delivery-indexes.mjs';
 import { detectDeliveryLayout } from '../delivery/delivery-layout.mjs';
 import {
   inspectLegacyDeliveryLayout,
   migrateDeliveryLayout,
 } from '../delivery/delivery-layout-migration.mjs';
 import { materializeAsset } from '../delivery/materialize-asset.mjs';
-import { applyLayoutTransaction, inspectLifecycleTree } from '../knowledge/layout-transaction.mjs';
 
-const version = '0.6.0';
+const version = '0.7.0';
 const MAX_ALIGNMENT_DOCUMENT_BYTES = 262_144;
 const command = process.argv[2] ?? 'help';
 
 const cliFailure = (code, path, message) => fail([createError(code, path, message)]);
 
 const publicDiagnosticMessages = Object.freeze({
+  DELIVERY_OWNER_MISMATCH: 'Exactly one valid physical owner pair is required. Create or repair the owner before creating its child asset.',
+  DELIVERY_OWNER_REQUIRED: 'Supply owner_artifact_id for this owned delivery asset.',
+  DELIVERY_OWNER_FORBIDDEN: 'Feedback is independent and must not declare owner_artifact_id.',
+  ASSET_REDUNDANT: 'The target already exists with a different request, or standalone creation would duplicate it. Inspect the saved document; exact retries use --update-indexes.',
+  LAYOUT_SOURCE_CHANGED: 'The lifecycle tree changed during publication. Reinspect it and retry the identical request.',
+  LAYOUT_TREE_LIMIT_EXCEEDED: 'The lifecycle tree exceeds the supported size, depth, or entry limit. Inspect retained files before retrying.',
+  PATH_SYMLINK_ESCAPE: 'A managed path is a symbolic link or escapes its root. Inspect the path before retrying.',
+
+  DELIVERY_FRONTMATTER_MALFORMED: 'A bounded, valid restricted YAML Frontmatter block is required.',
+  DELIVERY_FRONTMATTER_INVALID: 'The indicated Frontmatter field is missing, unsupported, invalid, or inconsistent with ownership; check the delivery template and schema.',
+  DELIVERY_INDEX_OCCUPIED: 'The index path contains a non-generated file. Preserve or relocate it before generating indexes; do not overwrite it automatically.',
+  DELIVERY_INVENTORY_PATH_MISMATCH: 'The delivery path must match artifact_id, artifact_kind, and owner_artifact_id.',
+  DELIVERY_INVENTORY_PAIR_INVALID: 'Both language files are required and their complete Frontmatter must match.',
+  DELIVERY_INVENTORY_OWNER_MISSING: 'An owned delivery asset requires its physical owner document pair.',
+  DELIVERY_INVENTORY_OWNER_MISMATCH: 'The asset directory and physical owner kind must match.',
+  DELIVERY_INVENTORY_DUPLICATE: 'Delivery artifact IDs and language files must be unique.',
+  DELIVERY_INVENTORY_INVALID: 'The delivery inventory contains an unsupported file or directory, unsafe path, or exceeds its bounds.',
+  DELIVERY_LAYOUT_MIGRATION_REQUIRED: 'A valid layout-v2 marker and schema-v2 delivery documents are required; inspect the layout before migration.',
+  ASSET_FRONTMATTER_INVALID: 'Delivery Frontmatter must match the delivery template and schema.',
+  ARCHITECTURE_DECLARATION_REQUIRED: 'Supply changed_contract_ref with an exact changed-contract declaration reference.',
+  ASSET_REQUEST_INVALID: 'Supply frontmatter, bilingual body, reason, and PRD creation_origin when applicable.',
+
   [ERROR_CODES.CURRENT_EVIDENCE_MISSING]: 'Current fact evidence is missing.',
   [ERROR_CODES.FACT_BLOCK_MALFORMED]: 'Fact Markdown validation failed.',
   [ERROR_CODES.FACT_ID_DUPLICATE]: 'Duplicate fact identifier.',
@@ -56,7 +79,9 @@ const redactFailureDiagnostics = (result) => {
           && error.path === '/governance_locator'
           && error.message === 'Unable to resolve governance locator.')
         ? error.message
-        : (publicDiagnosticMessages[error.code] ?? 'Validation failed.'),
+        : (['DELIVERY_FRONTMATTER_INVALID', 'ASSET_FRONTMATTER_INVALID'].includes(error.code) && Object.hasOwn(FIELD_DIAGNOSTICS, error.reason ?? '')
+          ? FIELD_DIAGNOSTICS[error.reason].message
+          : (publicDiagnosticMessages[error.code] ?? 'Validation failed.')),
     })),
   };
 };
@@ -213,6 +238,7 @@ if (command === 'help') {
       'materialize-delivery-asset',
       'migrate-delivery-layout',
       'parse-facts',
+      'preview-delivery-asset',
       'preview-delivery-layout-migration',
       'sync-alignment-review',
       'validate-alignment-feedback',
@@ -385,13 +411,17 @@ if (command === 'help') {
       }) : inventory);
     }
   }
-} else if (command === 'materialize-delivery-asset') {
-  const options = deliveryOptions();
-  if (!options) {
-    emit(cliFailure('CLI_USAGE', '/arguments', 'Usage: materialize-delivery-asset --root <absolute-project-root> --input <absolute-json-envelope>.'), 2);
+} else if (command === 'materialize-delivery-asset' || command === 'preview-delivery-asset') {
+  const args = process.argv.slice(3);
+  const updateIndexes = command === 'materialize-delivery-asset' && args.includes('--update-indexes');
+  const flagCount = args.filter((arg) => arg === '--update-indexes').length;
+  const options = parseNamedOptions(updateIndexes ? args.filter((arg) => arg !== '--update-indexes') : args, ['--root', '--input']);
+  if (!options || flagCount > 1 || !isAbsolute(options['--root']) || !isAbsolute(options['--input'])) {
+    emit(cliFailure('CLI_USAGE', '/arguments', 'Usage: preview-delivery-asset --root <absolute-project-root> --input <absolute-json-envelope>, or materialize-delivery-asset with optional --update-indexes.'), 2);
   } else {
     const input = await readBoundedEnvelope(options['--input']);
-    emit(input.ok ? await materializeAsset({ ...input.value, root: options['--root'] }) : input, input.ok ? undefined : 2);
+    const action = command === 'preview-delivery-asset' ? previewDeliveryAsset : updateIndexes ? materializeDeliveryWithIndexes : materializeAsset;
+    emit(input.ok ? await action({ ...input.value, root: options['--root'] }) : input, input.ok ? undefined : 2);
   }
 } else if (command === 'close-delivery') {
   const options = deliveryOptions();
@@ -406,36 +436,7 @@ if (command === 'help') {
   if (!options || !isAbsolute(options['--root'])) {
     emit(cliFailure('CLI_USAGE', '/arguments', 'Usage: generate-delivery-indexes --root <absolute-project-root>.'), 2);
   } else {
-    const lifecycleRoot = resolve(options['--root'], 'docs/project-lifecycle');
-    const [inventory, tree] = await Promise.all([
-      collectDeliveryInventory({ lifecycleRoot }),
-      inspectLifecycleTree({ repositoryRoot: options['--root'] }),
-    ]);
-    if (!inventory.ok || !tree.ok) emit(!inventory.ok ? inventory : tree);
-    else {
-      const indexes = await generateDeliveryIndexes({ inventory: inventory.value });
-      if (!indexes.ok) emit(indexes);
-      else {
-        const published = await applyLayoutTransaction({
-          repositoryRoot: options['--root'],
-          expectedFingerprint: tree.value.fingerprint,
-          candidateFiles: indexes.value.files.map(({ locator, content }) => ({
-            repository_id: null,
-            locator,
-            content,
-            validate: async (candidate) => candidate === content ? ok(candidate) : cliFailure('DELIVERY_INDEX_INVALID', `/${locator}`, 'Generated index changed.'),
-          })),
-          candidateDirectories: [],
-          deleteLocators: [],
-          validateCandidate: ({ lifecycleRoot: candidateRoot }) => collectDeliveryInventory({ lifecycleRoot: candidateRoot }),
-        });
-        emit(published.ok ? ok({
-          layout_version: 2,
-          locators: indexes.value.files.map(({ locator }) => locator),
-          changed: published.value.changed,
-        }) : published);
-      }
-    }
+    emit(await publishDeliveryIndexes({ root: options['--root'] }));
   }
 } else if (command === 'validate-pair') {
   const [enPath, zhPath, mapPath] = process.argv.slice(3);

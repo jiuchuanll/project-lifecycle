@@ -13,7 +13,7 @@ Project Lifecycle 是一个共享、宿主中立的插件，用于构建低噪�
 ## 项目状态
 
 > [!IMPORTANT]
-> 本仓库已经开源，但版本 `0.6.0` 仍是**预发布评估候选**。它尚未发布到 npm，且目前
+> 本仓库已经开源，但版本 `0.7.0` 仍是**预发布评估候选**。它尚未发布到 npm，且目前
 > 没有任何原生宿主满足发布支持门禁。安装说明仅用于评估，不代表生产支持承诺。
 
 源代码、确定性发布压缩包和保留的一致性证据均已公开，可供检查和贡献。所有支持声明
@@ -162,6 +162,7 @@ docs/project-lifecycle/
 - `validate-json`
 - `validate-pair`
 - `parse-facts`
+- `preview-delivery-asset`
 - `preview-delivery-layout-migration`
 - `sync-alignment-review`
 - `validate-alignment-feedback`
@@ -172,6 +173,11 @@ docs/project-lifecycle/
 使用 `bin/project-lifecycle help` 查看命令集合。验证器负责结构性契约，例如 Schema、
 ID、引用、中英文配对、Fact 区块和 fixture 完整性；它不能替代 Agent 对产品语义的判断，
 也不能替代用户审核。
+
+创建交付文档时，先使用[可编辑请求示例](skills/run-prd-lifecycle/references/delivery-assets.md#creation-and-indexing-workflow)。
+运行 `preview-delivery-asset --root <project> --input <request.json>` 进行只读检查，
+再运行 `materialize-delivery-asset --root <project> --input <request.json> --update-indexes`。
+组合入口会区分文档保存与索引失败，并支持内容完全相同的安全重试。
 
 ## 支持矩阵
 
@@ -241,4 +247,4 @@ Project Lifecycle 使用 [Apache License 2.0](LICENSE) 开源。
 - KnowledgeVault 消费端迁移保持只读审计，直到至少一个宿主受支持且两个共享 Skill
   均被原生发现。详见[迁移方案](docs/migrations/knowledgevault-agent-app.md)。
 
-0.6.0 候选范围与升级说明见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。
+0.7.0 候选范围与升级说明见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。

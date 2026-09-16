@@ -14,7 +14,7 @@ silently becoming accepted project truth.
 ## Project status
 
 > [!IMPORTANT]
-> This repository is open source, but version `0.6.0` remains a **pre-release
+> This repository is open source, but version `0.7.0` remains a **pre-release
 > evaluation candidate**. It is not published to npm, and no native host
 > currently satisfies the release support gate. Treat the installation guides
 > as evaluation instructions, not production-support claims.
@@ -189,6 +189,7 @@ The CLI emits one JSON result object and provides these commands:
 - `validate-json`
 - `validate-pair`
 - `parse-facts`
+- `preview-delivery-asset`
 - `preview-delivery-layout-migration`
 - `sync-alignment-review`
 - `validate-alignment-feedback`
@@ -200,6 +201,11 @@ Use `bin/project-lifecycle help` to inspect the available command set. The
 validator enforces structural contracts such as schema shape, IDs, references,
 bilingual pairing, fact blocks, and fixture integrity; it does not replace
 Agent judgment or human approval of product meaning.
+
+For delivery creation, start with the [editable request examples](skills/run-prd-lifecycle/references/delivery-assets.md#creation-and-indexing-workflow).
+Run `preview-delivery-asset --root <project> --input <request.json>` for read-only checks,
+then `materialize-delivery-asset --root <project> --input <request.json> --update-indexes`.
+The integrated result distinguishes saved documents from index failure and supports exact-content retries.
 
 ## Support matrix
 
@@ -280,4 +286,4 @@ Project Lifecycle is licensed under the [Apache License 2.0](LICENSE).
   and both shared Skills are discovered natively. See the
   [migration recipe](docs/migrations/knowledgevault-agent-app.md).
 
-See [RELEASE-NOTES.md](RELEASE-NOTES.md) for the exact 0.6.0 candidate scope and upgrade notes.
+See [RELEASE-NOTES.md](RELEASE-NOTES.md) for the exact 0.7.0 candidate scope and upgrade notes.

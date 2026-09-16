@@ -4,6 +4,8 @@ import test from 'node:test';
 
 import { parse as parseYaml } from 'yaml';
 
+import { maskFencedMarkdown } from '../../scripts/lib/markdown.mjs';
+
 const skillUrl = new URL('../../skills/run-prd-lifecycle/SKILL.md', import.meta.url);
 const referenceRoot = new URL('../../skills/run-prd-lifecycle/references/', import.meta.url);
 const expectedReferences = [
@@ -112,7 +114,8 @@ test('keeps the four routes and temporary NEEDS_USER stop canonical in intake ro
 
   for (const reference of expectedReferences.filter((name) => name !== 'intake-routing.md')) {
     const source = await readFile(new URL(reference, referenceRoot), 'utf8');
-    for (const route of routes) assert.doesNotMatch(source, new RegExp(`\\b${route}\\b`));
+    // Request examples may use route values; route definitions remain centralized.
+    for (const route of routes) assert.doesNotMatch(maskFencedMarkdown(source), new RegExp(`\\b${route}\\b`));
     assert.doesNotMatch(source, /\bNEEDS_USER\b/);
   }
 });
