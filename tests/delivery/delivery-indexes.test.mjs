@@ -202,3 +202,49 @@ test('rejects delivery trees beyond the managed depth and file-count bounds', as
   )));
   assert.equal((await collectDeliveryInventory({ lifecycleRoot: crowded.lifecycleRoot })).ok, false);
 });
+
+test('indexes retained owners and children whose IDs end in the language suffix', async (context) => {
+  const { lifecycleRoot } = await fixture(context);
+  await writePair(lifecycleRoot, 'archive/delivery/prds/prd-retained-en/prd-retained-en-en.md', frontmatter({
+    artifact_id: 'prd-retained-en', artifact_kind: 'prd', owner_artifact_id: 'prd-retained-en', retention_tier: 'archive',
+  }));
+  await writePair(lifecycleRoot, 'archive/delivery/prds/prd-retained-en/architecture/architecture-retained-en-en.md', frontmatter({
+    artifact_id: 'architecture-retained-en', artifact_kind: 'architecture', owner_artifact_id: 'prd-retained-en', retention_tier: 'archive',
+  }));
+  const inventory = await collectDeliveryInventory({ lifecycleRoot });
+  assert.equal(inventory.ok, true, JSON.stringify(inventory));
+  const indexes = await generateDeliveryIndexes({ inventory: inventory.value });
+  const ownerIndex = indexes.value.files.find(({ locator }) => locator === 'delivery/prds/prd-retained-en/INDEX.md');
+  assert.match(ownerIndex.content, /architecture-retained-en\.md/u);
+  assert.doesNotMatch(ownerIndex.content, /architecture-retained-en-en\.md/u);
+});
+
+test('keeps oversized overlays rejected with a Frontmatter diagnostic', async (context) => {
+  const { lifecycleRoot } = await fixture(context);
+  const locator = 'delivery/feedback/feedback-density-en.md';
+  const content = document(frontmatter({ artifact_id: 'feedback-density', artifact_kind: 'feedback' }));
+  const result = await collectDeliveryInventory({
+    lifecycleRoot,
+    overlays: { [locator]: content + 'x'.repeat(262_144) },
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'DELIVERY_FRONTMATTER_MALFORMED');
+});
+
+test('caps independent inventory diagnostics and reports truncation without deriving partial indexes', async (context) => {
+  const { lifecycleRoot } = await fixture(context);
+  for (let index = 0; index < 55; index += 1) {
+    const id = `feedback-invalid-${index}`;
+    await writePair(lifecycleRoot, `delivery/feedback/${id}-en.md`, {
+      ...frontmatter({ artifact_id: id, artifact_kind: 'feedback' }),
+      title: 'private-input-marker',
+    });
+  }
+  const result = await collectDeliveryInventory({ lifecycleRoot });
+  assert.equal(result.ok, false);
+  assert.equal(result.value, null);
+  assert.equal(result.errors.length, 50);
+  assert.equal(result.context.truncated, true);
+  assert.equal(result.context.files_changed, false);
+  assert.doesNotMatch(JSON.stringify(result), /private-input-marker/u);
+});

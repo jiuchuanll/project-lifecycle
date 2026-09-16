@@ -10314,7 +10314,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve9.call(this, root, ref);
+      let _sch = resolve11.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a = root.localRefs) === null || _a === void 0 ? void 0 : _a[ref];
         const { schemaId } = this.opts;
@@ -10341,7 +10341,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve9(root, ref) {
+    function resolve11(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -10972,7 +10972,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve9(baseURI, relativeURI, options) {
+    function resolve11(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const { parsed: baseParsed, malformedAuthorityOrPort: baseMalformed } = parseWithStatus(baseURI, schemelessOptions);
       const { parsed: relativeParsed, malformedAuthorityOrPort: relativeMalformed } = parseWithStatus(relativeURI, schemelessOptions);
@@ -11256,7 +11256,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve9,
+      resolve: resolve11,
       resolveComponent,
       equal,
       serialize,
@@ -15072,7 +15072,7 @@ var require_dist2 = __commonJS({
 // scripts/bin/project-lifecycle-source.mjs
 import { createHash as createHash6 } from "node:crypto";
 import { open as open5, readFile as readFile10, realpath as realpath11, stat as stat2 } from "node:fs/promises";
-import { basename as basename3, dirname as dirname7, isAbsolute as isAbsolute12, relative as relative10, resolve as resolve8, sep as sep10 } from "node:path";
+import { basename as basename3, dirname as dirname7, isAbsolute as isAbsolute12, relative as relative10, resolve as resolve10, sep as sep10 } from "node:path";
 
 // scripts/lib/atomic-write.mjs
 import { open, readFile, rename, unlink } from "node:fs/promises";
@@ -19095,6 +19095,44 @@ var extractClosureSummaryHash = (body) => {
 import { lstat as lstat5, open as open3, opendir as opendir3, readFile as readFile5, realpath as realpath6 } from "node:fs/promises";
 import { isAbsolute as isAbsolute7, join as join5, relative as relative5, resolve as resolve5, sep as sep5 } from "node:path";
 import { isDeepStrictEqual as isDeepStrictEqual3 } from "node:util";
+
+// scripts/delivery/delivery-diagnostics.mjs
+var FIELD_DIAGNOSTICS = Object.freeze({
+  required: { message: "A required Frontmatter field is missing.", action: "Add the indicated field using grounded values from the delivery template." },
+  additionalProperties: { message: "This Frontmatter field is not supported.", action: "Move descriptive content into the Markdown body; keep only template machine fields." },
+  type: { message: "This Frontmatter field has the wrong type.", action: "Use the field type declared by the delivery template and schema." },
+  enum: { message: "This Frontmatter field is outside the allowed values.", action: "Use an allowed schema value consistent with the intended delivery state." },
+  const: { message: "This Frontmatter field does not match its required value.", action: "Use the value required by the delivery schema." },
+  pattern: { message: "This Frontmatter identifier has an invalid format.", action: "Use the canonical lowercase identifier format and required kind prefix." },
+  semantic: { message: "This Frontmatter field violates a delivery relationship or schema constraint.", action: "Reconcile the indicated field with the template, ownership and relationship rules." }
+});
+var pointerToken2 = (value) => String(value).replaceAll("~", "~0").replaceAll("/", "~1");
+var diagnostic = (code, path, reason, expected) => ({
+  code,
+  path,
+  reason,
+  ...FIELD_DIAGNOSTICS[reason],
+  ...expected ? { expected } : {}
+});
+var validateDeliveryFields = (value, { code = "DELIVERY_FRONTMATTER_INVALID", path = "/frontmatter" } = {}) => {
+  const validator = getSchemaValidator("delivery-frontmatter");
+  if (!validator(value)) {
+    const errors = validator.errors.filter(({ keyword }) => keyword !== "if").map((error) => {
+      const suffix = error.keyword === "required" ? `${error.instancePath}/${pointerToken2(error.params.missingProperty)}` : error.keyword === "additionalProperties" ? `${error.instancePath}/${pointerToken2(error.params.additionalProperty)}` : error.instancePath;
+      const reason = Object.hasOwn(FIELD_DIAGNOSTICS, error.keyword) ? error.keyword : "semantic";
+      return diagnostic(code, `${path}${suffix}`, reason, error.keyword === "type" ? error.params.type : void 0);
+    });
+    return fail(errors);
+  }
+  const result = validateJson("delivery-frontmatter", value);
+  return result.ok ? ok(value) : fail(result.errors.map((error) => diagnostic(
+    code,
+    `${path}${error.path === "/" ? "" : error.path}`,
+    "semantic"
+  )));
+};
+
+// scripts/delivery/delivery-inventory.mjs
 var MAX_ENTRIES = 2e3;
 var MAX_DEPTH = 4;
 var MAX_FRONTMATTER_BYTES = 65536;
@@ -19112,8 +19150,6 @@ var inside3 = (root, candidate) => {
   const fromRoot = relative5(root, candidate);
   return fromRoot === "" || fromRoot !== ".." && !fromRoot.startsWith(`..${sep5}`) && !isAbsolute7(fromRoot);
 };
-var languageOf = (name) => name.endsWith("-en.md") ? "en" : "zh-CN";
-var artifactIdOf = (name) => name.replace(/-en\.md$/u, "").replace(/\.md$/u, "");
 var canonicalDirectory = (locator) => /^(?:delivery|archive\/delivery)\/(?:feedback|prds|non-prd)(?:\/[a-z][a-z0-9-]*(?:\/(?:architecture|batches|closure|guidance|test-reports))?)?$/u.test(locator) || locator === "delivery/views";
 var canonicalIndex = (locator) => /^delivery\/(?:INDEX(?:-en)?\.md|(?:prds|non-prd)\/[a-z][a-z0-9-]*\/INDEX(?:-en)?\.md)$/u.test(locator);
 var readPrefix = async (path) => {
@@ -19136,27 +19172,37 @@ var readPrefix = async (path) => {
     await handle.close();
   }
 };
-var parseFrontmatter2 = (source) => {
+var parseFrontmatter2 = (source, locator) => {
+  const path = `/${locator}/frontmatter`;
+  if (typeof source !== "string" || Buffer.byteLength(source) > 262144) {
+    return failure5("DELIVERY_FRONTMATTER_MALFORMED", path, "A bounded YAML Frontmatter block is required.");
+  }
   const normalized = source.replaceAll("\r\n", "\n");
   const closing = normalized.indexOf("\n---\n", 4);
-  if (!normalized.startsWith("---\n") || closing === -1) return null;
-  const parsed = parseRestrictedYaml(normalized.slice(4, closing), "/frontmatter");
-  if (!parsed.ok || !validateJson("delivery-frontmatter", parsed.value).ok || parsed.value.schema_version !== 2) return null;
-  return parsed.value;
+  if (!normalized.startsWith("---\n") || closing === -1) {
+    return failure5("DELIVERY_FRONTMATTER_MALFORMED", path, "A bounded YAML Frontmatter block is required.");
+  }
+  const parsed = parseRestrictedYaml(normalized.slice(4, closing), path);
+  if (!parsed.ok) return failure5("DELIVERY_FRONTMATTER_MALFORMED", path, "Restricted YAML Frontmatter is malformed.");
+  const validation = validateDeliveryFields(parsed.value, { path });
+  if (!validation.ok) return validation;
+  if (parsed.value.schema_version !== 2) {
+    return failure5("DELIVERY_LAYOUT_MIGRATION_REQUIRED", `${path}/schema_version`, "Delivery layout v2 is required.");
+  }
+  return ok(parsed.value);
 };
 var classify = (locator) => {
   const archived = locator.startsWith("archive/delivery/");
   const prefix = archived ? "archive/delivery/" : "delivery/";
   const rest = locator.slice(prefix.length);
   const feedback = /^feedback\/([a-z][a-z0-9-]*\.md)$/u.exec(rest);
-  if (feedback) return { archived, artifactId: artifactIdOf(feedback[1]), ownerKind: null, ownerId: null, expectedKind: "feedback" };
+  if (feedback) return { archived, ownerKind: null, ownerId: null, expectedKind: "feedback" };
   const owner = /^(prds|non-prd)\/([a-z][a-z0-9-]*)\/(?:([a-z-]+)\/)?([a-z][a-z0-9-]*\.md)$/u.exec(rest);
   if (!owner) return null;
   const ownerKind = owner[1] === "prds" ? "prd" : "non-prd-delivery";
   const phase = owner[3] ?? null;
   return {
     archived,
-    artifactId: artifactIdOf(owner[4]),
     ownerKind,
     ownerId: owner[2],
     expectedKind: phase === null ? ownerKind : PHASE_KINDS[phase] ?? null
@@ -19247,6 +19293,18 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
   } catch {
     return failure5("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/delivery/layout.json", "Delivery layout v2 marker is invalid.");
   }
+  const errors = [];
+  const invalidIds = /* @__PURE__ */ new Set();
+  const invalidLocators = /* @__PURE__ */ new Set();
+  let truncated = false;
+  const recordErrors = (items) => {
+    if (errors.length + items.length > 50) truncated = true;
+    errors.push(...items.slice(0, 50 - errors.length));
+  };
+  const invalidInventory = () => ({
+    ...fail(errors),
+    context: { files_changed: false, error_limit: 50, truncated }
+  });
   const ignored = /* @__PURE__ */ new Set([
     "delivery/layout.json",
     "delivery/INDEX-en.md",
@@ -19274,7 +19332,7 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
     }
     const content3 = source.overlay ?? (source.size <= 131072 ? await readFile5(source.path, "utf8").catch(() => null) : null);
     if (typeof content3 !== "string" || !content3.startsWith(INDEX_NOTICE)) {
-      return failure5("DELIVERY_INVENTORY_INVALID", `/${locator}`, "Delivery index locator is occupied.");
+      recordErrors(failure5("DELIVERY_INDEX_OCCUPIED", `/${locator}`, "Delivery index locator is occupied by a non-generated file; preserve or relocate it before generation.").errors);
     }
     ignored.add(locator);
   }
@@ -19283,21 +19341,35 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
     if (ignored.has(locator)) continue;
     const descriptor = classify(locator);
     if (!descriptor || descriptor.expectedKind === null) {
-      return failure5("DELIVERY_INVENTORY_INVALID", `/${locator}`, "Delivery contains an unknown managed file.");
+      recordErrors(failure5("DELIVERY_INVENTORY_INVALID", `/${locator}`, "Delivery contains an unknown managed file.").errors);
+      continue;
     }
     const raw = source.overlay ?? await readPrefix(source.path).catch(() => null);
-    const metadata = typeof raw === "string" && Buffer.byteLength(raw) <= 262144 ? parseFrontmatter2(raw) : null;
-    if (!metadata || metadata.artifact_id !== descriptor.artifactId || metadata.artifact_kind !== descriptor.expectedKind || descriptor.ownerId !== null && metadata.owner_artifact_id !== descriptor.ownerId) {
-      return failure5("DELIVERY_INVENTORY_PATH_MISMATCH", `/${locator}`, "Delivery path and Frontmatter ownership must match.");
+    const parsed = parseFrontmatter2(raw, locator);
+    if (!parsed.ok) {
+      recordErrors(parsed.errors);
+      invalidLocators.add(locator);
+      continue;
+    }
+    const metadata = parsed.value;
+    if (metadata.artifact_kind !== descriptor.expectedKind || descriptor.ownerId !== null && metadata.owner_artifact_id !== descriptor.ownerId) {
+      recordErrors(failure5("DELIVERY_INVENTORY_PATH_MISMATCH", `/${locator}`, "Delivery path and Frontmatter ownership must match.").errors);
+      invalidIds.add(metadata.artifact_id);
+      continue;
     }
     const expected = descriptor.archived ? archivedDeliveryPair(metadata, { ownerKind: descriptor.ownerKind }) : activeDeliveryPair(metadata, { ownerKind: descriptor.ownerKind });
     if (!Object.values(expected).includes(locator)) {
-      return failure5("DELIVERY_INVENTORY_PATH_MISMATCH", `/${locator}`, "Delivery locator is not canonical for its owner.");
+      recordErrors(failure5("DELIVERY_INVENTORY_PATH_MISMATCH", `/${locator}`, "Delivery locator is not canonical for its owner.").errors);
+      invalidIds.add(metadata.artifact_id);
+      continue;
     }
     const key = `${descriptor.archived ? "archive" : "active"}:${metadata.artifact_id}`;
     const pair = grouped.get(key) ?? {};
-    const language = languageOf(locator);
-    if (pair[language]) return failure5("DELIVERY_INVENTORY_DUPLICATE", `/${locator}`, "Delivery artifact language is duplicated.");
+    const language = expected.en === locator ? "en" : "zh-CN";
+    if (pair[language]) {
+      recordErrors(failure5("DELIVERY_INVENTORY_DUPLICATE", `/${locator}`, "Delivery artifact language is duplicated.").errors);
+      continue;
+    }
     pair[language] = { language, locator, frontmatter: metadata };
     grouped.set(key, pair);
   }
@@ -19308,11 +19380,16 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
   const artifactIds = /* @__PURE__ */ new Set();
   for (const [key, pair] of grouped) {
     if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual3(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
-      return failure5("DELIVERY_INVENTORY_PAIR_INVALID", `/${key}`, "Delivery artifacts require one matching bilingual pair.");
+      const counterpart = pair.en ? pair.en.locator.replace(/-en\.md$/u, ".md") : pair["zh-CN"].locator.replace(/\.md$/u, "-en.md");
+      if (!invalidLocators.has(counterpart) && !invalidIds.has(pair.en?.frontmatter.artifact_id ?? pair["zh-CN"]?.frontmatter.artifact_id)) {
+        recordErrors(failure5("DELIVERY_INVENTORY_PAIR_INVALID", `/${key}`, "Delivery artifacts require one matching bilingual pair.").errors);
+      }
+      continue;
     }
     const item = itemFromPair(pair);
     if (artifactIds.has(item.artifact_id)) {
-      return failure5("DELIVERY_INVENTORY_DUPLICATE", `/${item.artifact_id}`, "Delivery artifact IDs must be globally unique.");
+      recordErrors(failure5("DELIVERY_INVENTORY_DUPLICATE", `/${item.artifact_id}`, "Delivery artifact IDs must be globally unique.").errors);
+      continue;
     }
     artifactIds.add(item.artifact_id);
     if (key.startsWith("archive:")) {
@@ -19323,6 +19400,7 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
       activePairs.push(pair.en, pair["zh-CN"]);
     }
   }
+  if (errors.length > 0) return invalidInventory();
   const sortItems = (values) => values.sort((left, right) => compareCodePoints(left.artifact_id, right.artifact_id));
   sortItems(activeItems);
   sortItems(archivedItems);
@@ -19346,12 +19424,15 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
       if (item.artifact_kind === "closure-summary" && retainedOwnerIds.has(item.owner_artifact_id)) {
         const retainedOwner = archivedByOwner[item.owner_artifact_id].assets.find((candidate) => candidate.artifact_id === item.owner_artifact_id && ["prd", "non-prd-delivery"].includes(candidate.artifact_kind));
         if (retainedOwner && !ownerKindMismatch(item, retainedOwner)) continue;
-        return failure5("DELIVERY_INVENTORY_OWNER_MISMATCH", `/${item.artifact_id}`, "Closure summary and retained physical owner kinds must match.");
+        recordErrors(failure5("DELIVERY_INVENTORY_OWNER_MISMATCH", `/${item.artifact_id}`, "Closure summary and retained physical owner kinds must match.").errors);
+        continue;
       }
-      return failure5("DELIVERY_INVENTORY_OWNER_MISSING", `/${item.artifact_id}`, "Every active owned asset requires one active physical owner.");
+      recordErrors(failure5("DELIVERY_INVENTORY_OWNER_MISSING", `/${item.artifact_id}`, "Every active owned asset requires one active physical owner.").errors);
+      continue;
     }
     if (ownerKindMismatch(item, byOwner[item.owner_artifact_id].owner)) {
-      return failure5("DELIVERY_INVENTORY_OWNER_MISMATCH", `/${item.artifact_id}`, "Owned asset and physical owner kinds must match.");
+      recordErrors(failure5("DELIVERY_INVENTORY_OWNER_MISMATCH", `/${item.artifact_id}`, "Owned asset and physical owner kinds must match.").errors);
+      continue;
     }
     byOwner[item.owner_artifact_id].assets.push(item);
   }
@@ -19359,9 +19440,10 @@ var collectDeliveryInventory = async ({ lifecycleRoot: rootValue, overlays = {} 
     const retainedOwner = entry2.assets.find(({ artifact_id: id, artifact_kind: kind }) => id === entry2.owner_artifact_id && ["prd", "non-prd-delivery"].includes(kind));
     const owner = byOwner[entry2.owner_artifact_id]?.owner ?? retainedOwner;
     if (owner && entry2.assets.some((item) => ownerKindMismatch(item, owner))) {
-      return failure5("DELIVERY_INVENTORY_OWNER_MISMATCH", `/${entry2.owner_artifact_id}`, "Archived assets and physical owner kinds must match.");
+      recordErrors(failure5("DELIVERY_INVENTORY_OWNER_MISMATCH", `/${entry2.owner_artifact_id}`, "Archived assets and physical owner kinds must match.").errors);
     }
   }
+  if (errors.length > 0) return invalidInventory();
   for (const entry2 of Object.values(byOwner)) sortItems(entry2.assets);
   for (const entry2 of Object.values(archivedByOwner)) sortItems(entry2.assets);
   return ok({
@@ -19729,10 +19811,1102 @@ var syncAlignmentReview = async (input = {}, operations = {}) => {
   });
 };
 
+// scripts/delivery/delivery-workflow.mjs
+import { resolve as resolve8 } from "node:path";
+
+// scripts/knowledge/layout-transaction.mjs
+import { createHash as createHash3 } from "node:crypto";
+import {
+  cp,
+  lstat as lstat7,
+  mkdir as mkdir2,
+  mkdtemp,
+  open as open4,
+  opendir as opendir4,
+  readFile as readFile7,
+  readdir as readdir2,
+  readlink,
+  realpath as realpath8,
+  rename as rename2,
+  rm,
+  rmdir,
+  stat,
+  utimes
+} from "node:fs/promises";
+import { dirname as dirname4, isAbsolute as isAbsolute9, join as join7, relative as relative7, resolve as resolve6, sep as sep7 } from "node:path";
+var hash = (content3) => createHash3("sha256").update(content3).digest("hex");
+var MAX_SNAPSHOT_ENTRIES = 1e4;
+var MAX_SNAPSHOT_DEPTH = 16;
+var MAX_SNAPSHOT_FILE_BYTES = 4194304;
+var MAX_SNAPSHOT_TOTAL_BYTES = 67108864;
+var failure7 = (code, path, message) => fail([createError(code, path, message)]);
+var inside5 = (root, candidate) => {
+  const fromRoot = relative7(root, candidate);
+  return fromRoot === "" || fromRoot !== ".." && !fromRoot.startsWith(`..${sep7}`) && !isAbsolute9(fromRoot);
+};
+var fileState = async (path) => {
+  try {
+    return await lstat7(path);
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+};
+var pathError2 = (code) => Object.assign(new Error(code), { code });
+var lifecyclePaths = async (repositoryRoot, { allowMissing = false } = {}) => {
+  if (typeof repositoryRoot !== "string" || !isAbsolute9(repositoryRoot)) throw pathError2("LAYOUT_ROOT_INVALID");
+  const lexicalRoot = resolve6(repositoryRoot);
+  const rootState = await lstat7(lexicalRoot);
+  const physicalRoot = await realpath8(lexicalRoot);
+  if (!rootState.isDirectory() || rootState.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
+  const docsLexical = join7(physicalRoot, "docs");
+  const docsState = await lstat7(docsLexical);
+  const docsRoot = await realpath8(docsLexical);
+  if (!docsState.isDirectory() || docsState.isSymbolicLink() || !inside5(physicalRoot, docsRoot)) {
+    throw pathError2("PATH_SYMLINK_ESCAPE");
+  }
+  const lifecycleLexical = join7(docsRoot, "project-lifecycle");
+  const lifecycleState = await fileState(lifecycleLexical);
+  if (lifecycleState === null && allowMissing) {
+    return {
+      projectRoot: physicalRoot,
+      docsRoot,
+      lifecycleRoot: lifecycleLexical,
+      exists: false
+    };
+  }
+  if (lifecycleState === null) throw pathError2("LAYOUT_ROOT_INVALID");
+  const lifecycleRoot = await realpath8(lifecycleLexical);
+  if (!lifecycleState.isDirectory() || lifecycleState.isSymbolicLink() || !inside5(physicalRoot, lifecycleRoot)) {
+    throw pathError2("PATH_SYMLINK_ESCAPE");
+  }
+  return { projectRoot: physicalRoot, docsRoot, lifecycleRoot, exists: true };
+};
+var snapshotTree = async (lifecycleRoot, operationOverrides = {}) => {
+  const rootState = await lstat7(lifecycleRoot);
+  const rootReal = await realpath8(lifecycleRoot);
+  if (!rootState.isDirectory() || rootState.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
+  const operations = { lstat: lstat7, open: open4, opendir: opendir4, readlink, realpath: realpath8, ...operationOverrides };
+  const entries = [];
+  let discoveredEntries = 0;
+  let totalBytes = 0;
+  const readBoundedFile2 = async (path) => {
+    const handle = await operations.open(path, "r");
+    try {
+      const buffer = Buffer.alloc(MAX_SNAPSHOT_FILE_BYTES + 1);
+      let bytesRead = 0;
+      while (bytesRead < buffer.length) {
+        const result = await handle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);
+        if (result.bytesRead === 0) break;
+        bytesRead += result.bytesRead;
+      }
+      if (bytesRead > MAX_SNAPSHOT_FILE_BYTES || totalBytes + bytesRead > MAX_SNAPSHOT_TOTAL_BYTES) {
+        throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+      }
+      totalBytes += bytesRead;
+      return buffer.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+  };
+  const visit = async (directory, prefix = "", depth = 0) => {
+    if (depth > MAX_SNAPSHOT_DEPTH) throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+    const children = [];
+    for await (const child of await operations.opendir(directory)) {
+      discoveredEntries += 1;
+      if (discoveredEntries > MAX_SNAPSHOT_ENTRIES) throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+      children.push(child);
+    }
+    children.sort((left, right) => compareCodePoints(left.name, right.name));
+    for (const child of children) {
+      const absolute = join7(directory, child.name);
+      const locator = prefix ? `${prefix}/${child.name}` : child.name;
+      const state = await operations.lstat(absolute);
+      if (state.isDirectory() && !state.isSymbolicLink()) {
+        const physical = await operations.realpath(absolute);
+        if (!inside5(rootReal, physical)) throw pathError2("PATH_SYMLINK_ESCAPE");
+        entries.push({ locator: `${locator}/`, type: "directory" });
+        await visit(physical, locator, depth + 1);
+      } else if (state.isFile()) {
+        if (state.size > MAX_SNAPSHOT_FILE_BYTES) throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
+        entries.push({ locator, type: "file", hash: hash(await readBoundedFile2(absolute)) });
+      } else if (state.isSymbolicLink()) {
+        let physical;
+        try {
+          physical = await operations.realpath(absolute);
+        } catch {
+          throw pathError2("PATH_SYMLINK_ESCAPE");
+        }
+        if (!inside5(rootReal, physical)) throw pathError2("PATH_SYMLINK_ESCAPE");
+        entries.push({ locator, type: "symlink", target: await operations.readlink(absolute) });
+      } else {
+        throw pathError2("LAYOUT_ROOT_INVALID");
+      }
+    }
+  };
+  await visit(rootReal);
+  const fingerprint = hash(JSON.stringify(entries));
+  return { fingerprint, entries };
+};
+var inspectLifecycleTree = async ({ repositoryRoot, snapshotOperations } = {}) => {
+  try {
+    const { lifecycleRoot } = await lifecyclePaths(repositoryRoot);
+    return ok(await snapshotTree(lifecycleRoot, snapshotOperations));
+  } catch (error) {
+    return failure7(
+      error?.code ?? "LAYOUT_ROOT_INVALID",
+      "/",
+      "The lifecycle tree must be a bounded regular directory."
+    );
+  }
+};
+var validateInputs = ({
+  repositoryRoot,
+  candidateFiles,
+  candidateDirectories = [],
+  pruneDirectories = [],
+  deleteLocators,
+  validateCandidate
+}) => {
+  if (typeof repositoryRoot !== "string" || !isAbsolute9(repositoryRoot) || !Array.isArray(candidateFiles) || !Array.isArray(candidateDirectories) || !Array.isArray(deleteLocators) || !Array.isArray(pruneDirectories) || typeof validateCandidate !== "function") {
+    return failure7("LAYOUT_INPUT_INVALID", "/", "A bounded repository transaction input is required.");
+  }
+  const locators = /* @__PURE__ */ new Set();
+  const repositoryIds = /* @__PURE__ */ new Set();
+  try {
+    for (const [index2, entry2] of candidateFiles.entries()) {
+      if (!entry2 || typeof entry2 !== "object" || Array.isArray(entry2) || !(entry2.repository_id === null || typeof entry2.repository_id === "string") || typeof entry2.content !== "string" || typeof entry2.validate !== "function") {
+        return failure7("LAYOUT_INPUT_INVALID", `/candidateFiles/${index2}`, "Every candidate file requires repository ownership, content, and validation.");
+      }
+      assertBoundedRelativePath(entry2.locator);
+      if (locators.has(entry2.locator)) return failure7("LAYOUT_INPUT_INVALID", `/candidateFiles/${index2}/locator`, "Candidate locators must be unique.");
+      locators.add(entry2.locator);
+      repositoryIds.add(entry2.repository_id ?? "<governance>");
+    }
+    for (const [index2, locator] of deleteLocators.entries()) {
+      assertBoundedRelativePath(locator);
+      if (locators.has(locator)) return failure7("LAYOUT_INPUT_INVALID", `/deleteLocators/${index2}`, "A locator cannot be written and deleted together.");
+      if (deleteLocators.indexOf(locator) !== index2) return failure7("LAYOUT_INPUT_INVALID", `/deleteLocators/${index2}`, "Delete locators must be unique.");
+    }
+    for (const [index2, locator] of candidateDirectories.entries()) {
+      assertBoundedRelativePath(locator);
+      if (candidateDirectories.indexOf(locator) !== index2) return failure7("LAYOUT_INPUT_INVALID", `/candidateDirectories/${index2}`, "Candidate directories must be unique.");
+      if (locators.has(locator) || deleteLocators.includes(locator)) {
+        return failure7("LAYOUT_INPUT_INVALID", `/candidateDirectories/${index2}`, "Candidate directories cannot overlap file writes or deletes.");
+      }
+    }
+    for (const [index2, locator] of pruneDirectories.entries()) {
+      assertBoundedRelativePath(locator);
+      if (pruneDirectories.indexOf(locator) !== index2 || candidateDirectories.includes(locator) || locators.has(locator) || deleteLocators.includes(locator)) {
+        return failure7("LAYOUT_INPUT_INVALID", `/pruneDirectories/${index2}`, "Pruned directories must be unique and separate from candidate paths.");
+      }
+    }
+  } catch {
+    return failure7("PATH_ESCAPE", "/", "Every layout locator must be a bounded portable relative path.");
+  }
+  if (repositoryIds.size > 1) {
+    return failure7("LAYOUT_INPUT_INVALID", "/candidateFiles", "One transaction may publish only one repository shard.");
+  }
+  return ok();
+};
+var rollbackInitialization = async ({ lifecycleRoot, stagingRoot, candidateFingerprint }) => {
+  try {
+    if (await fingerprintAt(lifecycleRoot, candidateFingerprint)) {
+      if (await fileState(stagingRoot)) return recoveryFailure({ lifecycleRoot, stagingRoot });
+      try {
+        await rename2(lifecycleRoot, stagingRoot);
+      } catch {
+        if (await fileState(lifecycleRoot) || !await fingerprintAt(stagingRoot, candidateFingerprint)) {
+          return recoveryFailure({ lifecycleRoot, stagingRoot });
+        }
+      }
+    } else if (await fileState(lifecycleRoot)) {
+      return recoveryFailure({ lifecycleRoot, stagingRoot });
+    }
+    await cleanupStage(stagingRoot);
+    return ok();
+  } catch {
+    return recoveryFailure({ lifecycleRoot, stagingRoot });
+  }
+};
+var ensureParentDirectories = async (root, locator) => {
+  const parent = dirname4(locator);
+  if (parent === ".") return;
+  let current = root;
+  for (const segment of parent.split("/")) {
+    current = join7(current, segment);
+    const state = await fileState(current);
+    if (state === null) await mkdir2(current);
+    else if (!state.isDirectory() || state.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
+    const physical = await realpath8(current);
+    if (!inside5(root, physical)) throw pathError2("PATH_SYMLINK_ESCAPE");
+  }
+};
+var fingerprintAt = async (path, expected) => {
+  try {
+    return (await snapshotTree(path)).fingerprint === expected;
+  } catch {
+    return false;
+  }
+};
+var cleanupStage = async (stage) => {
+  if (stage && await fileState(stage)) await rm(stage, { recursive: true, force: true });
+};
+var preserveTreeTimestamps = async (sourceRoot, targetRoot, entries) => {
+  const ordinary = entries.filter(({ type }) => type === "file" || type === "directory").sort((left, right) => right.locator.length - left.locator.length);
+  for (const entry2 of ordinary) {
+    const locator = entry2.type === "directory" ? entry2.locator.slice(0, -1) : entry2.locator;
+    const source = await stat(join7(sourceRoot, locator), { bigint: true });
+    await utimes(
+      join7(targetRoot, locator),
+      Number(source.atimeNs) / 1e9,
+      Number(source.mtimeNs) / 1e9
+    );
+  }
+};
+var recoveryFailure = async ({ lifecycleRoot, stagingRoot, backupRoot }) => {
+  const labels = [];
+  for (const [label, path] of [["backup", backupRoot], ["live", lifecycleRoot], ["stage", stagingRoot]]) {
+    if (path && await fileState(path).catch(() => true)) labels.push(label);
+  }
+  return failure7(
+    "LAYOUT_RESTORE_FAILED",
+    "/recovery",
+    `Recovery required; preserved artifacts: ${labels.join(", ") || "unknown"}.`
+  );
+};
+var restoreOriginal = async ({
+  lifecycleRoot,
+  stagingRoot,
+  backupRoot,
+  originalFingerprint,
+  candidateFingerprint,
+  restoreRename
+}) => {
+  try {
+    if (await fingerprintAt(lifecycleRoot, originalFingerprint)) {
+      await cleanupStage(stagingRoot);
+      return ok();
+    }
+    if (!backupRoot || !await fingerprintAt(backupRoot, originalFingerprint)) {
+      return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+    }
+    if (await fingerprintAt(lifecycleRoot, candidateFingerprint)) {
+      if (await fileState(stagingRoot)) return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+      await rename2(lifecycleRoot, stagingRoot);
+      if (await fileState(lifecycleRoot) || !await fingerprintAt(stagingRoot, candidateFingerprint)) {
+        return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+      }
+    } else if (await fileState(lifecycleRoot)) {
+      return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+    }
+    try {
+      await restoreRename(backupRoot, lifecycleRoot);
+    } catch {
+      if (!await fingerprintAt(lifecycleRoot, originalFingerprint) || await fileState(backupRoot)) {
+        return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+      }
+    }
+    if (!await fingerprintAt(lifecycleRoot, originalFingerprint) || await fileState(backupRoot)) {
+      return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+    }
+    await cleanupStage(stagingRoot);
+    return ok();
+  } catch {
+    return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
+  }
+};
+var applyLayoutTransaction = async (input = {}, operations = {}) => {
+  const inputValidation = validateInputs(input);
+  if (!inputValidation.ok) return inputValidation;
+  const write = operations.atomicWriteValidated ?? atomicWriteValidated;
+  const publishRename = operations.rename ?? rename2;
+  const restoreRename = operations.restoreRename ?? rename2;
+  const copyTree = operations.copy ?? cp;
+  const afterPublish = operations.afterPublish ?? (async () => {
+  });
+  const inspectTransition = operations.inspectTransition ?? (async () => ({ ok: true }));
+  const removeBackup = operations.removeBackup ?? ((path) => rm(path, { recursive: true, force: true }));
+  let paths;
+  let current;
+  try {
+    paths = await lifecyclePaths(input.repositoryRoot, { allowMissing: input.initialize === true });
+    current = paths.exists ? await snapshotTree(paths.lifecycleRoot) : { fingerprint: hash(JSON.stringify([])), entries: [] };
+  } catch (error) {
+    return failure7(error?.code ?? "LAYOUT_ROOT_INVALID", "/", "The lifecycle tree could not be inspected safely.");
+  }
+  if (input.expectedFingerprint && input.expectedFingerprint !== current.fingerprint) {
+    return failure7("LAYOUT_FINGERPRINT_STALE", "/expectedFingerprint", "The lifecycle tree changed before publication.");
+  }
+  const currentByLocator = new Map(current.entries.map((entry2) => [entry2.locator, entry2]));
+  const candidateDirectories = input.candidateDirectories ?? [];
+  const writes = input.candidateFiles.filter((entry2) => currentByLocator.get(entry2.locator)?.hash !== hash(entry2.content)).sort((left, right) => compareCodePoints(left.locator, right.locator));
+  const deletes = input.deleteLocators.filter((locator) => currentByLocator.has(locator) || currentByLocator.has(`${locator}/`)).sort(compareCodePoints);
+  const directoriesToCreate = candidateDirectories.filter((locator) => currentByLocator.get(`${locator}/`)?.type !== "directory").sort(compareCodePoints);
+  const directoriesToPrune = (input.pruneDirectories ?? []).filter((locator) => currentByLocator.get(`${locator}/`)?.type === "directory").sort((left, right) => right.length - left.length || compareCodePoints(left, right));
+  const unchanged = [
+    ...input.candidateFiles.filter((entry2) => !writes.includes(entry2)).map(({ locator }) => locator),
+    ...input.deleteLocators.filter((locator) => !deletes.includes(locator)),
+    ...candidateDirectories.filter((locator) => !directoriesToCreate.includes(locator)).map((locator) => `${locator}/`),
+    ...(input.pruneDirectories ?? []).filter((locator) => !directoriesToPrune.includes(locator)).map((locator) => `${locator}/`)
+  ].sort(compareCodePoints);
+  if (writes.length === 0 && deletes.length === 0 && directoriesToCreate.length === 0 && directoriesToPrune.length === 0) {
+    try {
+      const validation = await input.validateCandidate({ lifecycleRoot: paths.lifecycleRoot });
+      if (validation?.ok !== true) return failure7("LAYOUT_CANDIDATE_INVALID", "/", "The complete lifecycle candidate is invalid.");
+      return ok({ changed: [], unchanged, cleanup_pending: false, recovery_artifacts: [] });
+    } catch {
+      return failure7("LAYOUT_CANDIDATE_INVALID", "/", "The complete lifecycle candidate is invalid.");
+    }
+  }
+  let stagingRoot;
+  let backupRoot;
+  let candidateFingerprint;
+  let publicationStarted = false;
+  let initializationPublished = false;
+  try {
+    stagingRoot = await mkdtemp(join7(paths.docsRoot, ".project-lifecycle-layout-stage-"));
+    if (paths.exists) {
+      await copyTree(paths.lifecycleRoot, stagingRoot, {
+        recursive: true,
+        dereference: false,
+        preserveTimestamps: true,
+        force: false,
+        verbatimSymlinks: true
+      });
+      await preserveTreeTimestamps(paths.lifecycleRoot, stagingRoot, current.entries);
+    }
+    await snapshotTree(stagingRoot);
+    for (const locator of directoriesToCreate) {
+      await ensureParentDirectories(stagingRoot, `${locator}/placeholder`);
+      const target = join7(stagingRoot, locator);
+      const state = await fileState(target);
+      if (state === null) await mkdir2(target);
+      else if (!state.isDirectory() || state.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
+    }
+    for (const locator of deletes) {
+      const target = await resolveInside(stagingRoot, locator);
+      await rm(target, { recursive: true, force: true });
+    }
+    for (const locator of directoriesToPrune) {
+      const target = await resolveInside(stagingRoot, locator);
+      await rmdir(target);
+    }
+    for (const entry2 of writes) {
+      await ensureParentDirectories(stagingRoot, entry2.locator);
+      await write({ root: stagingRoot, target: entry2.locator, content: entry2.content, validate: entry2.validate });
+    }
+    const candidateValidation = await input.validateCandidate({ lifecycleRoot: stagingRoot });
+    if (candidateValidation?.ok !== true) {
+      await cleanupStage(stagingRoot);
+      return failure7("LAYOUT_CANDIDATE_INVALID", "/", "The complete lifecycle candidate is invalid.");
+    }
+    candidateFingerprint = (await snapshotTree(stagingRoot)).fingerprint;
+    const originalIsCurrent = paths.exists ? await fingerprintAt(paths.lifecycleRoot, current.fingerprint) : await fileState(paths.lifecycleRoot) === null;
+    if (!originalIsCurrent) {
+      await cleanupStage(stagingRoot);
+      return failure7("LAYOUT_FINGERPRINT_STALE", "/expectedFingerprint", "The lifecycle tree changed before publication.");
+    }
+    if (!paths.exists) {
+      try {
+        await publishRename(stagingRoot, paths.lifecycleRoot);
+      } catch {
+        if (await fileState(stagingRoot) || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) {
+          throw pathError2("LAYOUT_TRANSACTION_FAILED");
+        }
+      }
+      publicationStarted = true;
+      initializationPublished = true;
+      const liveValidation2 = await input.validateCandidate({ lifecycleRoot: paths.lifecycleRoot });
+      if (liveValidation2?.ok !== true || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) {
+        throw pathError2("LAYOUT_TRANSACTION_FAILED");
+      }
+      await afterPublish({ lifecycleRoot: paths.lifecycleRoot });
+      return ok({
+        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+        unchanged,
+        cleanup_pending: false,
+        recovery_artifacts: []
+      });
+    }
+    backupRoot = await mkdtemp(join7(paths.docsRoot, ".project-lifecycle-layout-backup-"));
+    await rmdir(backupRoot);
+    try {
+      await publishRename(paths.lifecycleRoot, backupRoot);
+    } catch {
+      if (await fileState(paths.lifecycleRoot) || !await fingerprintAt(backupRoot, current.fingerprint)) throw pathError2("LAYOUT_TRANSACTION_FAILED");
+    }
+    publicationStarted = true;
+    if (await fileState(paths.lifecycleRoot) || !await fingerprintAt(backupRoot, current.fingerprint)) {
+      throw pathError2("LAYOUT_TRANSACTION_FAILED");
+    }
+    if ((await inspectTransition({
+      phase: "backup-moved",
+      lifecycleRoot: paths.lifecycleRoot,
+      stagingRoot,
+      backupRoot
+    }))?.ok !== true) throw pathError2("LAYOUT_TRANSACTION_FAILED");
+    try {
+      await publishRename(stagingRoot, paths.lifecycleRoot);
+    } catch {
+      if (await fileState(stagingRoot) || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) throw pathError2("LAYOUT_TRANSACTION_FAILED");
+    }
+    if ((await inspectTransition({
+      phase: "candidate-moved",
+      lifecycleRoot: paths.lifecycleRoot,
+      stagingRoot,
+      backupRoot
+    }))?.ok !== true) throw pathError2("LAYOUT_TRANSACTION_FAILED");
+    const liveValidation = await input.validateCandidate({ lifecycleRoot: paths.lifecycleRoot });
+    if (liveValidation?.ok !== true || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) {
+      throw pathError2("LAYOUT_TRANSACTION_FAILED");
+    }
+    await afterPublish({ lifecycleRoot: paths.lifecycleRoot });
+    if (operations.retainBackup === true) {
+      return ok({
+        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+        unchanged,
+        cleanup_pending: true,
+        recovery_artifacts: ["backup"],
+        retained_publication: {
+          lifecycle_root: paths.lifecycleRoot,
+          backup_root: backupRoot,
+          original_fingerprint: current.fingerprint,
+          candidate_fingerprint: candidateFingerprint
+        }
+      });
+    }
+    try {
+      await removeBackup(backupRoot);
+    } catch {
+    }
+    if (await fileState(backupRoot)) {
+      return ok({
+        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+        unchanged,
+        cleanup_pending: true,
+        recovery_artifacts: ["backup"]
+      });
+    }
+    backupRoot = null;
+    return ok({
+      changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
+      unchanged,
+      cleanup_pending: false,
+      recovery_artifacts: []
+    });
+  } catch (error) {
+    if (publicationStarted) {
+      const restored = initializationPublished ? await rollbackInitialization({
+        lifecycleRoot: paths.lifecycleRoot,
+        stagingRoot,
+        candidateFingerprint
+      }) : await restoreOriginal({
+        lifecycleRoot: paths.lifecycleRoot,
+        stagingRoot,
+        backupRoot,
+        originalFingerprint: current.fingerprint,
+        candidateFingerprint,
+        restoreRename
+      });
+      if (!restored.ok) return restored;
+    } else {
+      await cleanupStage(stagingRoot).catch(() => {
+      });
+    }
+    return failure7(
+      error?.code === "PATH_ESCAPE" || error?.code === "PATH_SYMLINK_ESCAPE" ? error.code : "LAYOUT_TRANSACTION_FAILED",
+      "/",
+      "The lifecycle layout transaction could not be completed."
+    );
+  }
+};
+var finalizeRetainedLayout = async ({ retained_publication: publication } = {}, operations = {}) => {
+  if (!publication?.backup_root) return failure7("LAYOUT_INPUT_INVALID", "/retained_publication", "A retained publication is required.");
+  try {
+    const removeBackup = operations.removeBackup ?? ((path) => rm(path, { recursive: true, force: true }));
+    if (!await fingerprintAt(publication.lifecycle_root, publication.candidate_fingerprint)) {
+      return failure7("LAYOUT_FINGERPRINT_STALE", "/retained_publication", "The published candidate changed before finalization.");
+    }
+    await removeBackup(publication.backup_root);
+    return await fileState(publication.backup_root) ? failure7("LAYOUT_TRANSACTION_FAILED", "/retained_publication", "The retained backup could not be finalized.") : ok(null);
+  } catch {
+    return failure7("LAYOUT_TRANSACTION_FAILED", "/retained_publication", "The retained backup could not be finalized.");
+  }
+};
+var rollbackRetainedLayout = async ({ retained_publication: publication } = {}, operations = {}) => {
+  if (!publication?.backup_root) return failure7("LAYOUT_INPUT_INVALID", "/retained_publication", "A retained publication is required.");
+  let stagingRoot;
+  try {
+    stagingRoot = await mkdtemp(join7(dirname4(publication.lifecycle_root), ".project-lifecycle-layout-rollback-"));
+    await rmdir(stagingRoot);
+  } catch {
+    return failure7("LAYOUT_RESTORE_FAILED", "/recovery", "Recovery staging could not be initialized.");
+  }
+  return restoreOriginal({
+    lifecycleRoot: publication.lifecycle_root,
+    stagingRoot,
+    backupRoot: publication.backup_root,
+    originalFingerprint: publication.original_fingerprint,
+    candidateFingerprint: publication.candidate_fingerprint,
+    restoreRename: operations.restoreRename ?? rename2
+  });
+};
+
+// scripts/delivery/materialize-asset.mjs
+var import_yaml2 = __toESM(require_dist(), 1);
+import { createHash as createHash4 } from "node:crypto";
+import { lstat as lstat8, mkdir as mkdir3, readFile as readFile8, realpath as realpath9, rmdir as rmdir2, unlink as unlink3 } from "node:fs/promises";
+import { dirname as dirname5, isAbsolute as isAbsolute10, join as join8, relative as relative8, sep as sep8 } from "node:path";
+import { isDeepStrictEqual as isDeepStrictEqual5 } from "node:util";
+var MAX_BODY_BYTES = 131072;
+var MAX_DOCUMENT_BYTES2 = MAX_BODY_BYTES * 2;
+var FEEDBACK_SOURCE_SECTIONS = ["original_problem", "scenario", "expectation"];
+var FEEDBACK_MUTABLE_SECTIONS = ["marking", "coverage"];
+var FEEDBACK_HASH_MARKER = /^<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n?/u;
+var failure8 = (code, path, message) => fail([createError(code, path, message)]);
+var record5 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var hash2 = (value) => createHash4("sha256").update(value).digest("hex");
+var boundedText = (value) => typeof value === "string" && value.trim().length > 0 && value.length <= 500 && !/[\p{Cc}\p{Cf}]/u.test(value);
+var inside6 = (root, candidate) => {
+  const path = relative8(root, candidate);
+  return path === "" || path !== ".." && !path.startsWith(`..${sep8}`) && !isAbsolute10(path);
+};
+var requireRegularDirectory = async (path, rootReal = null) => {
+  const state = await lstat8(path);
+  if (!state.isDirectory() || state.isSymbolicLink()) throw new Error("Unsafe delivery directory.");
+  const physical = await realpath9(path);
+  if (rootReal !== null && !inside6(rootReal, physical)) throw new Error("Delivery directory escapes project root.");
+  return physical;
+};
+var resolveLifecycleRoot2 = async (root) => {
+  const projectRoot = await requireRegularDirectory(root);
+  const docsRoot = await requireRegularDirectory(join8(root, "docs"), projectRoot);
+  const lifecycleRoot = await requireRegularDirectory(join8(root, "docs", "project-lifecycle"), projectRoot);
+  if (!inside6(docsRoot, lifecycleRoot)) throw new Error("Lifecycle root escapes docs root.");
+  const deliveryRoot = await requireRegularDirectory(join8(root, "docs", "project-lifecycle", "delivery"), lifecycleRoot);
+  if (!inside6(lifecycleRoot, deliveryRoot)) throw new Error("Delivery root escapes lifecycle root.");
+  return lifecycleRoot;
+};
+var headingLevels2 = (source) => [...source.matchAll(/^(#{1,6})[ \t]+\S.*$/gm)].map((match) => match[1].length);
+var sectionPattern2 = (id) => new RegExp(
+  `<!-- project-lifecycle:section ${id} -->\\n([\\s\\S]*?)\\n<!-- /project-lifecycle:section -->`,
+  "u"
+);
+var extractFeedbackSections = (body) => {
+  const normalized = withoutManagedFeedbackHash(body);
+  const visible = maskFencedMarkdown(normalized);
+  const sections = {};
+  for (const id of [...FEEDBACK_SOURCE_SECTIONS, ...FEEDBACK_MUTABLE_SECTIONS]) {
+    const matches = [...visible.matchAll(new RegExp(sectionPattern2(id).source, "gu"))];
+    if (matches.length !== 1 || matches[0][1].trim().length === 0) return null;
+    const opening = `<!-- project-lifecycle:section ${id} -->
+`;
+    const closing = "\n<!-- /project-lifecycle:section -->";
+    const start = matches[0].index + opening.length;
+    const end = matches[0].index + matches[0][0].length - closing.length;
+    sections[id] = normalized.slice(start, end).trim();
+  }
+  return sections;
+};
+var sourceHashes = (sections) => Object.fromEntries(
+  FEEDBACK_SOURCE_SECTIONS.map((id) => [id, hash2(sections[id])])
+);
+var feedbackHashMarker = (hashes) => `<!-- project-lifecycle:feedback-source-hashes ${FEEDBACK_SOURCE_SECTIONS.map((id) => `${id}=${hashes[id]}`).join(" ")} -->`;
+var withoutManagedFeedbackHash = (body) => {
+  const normalized = body.replaceAll("\r\n", "\n").replace(/^\n/u, "");
+  if (FEEDBACK_HASH_MARKER.test(normalized)) return normalized.replace(FEEDBACK_HASH_MARKER, "");
+  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(normalized);
+  if (title) {
+    const rest2 = normalized.slice(title[0].length);
+    return FEEDBACK_HASH_MARKER.test(rest2) ? `${title[0]}${rest2.replace(FEEDBACK_HASH_MARKER, "")}` : normalized;
+  }
+  const legacyPrefix = /^(<!-- project-lifecycle:section original_problem -->\n\n)/u.exec(normalized);
+  if (!legacyPrefix) return normalized;
+  const rest = normalized.slice(legacyPrefix[0].length);
+  return FEEDBACK_HASH_MARKER.test(rest) ? `${legacyPrefix[0]}${rest.replace(FEEDBACK_HASH_MARKER, "")}` : normalized;
+};
+var addFeedbackHashes = (body, hashes) => {
+  const withoutMarker = withoutManagedFeedbackHash(body);
+  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(withoutMarker);
+  if (!title) return `${feedbackHashMarker(hashes)}
+${withoutMarker}`;
+  return `${title[0]}${feedbackHashMarker(hashes)}
+${withoutMarker.slice(title[0].length)}`;
+};
+var feedbackSkeleton = (body) => {
+  let output = withoutManagedFeedbackHash(body);
+  for (const id of FEEDBACK_MUTABLE_SECTIONS) {
+    output = output.replace(sectionPattern2(id), `<!-- project-lifecycle:section ${id} -->
+[MUTABLE]
+<!-- /project-lifecycle:section -->`);
+  }
+  return output.replaceAll("\r\n", "\n").replace(/^\n/u, "");
+};
+var withoutDocumentTitle = (body) => body.replaceAll("\r\n", "\n").replace(/^\n/u, "").replace(/^#[ \t]+[^\n]+\n(?:\n)?/u, "");
+var hasExactCoverageReference = (coverage, reference) => {
+  const tokens = coverage.split(/[\s;,；，]+/u).filter((token) => token.length > 0);
+  return tokens.includes(reference);
+};
+var feedbackFrame = (body) => {
+  let output = withoutManagedFeedbackHash(withoutDocumentTitle(body));
+  for (const id of [...FEEDBACK_SOURCE_SECTIONS, ...FEEDBACK_MUTABLE_SECTIONS]) {
+    output = output.replace(sectionPattern2(id), `<!-- project-lifecycle:section-frame ${id} -->`);
+  }
+  return output.replace(/\s+/gu, " ").trim();
+};
+var splitDocument = (source) => {
+  const normalized = source.replaceAll("\r\n", "\n");
+  if (!normalized.startsWith("---\n")) return null;
+  const closing = normalized.indexOf("\n---\n", 4);
+  if (closing === -1) return null;
+  const parsed = parseRestrictedYaml(normalized.slice(4, closing), "/frontmatter");
+  if (!parsed.ok) return null;
+  return { frontmatter: parsed.value, body: normalized.slice(closing + 5) };
+};
+var renderDocument = (frontmatter, body) => `---
+${(0, import_yaml2.stringify)(frontmatter, { lineWidth: 0 }).trimEnd()}
+---
+${body.startsWith("\n") ? body : `
+${body}`}`;
+var validateRendered = (source, expectedFrontmatter, expectedBody) => {
+  const parsed = splitDocument(source);
+  if (!parsed || !isDeepStrictEqual5(parsed.frontmatter, expectedFrontmatter) || parsed.body !== (expectedBody.startsWith("\n") ? expectedBody : `
+${expectedBody}`)) {
+    return failure8("DELIVERY_DOCUMENT_INVALID", "/", "Rendered delivery document does not match its validated request.");
+  }
+  return validateJson("delivery-frontmatter", parsed.frontmatter);
+};
+var compatibleRoute = ({ artifact_kind: kind, primary_route: route }) => {
+  if (route === "KNOWLEDGE_UPDATE") return kind === "feedback";
+  if (route === "OUTSIDE_PLUGIN") return false;
+  if (kind === "prd") return route === "PRD_DELIVERY";
+  if (kind === "non-prd-delivery") return route === "NON_PRD_DELIVERY";
+  return ["PRD_DELIVERY", "NON_PRD_DELIVERY"].includes(route);
+};
+var validateMaterializationRequest = (input = {}) => {
+  if (!record5(input) || !record5(input.frontmatter) || !record5(input.body) || typeof input.body.en !== "string" || typeof input.body["zh-CN"] !== "string" || !boundedText(input.reason)) {
+    return failure8("ASSET_REQUEST_INVALID", "/", "A bounded explicit delivery asset request is required.");
+  }
+  if (input.frontmatter.schema_version !== 2) {
+    return failure8("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/frontmatter/schema_version", "Delivery layout v2 is required before durable writes.");
+  }
+  if (["prd", "non-prd-delivery"].includes(input.frontmatter.artifact_kind) && Object.hasOwn(input.frontmatter, "owner_artifact_id")) {
+    const rootOwnership = validatePhysicalOwner(input.frontmatter);
+    if (!rootOwnership.ok) return rootOwnership;
+  }
+  const frontmatter = validateDeliveryFields(input.frontmatter, { code: "ASSET_FRONTMATTER_INVALID" });
+  if (!frontmatter.ok) return frontmatter;
+  const ownership = validatePhysicalOwner(input.frontmatter);
+  if (!ownership.ok) return ownership;
+  if (input.canonical_purpose_satisfied === true) {
+    return failure8("ASSET_REDUNDANT", "/canonical_purpose_satisfied", "An active owner already satisfies this canonical purpose.");
+  }
+  if (input.frontmatter.artifact_kind === "prd") {
+    if (!["explicit_user", "agent_inferred"].includes(input.creation_origin)) {
+      return failure8("ASSET_REQUEST_INVALID", "/creation_origin", "PRD creation origin must be explicit.");
+    }
+    if (input.creation_origin === "agent_inferred" && !isSafeReference(input.creation_approval_ref)) {
+      return failure8("PRD_APPROVAL_REQUIRED", "/creation_approval_ref", "Agent-inferred PRD creation requires explicit confirmation.");
+    }
+  }
+  if (input.frontmatter.artifact_kind === "architecture" && !isSafeReference(input.changed_contract_ref)) {
+    return failure8("ARCHITECTURE_DECLARATION_REQUIRED", "/changed_contract_ref", "Architecture requires an exact changed-contract declaration.");
+  }
+  for (const language of ["en", "zh-CN"]) {
+    const body = input.body[language];
+    if (body.trim().length === 0 || Buffer.byteLength(body) > MAX_BODY_BYTES) {
+      return failure8("ASSET_BODY_INVALID", `/body/${language}`, "Localized delivery body must be non-empty and bounded.");
+    }
+    if (Buffer.byteLength(renderDocument(input.frontmatter, body)) > MAX_DOCUMENT_BYTES2) {
+      return failure8("ASSET_BODY_INVALID", `/body/${language}`, "Complete localized delivery document must remain bounded.");
+    }
+  }
+  if (!isDeepStrictEqual5(headingLevels2(input.body.en), headingLevels2(input.body["zh-CN"]))) {
+    return failure8("PAIR_SECTION_MISMATCH", "/body", "Localized delivery bodies require matching heading structure.");
+  }
+  if (input.frontmatter.artifact_kind === "feedback") {
+    for (const language of ["en", "zh-CN"]) {
+      if (!extractFeedbackSections(input.body[language])) {
+        return failure8("FEEDBACK_STRUCTURE_INVALID", `/body/${language}`, "Feedback requires exact source, marking, and coverage sections.");
+      }
+    }
+    const alignment = validateAlignmentFeedbackPair({
+      frontmatter: input.frontmatter,
+      bodies: input.body
+    });
+    if (!alignment.ok) return alignment;
+    if (alignment.value.marker !== null && input.frontmatter.retention_tier !== "active") {
+      return failure8(
+        "ALIGNMENT_RETENTION_INVALID",
+        "/frontmatter/retention_tier",
+        "Feedback with an active alignment marker must remain active until validated marker removal."
+      );
+    }
+  }
+  if (input.frontmatter.artifact_kind === "closure-summary") {
+    const managedHashes = ["en", "zh-CN"].map((language) => extractClosureSummaryHash(input.body[language]));
+    if (input.closure_summary === void 0 && managedHashes.some((digest) => digest !== null)) {
+      return failure8("CLOSURE_SUMMARY_INVALID", "/closure_summary", "Managed closure proof cannot be supplied as body text.");
+    }
+    const summary = input.closure_summary;
+    const feedbackIds = summary?.feedback_coverage?.map(({ feedback_id: feedbackId }) => feedbackId).sort();
+    if (summary !== void 0 && (!validateClosureSummary(summary).ok || summary.artifact_id !== input.frontmatter.artifact_id || summary.owner_artifact_id !== input.frontmatter.owner_artifact_id || !isDeepStrictEqual5(feedbackIds, [...input.frontmatter.relationships.feedback_ids].sort()) || summary.owner_artifact_id.startsWith("prd-") && !input.frontmatter.relationships.prd_ids.includes(summary.owner_artifact_id))) {
+      return failure8("CLOSURE_SUMMARY_INVALID", "/closure_summary", "Persisted closure proof must match the closure-summary asset identity.");
+    }
+  } else if (input.closure_summary !== void 0) {
+    return failure8("CLOSURE_SUMMARY_INVALID", "/closure_summary", "Persisted closure proof requires a closure-summary asset.");
+  }
+  if (!compatibleRoute(input.frontmatter)) {
+    return failure8("ROUTE_ASSET_MISMATCH", "/frontmatter/primary_route", "The supplied route cannot own this durable asset kind.");
+  }
+  return ok(input);
+};
+var existingFile = async (path, lifecycleRoot) => {
+  try {
+    const stats = await lstat8(path);
+    if (stats.isSymbolicLink() || !stats.isFile()) throw Object.assign(new Error("Unsafe existing delivery target."), { code: "ASSET_PATH_INVALID" });
+    if (!inside6(lifecycleRoot, await realpath9(path))) {
+      throw Object.assign(new Error("Existing delivery target escapes lifecycle root."), { code: "ASSET_PATH_INVALID" });
+    }
+    return await readFile8(path, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+};
+var ensureManagedDirectory = async (lifecycleRoot, locator) => {
+  const rootReal = await realpath9(lifecycleRoot);
+  const created = [];
+  try {
+    let current = lifecycleRoot;
+    for (const segment of dirname5(locator).split("/")) {
+      current = join8(current, segment);
+      try {
+        const state = await lstat8(current);
+        if (!state.isDirectory() || state.isSymbolicLink()) throw new Error("Unsafe managed delivery directory.");
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+        await mkdir3(current);
+        created.push(current);
+      }
+      if (!inside6(rootReal, await realpath9(current))) throw new Error("Managed delivery directory escapes lifecycle root.");
+    }
+    return created;
+  } catch (error) {
+    await cleanupManagedDirectories(created);
+    throw error;
+  }
+};
+var cleanupManagedDirectories = async (directories) => {
+  for (const directory of [...directories].reverse()) {
+    try {
+      await rmdir2(directory);
+    } catch (error) {
+      if (!["ENOENT", "ENOTEMPTY"].includes(error.code)) throw error;
+    }
+  }
+};
+var discoverAlignmentResolutionInventory = async (lifecycleRoot, feedbackId) => {
+  const collected = await collectDeliveryInventory({ lifecycleRoot });
+  if (!collected.ok) throw new Error("Delivery owner inventory is invalid.");
+  const owners = [...collected.value.pairs, ...collected.value.archived_pairs].filter(({ language, frontmatter }) => language === "en" && ["prd", "non-prd-delivery"].includes(frontmatter.artifact_kind) && frontmatter.relationships.feedback_ids.includes(feedbackId)).map(({ frontmatter }) => frontmatter);
+  const closureIds = /* @__PURE__ */ new Set();
+  for (const closure of collected.value.closed_summaries.filter(({ frontmatter }) => frontmatter.relationships.feedback_ids.includes(feedbackId))) {
+    const hashes = [];
+    for (const language of ["en", "zh-CN"]) {
+      const source = await existingFile(join8(lifecycleRoot, closure.locators[language]), lifecycleRoot);
+      if (source === null || Buffer.byteLength(source) > MAX_DOCUMENT_BYTES2) {
+        throw new Error("Closure inventory contains an invalid file.");
+      }
+      const document3 = splitDocument(source);
+      if (!document3 || !isDeepStrictEqual5(document3.frontmatter, closure.frontmatter)) {
+        throw new Error("Closure inventory changed after validation.");
+      }
+      hashes.push(extractClosureSummaryHash(document3.body));
+    }
+    if (hashes[0] !== null && hashes[0] === hashes[1]) {
+      closureIds.add(`${closure.artifact_id}:${hashes[0]}`);
+    }
+  }
+  return { owners, closureIds };
+};
+var rollbackFirstWrite = async ({ write, lifecycleRoot, locator, original }) => {
+  const path = join8(lifecycleRoot, locator);
+  if (original === null) {
+    await unlink3(path);
+    try {
+      await lstat8(path);
+      throw new Error("New delivery file still exists after rollback.");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    return;
+  }
+  await write({
+    root: lifecycleRoot,
+    target: locator,
+    content: original,
+    validate: async (source) => {
+      const parsed = splitDocument(source);
+      return parsed ? ok(source) : failure8("DELIVERY_DOCUMENT_INVALID", "/", "Original delivery document could not be restored.");
+    }
+  });
+  if (await readFile8(path, "utf8") !== original) throw new Error("Original delivery file was not restored.");
+};
+async function materializeAsset(input = {}, operations = {}) {
+  const request = validateMaterializationRequest(input);
+  if (!request.ok) return request;
+  if (typeof input.root !== "string" || !isAbsolute10(input.root)) {
+    return failure8("ASSET_ROOT_INVALID", "/root", "Delivery materialization requires an absolute project root.");
+  }
+  let lifecycleRoot;
+  try {
+    lifecycleRoot = await resolveLifecycleRoot2(input.root);
+  } catch {
+    return failure8("ASSET_PATH_INVALID", "/root", "Delivery targets must be regular files beneath the fixed lifecycle root.");
+  }
+  const layout = await detectDeliveryLayout({ root: input.root });
+  if (!layout.ok || layout.value.kind !== "V2") {
+    return failure8("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/root", "Delivery layout v2 is required before durable writes.");
+  }
+  let owner = await resolvePhysicalOwner({ lifecycleRoot, frontmatter: input.frontmatter });
+  if (!owner.ok && input.frontmatter.artifact_kind === "closure-summary") {
+    const inventory = await collectDeliveryInventory({ lifecycleRoot });
+    if (inventory.ok) {
+      const retainedOwners = inventory.value.archived_pairs.filter(({ language, frontmatter }) => language === "en" && frontmatter.artifact_id === input.frontmatter.owner_artifact_id && frontmatter.owner_artifact_id === frontmatter.artifact_id && ["prd", "non-prd-delivery"].includes(frontmatter.artifact_kind));
+      if (retainedOwners.length === 1) {
+        owner = ok({
+          artifact_kind: retainedOwners[0].frontmatter.artifact_kind,
+          artifact_id: retainedOwners[0].frontmatter.artifact_id
+        });
+      }
+    }
+  }
+  if (!owner.ok) return owner;
+  const id = input.frontmatter.artifact_id;
+  const locators = activeDeliveryPair(input.frontmatter, { ownerKind: owner.value.artifact_kind });
+  const paths = Object.fromEntries(Object.entries(locators).map(([language, locator]) => [language, join8(lifecycleRoot, locator)]));
+  let existing;
+  try {
+    existing = {
+      en: await existingFile(paths.en, lifecycleRoot),
+      "zh-CN": await existingFile(paths["zh-CN"], lifecycleRoot)
+    };
+  } catch {
+    return failure8("ASSET_PATH_INVALID", "/root", "Delivery targets must be regular files beneath the fixed lifecycle root.");
+  }
+  if (existing.en === null !== (existing["zh-CN"] === null)) {
+    return failure8("PAIR_INCOMPLETE", "/delivery", "Delivery asset pairs must be created and updated together.");
+  }
+  const updating = existing.en !== null;
+  if (updating && input.frontmatter.artifact_kind !== "feedback" && !operations.allowExactReplay) {
+    return failure8("ASSET_REDUNDANT", "/frontmatter/artifact_id", "An existing delivery owner cannot be recreated by materialization.");
+  }
+  const bodies = { ...input.body };
+  if (input.frontmatter.artifact_kind === "closure-summary" && input.closure_summary !== void 0) {
+    const digest = closureSummaryHash(input.closure_summary);
+    for (const language of ["en", "zh-CN"]) bodies[language] = addClosureSummaryHash(bodies[language], digest);
+  }
+  if (input.frontmatter.artifact_kind === "feedback") {
+    const nextAlignment = validateAlignmentFeedbackPair({
+      frontmatter: input.frontmatter,
+      bodies
+    });
+    if (!nextAlignment.ok) return nextAlignment;
+    let priorAlignment = null;
+    if (updating) {
+      const priorDocuments = {
+        en: splitDocument(existing.en),
+        "zh-CN": splitDocument(existing["zh-CN"])
+      };
+      if (!priorDocuments.en || !priorDocuments["zh-CN"]) {
+        return failure8("HISTORY_BODY_CHANGED", "/body", "Existing Feedback pair is malformed.");
+      }
+      priorAlignment = validateAlignmentFeedbackPair({
+        frontmatter: priorDocuments.en.frontmatter,
+        bodies: {
+          en: priorDocuments.en.body,
+          "zh-CN": priorDocuments["zh-CN"].body
+        }
+      });
+      if (!priorAlignment.ok) return priorAlignment;
+    }
+    const removingAlignment = priorAlignment?.value.marker !== null && priorAlignment?.value.marker !== void 0 && nextAlignment.value.marker === null;
+    const exactFeedbackReplay = operations.allowExactReplay && updating && ["en", "zh-CN"].every((language) => renderDocument(
+      input.frontmatter,
+      addFeedbackHashes(bodies[language], sourceHashes(extractFeedbackSections(bodies[language])))
+    ) === existing[language]);
+    if (Object.hasOwn(input, "alignment_resolution") && !removingAlignment && !exactFeedbackReplay) {
+      return failure8("ALIGNMENT_RESOLUTION_UNEXPECTED", "/alignment_resolution", "Resolution is allowed only while removing an active marker.");
+    }
+    if (removingAlignment) {
+      const suppliedOwners = input.alignment_owners ?? [];
+      if (!Array.isArray(suppliedOwners) || suppliedOwners.some((owner2) => {
+        const validation = validateJson("delivery-frontmatter", owner2);
+        return !validation.ok || !["prd", "non-prd-delivery"].includes(owner2.artifact_kind);
+      })) {
+        return failure8("ALIGNMENT_RESOLUTION_INVALID", "/alignment_owners", "Marker exit requires validated delivery owners.");
+      }
+      let inventory;
+      try {
+        inventory = await discoverAlignmentResolutionInventory(lifecycleRoot, input.frontmatter.artifact_id);
+      } catch {
+        return failure8("ALIGNMENT_OWNER_INVENTORY_INCOMPLETE", "/alignment_owners", "Marker exit requires a complete valid owner inventory from authoritative delivery assets.");
+      }
+      const suppliedOwnerById = new Map(suppliedOwners.map((owner2) => [owner2.artifact_id, owner2]));
+      if (suppliedOwnerById.size !== suppliedOwners.length || suppliedOwnerById.size !== inventory.owners.length || inventory.owners.some((owner2) => !isDeepStrictEqual5(
+        suppliedOwnerById.get(owner2.artifact_id),
+        owner2
+      ))) {
+        return failure8("ALIGNMENT_OWNER_INVENTORY_INCOMPLETE", "/alignment_owners", "Marker exit requires the exact persisted bilingual delivery-owner inventory.");
+      }
+      const linkedOwnerIds = new Set(inventory.owners.map(({ artifact_id: ownerId }) => ownerId));
+      const suppliedClosures = input.alignment_closures ?? [];
+      if (!Array.isArray(suppliedClosures) || suppliedClosures.some((closure) => !validateClosureSummary(closure).ok)) {
+        return failure8("ALIGNMENT_RESOLUTION_INVALID", "/alignment_closures", "Marker exit requires validated closure summaries.");
+      }
+      const suppliedClosureIds = new Set(Array.isArray(suppliedClosures) ? suppliedClosures.map(({ artifact_id: closureId }) => closureId) : []);
+      let suppliedClosureProofs;
+      try {
+        suppliedClosureProofs = new Set(suppliedClosures.map((closure) => `${closure.artifact_id}:${closureSummaryHash(closure)}`));
+      } catch {
+        return failure8("ALIGNMENT_RESOLUTION_INVALID", "/alignment_closures", "Marker exit requires serializable closure summaries.");
+      }
+      const authoritativeClosureProofs = new Set([...inventory.closureIds].filter((proof) => {
+        const closureId = proof.slice(0, proof.indexOf(":"));
+        return closureId.startsWith("closure-") && linkedOwnerIds.has(closureId.slice("closure-".length));
+      }));
+      if (suppliedClosureIds.size !== suppliedClosureProofs.size || suppliedClosureProofs.size !== authoritativeClosureProofs.size || [...suppliedClosureProofs].some((proof) => !authoritativeClosureProofs.has(proof))) {
+        return failure8("ALIGNMENT_CLOSURE_INVENTORY_INCOMPLETE", "/alignment_closures", "Marker exit requires exact persisted bilingual closure-summary evidence.");
+      }
+      const exit2 = validateAlignmentExit({
+        feedbackId: input.frontmatter.artifact_id,
+        feedbackProjectId: input.frontmatter.current_project_id ?? input.frontmatter.project_id_at_creation,
+        resolution: input.alignment_resolution,
+        owners: inventory.owners,
+        closures: suppliedClosures,
+        knowledgeResults: input.alignment_knowledge_results ?? [],
+        ownerInventoryComplete: true
+      });
+      if (!exit2.ok) return exit2;
+      const requiredEvidence = exit2.value.disposition === "NO_REMEDIATION_ACCEPTED" ? [
+        exit2.value.disposition,
+        exit2.value.human_approval_ref,
+        ...exit2.value.knowledge_resolution_refs
+      ] : [
+        exit2.value.disposition,
+        ...exit2.value.closure_refs,
+        ...exit2.value.knowledge_resolution_refs
+      ];
+      for (const language of ["en", "zh-CN"]) {
+        const coverage = extractFeedbackSections(bodies[language])?.coverage;
+        if (!coverage || requiredEvidence.some((reference) => !hasExactCoverageReference(coverage, reference))) {
+          return failure8(
+            "ALIGNMENT_RESOLUTION_EVIDENCE_MISSING",
+            `/body/${language}/coverage`,
+            "Alignment exit must retain its disposition, closure or approval, and knowledge resolution references in Feedback coverage."
+          );
+        }
+      }
+    } else if (!updating && input.frontmatter.primary_route === "KNOWLEDGE_UPDATE" && nextAlignment.value.marker === null) {
+      return failure8("ROUTE_ASSET_MISMATCH", "/frontmatter/primary_route", "Knowledge-controlled Feedback requires an active alignment marker.");
+    }
+    for (const language of ["en", "zh-CN"]) {
+      const sections = extractFeedbackSections(bodies[language]);
+      bodies[language] = addFeedbackHashes(bodies[language], sourceHashes(sections));
+      if (updating) {
+        const prior = splitDocument(existing[language]);
+        if (!prior || !isDeepStrictEqual5(prior.frontmatter, input.frontmatter)) {
+          return failure8("HISTORY_BODY_CHANGED", `/body/${language}`, "Feedback identity and source history cannot be rewritten.");
+        }
+        const priorSections = extractFeedbackSections(prior.body);
+        const nextSections = extractFeedbackSections(bodies[language]);
+        const titleMigration = priorAlignment.value.marker === null && nextAlignment.value.marker !== null && priorAlignment.value.titles[language] === null;
+        const priorSkeleton = feedbackSkeleton(prior.body);
+        const nextSkeleton = feedbackSkeleton(
+          titleMigration ? withoutDocumentTitle(bodies[language]) : bodies[language]
+        );
+        const skeletonMatches = titleMigration ? feedbackFrame(prior.body) === feedbackFrame(bodies[language]) : priorSkeleton === nextSkeleton;
+        if (!priorSections || !nextSections || !isDeepStrictEqual5(sourceHashes(priorSections), sourceHashes(nextSections)) || !skeletonMatches) {
+          return failure8("HISTORY_BODY_CHANGED", `/body/${language}`, "Feedback source history cannot change without an erratum or successor.");
+        }
+      }
+    }
+  }
+  const documents = {
+    en: renderDocument(input.frontmatter, bodies.en),
+    "zh-CN": renderDocument(input.frontmatter, bodies["zh-CN"])
+  };
+  for (const language of ["en", "zh-CN"]) {
+    if (Buffer.byteLength(documents[language]) > MAX_DOCUMENT_BYTES2) {
+      return failure8("ASSET_BODY_INVALID", `/body/${language}`, "Complete localized delivery document must remain bounded.");
+    }
+  }
+  const unchanged = updating && existing.en === documents.en && existing["zh-CN"] === documents["zh-CN"];
+  if (updating && input.frontmatter.artifact_kind !== "feedback" && !unchanged) {
+    return failure8("ASSET_REDUNDANT", "/frontmatter/artifact_id", "An existing delivery owner cannot be replaced by a different request.");
+  }
+  if (operations.preview) {
+    return ok({ artifact_id: id, locators, status: unchanged ? "unchanged" : updating ? "updated" : "created", documents });
+  }
+  if (operations.allowExactReplay && unchanged) return ok({ artifact_id: id, locators, status: "unchanged" });
+  const write = operations.atomicWriteValidated ?? atomicWriteValidated;
+  let createdDirectories = [];
+  try {
+    createdDirectories = await ensureManagedDirectory(lifecycleRoot, locators.en);
+  } catch {
+    return failure8("ASSET_PATH_INVALID", "/root", "Delivery targets must be regular files beneath the fixed lifecycle root.");
+  }
+  try {
+    await write({
+      root: lifecycleRoot,
+      target: locators.en,
+      content: documents.en,
+      validate: (source) => validateRendered(source, input.frontmatter, bodies.en)
+    });
+    try {
+      await write({
+        root: lifecycleRoot,
+        target: locators["zh-CN"],
+        content: documents["zh-CN"],
+        validate: (source) => validateRendered(source, input.frontmatter, bodies["zh-CN"])
+      });
+    } catch (error) {
+      try {
+        await rollbackFirstWrite({
+          write,
+          lifecycleRoot,
+          locator: locators.en,
+          original: existing.en
+        });
+      } catch {
+        return failure8("ASSET_ROLLBACK_FAILED", "/delivery", "Delivery pair rollback failed; manual recovery is required.");
+      }
+      throw error;
+    }
+  } catch {
+    try {
+      await cleanupManagedDirectories(createdDirectories);
+    } catch {
+      return failure8("ASSET_ROLLBACK_FAILED", "/delivery", "Delivery pair rollback failed; manual recovery is required.");
+    }
+    return failure8("ASSET_WRITE_FAILED", "/delivery", "Delivery pair could not be written and validated.");
+  }
+  return ok({
+    artifact_id: id,
+    locators,
+    status: updating ? "updated" : "created"
+  });
+}
+
+// scripts/delivery/publish-delivery-indexes.mjs
+import { resolve as resolve7 } from "node:path";
+
 // scripts/delivery/delivery-indexes.mjs
 import { posix as posix3 } from "node:path";
 var NOTICE = "<!-- Generated by Project Lifecycle from validated delivery Frontmatter; do not edit. -->";
-var failure7 = (code, path, message) => fail([createError(code, path, message)]);
+var failure9 = (code, path, message) => fail([createError(code, path, message)]);
 var languageName = (language) => language === "en" ? "INDEX-en.md" : "INDEX.md";
 var text = {
   en: { title: "Delivery", feedback: "Feedback", owners: "Owners", retained: "Retained owners", closures: "Closure summaries", views: "Views", assets: "Owned assets", archive: "Retained archive", empty: "None." },
@@ -19804,7 +20978,7 @@ var renderOwner = (inventory, owner, language) => {
 };
 var generateDeliveryIndexes = async ({ inventory } = {}) => {
   if (!inventory || inventory.layout_version !== 2 || !Array.isArray(inventory.owners)) {
-    return failure7("DELIVERY_INDEX_INPUT_INVALID", "/inventory", "A validated delivery inventory is required.");
+    return failure9("DELIVERY_INDEX_INPUT_INVALID", "/inventory", "A validated delivery inventory is required.");
   }
   const files = [];
   for (const language of ["en", "zh-CN"]) {
@@ -19835,12 +21009,105 @@ var generateDeliveryIndexes = async ({ inventory } = {}) => {
   });
 };
 
+// scripts/delivery/publish-delivery-indexes.mjs
+var publishDeliveryIndexes = async ({ root } = {}) => {
+  const [inventory, tree] = await Promise.all([
+    collectDeliveryInventory({ lifecycleRoot: resolve7(root, "docs/project-lifecycle") }),
+    inspectLifecycleTree({ repositoryRoot: root })
+  ]);
+  if (!inventory.ok || !tree.ok) return !inventory.ok ? inventory : tree;
+  const indexes = await generateDeliveryIndexes({ inventory: inventory.value });
+  if (!indexes.ok) return indexes;
+  const published = await applyLayoutTransaction({
+    repositoryRoot: root,
+    expectedFingerprint: tree.value.fingerprint,
+    candidateFiles: indexes.value.files.map(({ locator, content: content3 }) => ({
+      repository_id: null,
+      locator,
+      content: content3,
+      validate: async (candidate) => candidate === content3 ? ok(candidate) : fail([
+        createError("DELIVERY_INDEX_INVALID", `/${locator}`, "Generated index changed.")
+      ])
+    })),
+    candidateDirectories: [],
+    deleteLocators: [],
+    validateCandidate: ({ lifecycleRoot }) => collectDeliveryInventory({ lifecycleRoot })
+  });
+  return published.ok ? ok({
+    layout_version: 2,
+    locators: indexes.value.files.map(({ locator }) => locator),
+    changed: published.value.changed
+  }) : published;
+};
+
+// scripts/delivery/delivery-workflow.mjs
+var blocked = (result, context) => ({ ...result, context: { ...result.context, ...context } });
+var previewDeliveryAsset = async (input) => {
+  const prepared = await materializeAsset(input, { preview: true, allowExactReplay: true });
+  if (!prepared.ok) return blocked(prepared, { phase: "request", files_changed: false, request_valid: false });
+  const { documents, ...asset } = prepared.value;
+  const overlays = Object.fromEntries(Object.entries(asset.locators).map(([language, locator]) => [locator, documents[language]]));
+  const lifecycleRoot = resolve8(input.root, "docs/project-lifecycle");
+  const [baseline, inventory] = await Promise.all([
+    collectDeliveryInventory({ lifecycleRoot }),
+    collectDeliveryInventory({ lifecycleRoot, overlays })
+  ]);
+  if (!inventory.ok) {
+    const existingErrors = new Set(baseline.errors.map(({ code, path }) => JSON.stringify([code, path])));
+    inventory.errors = inventory.errors.map((error) => ({
+      ...error,
+      origin: existingErrors.has(JSON.stringify([error.code, error.path])) ? "existing_inventory" : baseline.context?.truncated ? "undetermined" : "candidate"
+    }));
+  }
+  if (!inventory.ok) return blocked(inventory, {
+    phase: "candidate_inventory",
+    files_changed: false,
+    request_valid: true,
+    candidate_valid: false,
+    artifact_id: asset.artifact_id,
+    locators: asset.locators,
+    action: "Fix the listed delivery inventory blockers, then repeat preview. No files were written."
+  });
+  const tree = await inspectLifecycleTree({ repositoryRoot: input.root });
+  if (!tree.ok) return blocked(tree, { phase: "index_preflight", files_changed: false, request_valid: true });
+  return ok({ artifact_id: asset.artifact_id, locators: asset.locators, planned_status: asset.status, files_changed: false, indexes: "ready", request_valid: true });
+};
+var materializeDeliveryWithIndexes = async (input, operations = {}) => {
+  const preview = await previewDeliveryAsset(input);
+  if (!preview.ok) return preview;
+  const asset = await materializeAsset(input, { allowExactReplay: true });
+  if (!asset.ok) return blocked(asset, {
+    phase: "materialization",
+    asset_saved: asset.errors.some(({ code }) => code === "ASSET_ROLLBACK_FAILED") ? null : false,
+    indexes: "not_attempted"
+  });
+  const published = await (operations.publishDeliveryIndexes ?? publishDeliveryIndexes)({ root: input.root });
+  if (!published.ok) return blocked(published, {
+    phase: "index_publication",
+    asset_saved: true,
+    files_changed: asset.value.status !== "unchanged" ? true : null,
+    asset_changed: asset.value.status !== "unchanged",
+    artifact_id: asset.value.artifact_id,
+    locators: asset.value.locators,
+    indexes: "failed",
+    action: "The document pair is saved. Fix the reported index blocker, then repeat the identical request or run generate-delivery-indexes. Do not recreate or delete the saved pair."
+  });
+  return ok({
+    ...asset.value,
+    asset_saved: true,
+    indexes: "updated",
+    files_changed: asset.value.status !== "unchanged" || published.value.changed.length > 0,
+    index_locators: published.value.locators,
+    index_changes: published.value.changed
+  });
+};
+
 // scripts/delivery/delivery-layout-migration.mjs
-var import_yaml2 = __toESM(require_dist(), 1);
-import { createHash as createHash4 } from "node:crypto";
-import { lstat as lstat8, opendir as opendir5, readFile as readFile8, realpath as realpath9 } from "node:fs/promises";
-import { dirname as dirname5, isAbsolute as isAbsolute10, join as join8, posix as posix4, relative as relative8, resolve as resolve7, sep as sep8 } from "node:path";
-import { isDeepStrictEqual as isDeepStrictEqual5 } from "node:util";
+var import_yaml3 = __toESM(require_dist(), 1);
+import { createHash as createHash5 } from "node:crypto";
+import { lstat as lstat9, opendir as opendir5, readFile as readFile9, realpath as realpath10 } from "node:fs/promises";
+import { dirname as dirname6, isAbsolute as isAbsolute11, join as join9, posix as posix4, relative as relative9, resolve as resolve9, sep as sep9 } from "node:path";
+import { isDeepStrictEqual as isDeepStrictEqual6 } from "node:util";
 
 // node_modules/mdast-util-to-string/lib/index.js
 var emptyOptions = {};
@@ -22412,10 +23679,10 @@ function resolveAll(constructs2, events, context) {
   const called = [];
   let index2 = -1;
   while (++index2 < constructs2.length) {
-    const resolve9 = constructs2[index2].resolveAll;
-    if (resolve9 && !called.includes(resolve9)) {
-      events = resolve9(events, context);
-      called.push(resolve9);
+    const resolve11 = constructs2[index2].resolveAll;
+    if (resolve11 && !called.includes(resolve11)) {
+      events = resolve11(events, context);
+      called.push(resolve11);
     }
   }
   return events;
@@ -26806,7 +28073,7 @@ var inlineCodeRanges = (source, htmlNodes) => {
   }
   return ranges;
 };
-var inside5 = (node2, ranges) => ranges.some(({ start, end }) => node2.position.start.offset >= start && node2.position.end.offset <= end);
+var inside7 = (node2, ranges) => ranges.some(({ start, end }) => node2.position.start.offset >= start && node2.position.end.offset <= end);
 var destinationSpan = (source) => {
   const labelStart = source.startsWith("![") ? 1 : 0;
   if (source[labelStart] !== "[") return null;
@@ -26860,551 +28127,12 @@ var rewriteMarkdownOutsideCode = (source, rewrite) => {
   const collected = { links: [], html: [] };
   collectNodes(fromMarkdown(source), collected);
   const codeRanges = inlineCodeRanges(source, collected.html);
-  const replacements = collected.links.filter((node2) => !inside5(node2, codeRanges)).map((node2) => destinationReplacement(source, node2, rewrite)).filter(Boolean).sort((left, right) => left.start - right.start);
+  const replacements = collected.links.filter((node2) => !inside7(node2, codeRanges)).map((node2) => destinationReplacement(source, node2, rewrite)).filter(Boolean).sort((left, right) => left.start - right.start);
   let rewritten = source;
   for (const replacement of replacements.reverse()) {
     rewritten = `${rewritten.slice(0, replacement.start)}${replacement.content}${rewritten.slice(replacement.end)}`;
   }
   return rewritten;
-};
-
-// scripts/knowledge/layout-transaction.mjs
-import { createHash as createHash3 } from "node:crypto";
-import {
-  cp,
-  lstat as lstat7,
-  mkdir as mkdir2,
-  mkdtemp,
-  open as open4,
-  opendir as opendir4,
-  readFile as readFile7,
-  readdir as readdir2,
-  readlink,
-  realpath as realpath8,
-  rename as rename2,
-  rm,
-  rmdir,
-  stat,
-  utimes
-} from "node:fs/promises";
-import { dirname as dirname4, isAbsolute as isAbsolute9, join as join7, relative as relative7, resolve as resolve6, sep as sep7 } from "node:path";
-var hash = (content3) => createHash3("sha256").update(content3).digest("hex");
-var MAX_SNAPSHOT_ENTRIES = 1e4;
-var MAX_SNAPSHOT_DEPTH = 16;
-var MAX_SNAPSHOT_FILE_BYTES = 4194304;
-var MAX_SNAPSHOT_TOTAL_BYTES = 67108864;
-var failure8 = (code, path, message) => fail([createError(code, path, message)]);
-var inside6 = (root, candidate) => {
-  const fromRoot = relative7(root, candidate);
-  return fromRoot === "" || fromRoot !== ".." && !fromRoot.startsWith(`..${sep7}`) && !isAbsolute9(fromRoot);
-};
-var fileState = async (path) => {
-  try {
-    return await lstat7(path);
-  } catch (error) {
-    if (error.code === "ENOENT") return null;
-    throw error;
-  }
-};
-var pathError2 = (code) => Object.assign(new Error(code), { code });
-var lifecyclePaths = async (repositoryRoot, { allowMissing = false } = {}) => {
-  if (typeof repositoryRoot !== "string" || !isAbsolute9(repositoryRoot)) throw pathError2("LAYOUT_ROOT_INVALID");
-  const lexicalRoot = resolve6(repositoryRoot);
-  const rootState = await lstat7(lexicalRoot);
-  const physicalRoot = await realpath8(lexicalRoot);
-  if (!rootState.isDirectory() || rootState.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
-  const docsLexical = join7(physicalRoot, "docs");
-  const docsState = await lstat7(docsLexical);
-  const docsRoot = await realpath8(docsLexical);
-  if (!docsState.isDirectory() || docsState.isSymbolicLink() || !inside6(physicalRoot, docsRoot)) {
-    throw pathError2("PATH_SYMLINK_ESCAPE");
-  }
-  const lifecycleLexical = join7(docsRoot, "project-lifecycle");
-  const lifecycleState = await fileState(lifecycleLexical);
-  if (lifecycleState === null && allowMissing) {
-    return {
-      projectRoot: physicalRoot,
-      docsRoot,
-      lifecycleRoot: lifecycleLexical,
-      exists: false
-    };
-  }
-  if (lifecycleState === null) throw pathError2("LAYOUT_ROOT_INVALID");
-  const lifecycleRoot = await realpath8(lifecycleLexical);
-  if (!lifecycleState.isDirectory() || lifecycleState.isSymbolicLink() || !inside6(physicalRoot, lifecycleRoot)) {
-    throw pathError2("PATH_SYMLINK_ESCAPE");
-  }
-  return { projectRoot: physicalRoot, docsRoot, lifecycleRoot, exists: true };
-};
-var snapshotTree = async (lifecycleRoot, operationOverrides = {}) => {
-  const rootState = await lstat7(lifecycleRoot);
-  const rootReal = await realpath8(lifecycleRoot);
-  if (!rootState.isDirectory() || rootState.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
-  const operations = { lstat: lstat7, open: open4, opendir: opendir4, readlink, realpath: realpath8, ...operationOverrides };
-  const entries = [];
-  let discoveredEntries = 0;
-  let totalBytes = 0;
-  const readBoundedFile2 = async (path) => {
-    const handle = await operations.open(path, "r");
-    try {
-      const buffer = Buffer.alloc(MAX_SNAPSHOT_FILE_BYTES + 1);
-      let bytesRead = 0;
-      while (bytesRead < buffer.length) {
-        const result = await handle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);
-        if (result.bytesRead === 0) break;
-        bytesRead += result.bytesRead;
-      }
-      if (bytesRead > MAX_SNAPSHOT_FILE_BYTES || totalBytes + bytesRead > MAX_SNAPSHOT_TOTAL_BYTES) {
-        throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
-      }
-      totalBytes += bytesRead;
-      return buffer.subarray(0, bytesRead);
-    } finally {
-      await handle.close();
-    }
-  };
-  const visit = async (directory, prefix = "", depth = 0) => {
-    if (depth > MAX_SNAPSHOT_DEPTH) throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
-    const children = [];
-    for await (const child of await operations.opendir(directory)) {
-      discoveredEntries += 1;
-      if (discoveredEntries > MAX_SNAPSHOT_ENTRIES) throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
-      children.push(child);
-    }
-    children.sort((left, right) => compareCodePoints(left.name, right.name));
-    for (const child of children) {
-      const absolute = join7(directory, child.name);
-      const locator = prefix ? `${prefix}/${child.name}` : child.name;
-      const state = await operations.lstat(absolute);
-      if (state.isDirectory() && !state.isSymbolicLink()) {
-        const physical = await operations.realpath(absolute);
-        if (!inside6(rootReal, physical)) throw pathError2("PATH_SYMLINK_ESCAPE");
-        entries.push({ locator: `${locator}/`, type: "directory" });
-        await visit(physical, locator, depth + 1);
-      } else if (state.isFile()) {
-        if (state.size > MAX_SNAPSHOT_FILE_BYTES) throw pathError2("LAYOUT_TREE_LIMIT_EXCEEDED");
-        entries.push({ locator, type: "file", hash: hash(await readBoundedFile2(absolute)) });
-      } else if (state.isSymbolicLink()) {
-        let physical;
-        try {
-          physical = await operations.realpath(absolute);
-        } catch {
-          throw pathError2("PATH_SYMLINK_ESCAPE");
-        }
-        if (!inside6(rootReal, physical)) throw pathError2("PATH_SYMLINK_ESCAPE");
-        entries.push({ locator, type: "symlink", target: await operations.readlink(absolute) });
-      } else {
-        throw pathError2("LAYOUT_ROOT_INVALID");
-      }
-    }
-  };
-  await visit(rootReal);
-  const fingerprint = hash(JSON.stringify(entries));
-  return { fingerprint, entries };
-};
-var inspectLifecycleTree = async ({ repositoryRoot, snapshotOperations } = {}) => {
-  try {
-    const { lifecycleRoot } = await lifecyclePaths(repositoryRoot);
-    return ok(await snapshotTree(lifecycleRoot, snapshotOperations));
-  } catch (error) {
-    return failure8(
-      error?.code ?? "LAYOUT_ROOT_INVALID",
-      "/",
-      "The lifecycle tree must be a bounded regular directory."
-    );
-  }
-};
-var validateInputs = ({
-  repositoryRoot,
-  candidateFiles,
-  candidateDirectories = [],
-  pruneDirectories = [],
-  deleteLocators,
-  validateCandidate
-}) => {
-  if (typeof repositoryRoot !== "string" || !isAbsolute9(repositoryRoot) || !Array.isArray(candidateFiles) || !Array.isArray(candidateDirectories) || !Array.isArray(deleteLocators) || !Array.isArray(pruneDirectories) || typeof validateCandidate !== "function") {
-    return failure8("LAYOUT_INPUT_INVALID", "/", "A bounded repository transaction input is required.");
-  }
-  const locators = /* @__PURE__ */ new Set();
-  const repositoryIds = /* @__PURE__ */ new Set();
-  try {
-    for (const [index2, entry2] of candidateFiles.entries()) {
-      if (!entry2 || typeof entry2 !== "object" || Array.isArray(entry2) || !(entry2.repository_id === null || typeof entry2.repository_id === "string") || typeof entry2.content !== "string" || typeof entry2.validate !== "function") {
-        return failure8("LAYOUT_INPUT_INVALID", `/candidateFiles/${index2}`, "Every candidate file requires repository ownership, content, and validation.");
-      }
-      assertBoundedRelativePath(entry2.locator);
-      if (locators.has(entry2.locator)) return failure8("LAYOUT_INPUT_INVALID", `/candidateFiles/${index2}/locator`, "Candidate locators must be unique.");
-      locators.add(entry2.locator);
-      repositoryIds.add(entry2.repository_id ?? "<governance>");
-    }
-    for (const [index2, locator] of deleteLocators.entries()) {
-      assertBoundedRelativePath(locator);
-      if (locators.has(locator)) return failure8("LAYOUT_INPUT_INVALID", `/deleteLocators/${index2}`, "A locator cannot be written and deleted together.");
-      if (deleteLocators.indexOf(locator) !== index2) return failure8("LAYOUT_INPUT_INVALID", `/deleteLocators/${index2}`, "Delete locators must be unique.");
-    }
-    for (const [index2, locator] of candidateDirectories.entries()) {
-      assertBoundedRelativePath(locator);
-      if (candidateDirectories.indexOf(locator) !== index2) return failure8("LAYOUT_INPUT_INVALID", `/candidateDirectories/${index2}`, "Candidate directories must be unique.");
-      if (locators.has(locator) || deleteLocators.includes(locator)) {
-        return failure8("LAYOUT_INPUT_INVALID", `/candidateDirectories/${index2}`, "Candidate directories cannot overlap file writes or deletes.");
-      }
-    }
-    for (const [index2, locator] of pruneDirectories.entries()) {
-      assertBoundedRelativePath(locator);
-      if (pruneDirectories.indexOf(locator) !== index2 || candidateDirectories.includes(locator) || locators.has(locator) || deleteLocators.includes(locator)) {
-        return failure8("LAYOUT_INPUT_INVALID", `/pruneDirectories/${index2}`, "Pruned directories must be unique and separate from candidate paths.");
-      }
-    }
-  } catch {
-    return failure8("PATH_ESCAPE", "/", "Every layout locator must be a bounded portable relative path.");
-  }
-  if (repositoryIds.size > 1) {
-    return failure8("LAYOUT_INPUT_INVALID", "/candidateFiles", "One transaction may publish only one repository shard.");
-  }
-  return ok();
-};
-var rollbackInitialization = async ({ lifecycleRoot, stagingRoot, candidateFingerprint }) => {
-  try {
-    if (await fingerprintAt(lifecycleRoot, candidateFingerprint)) {
-      if (await fileState(stagingRoot)) return recoveryFailure({ lifecycleRoot, stagingRoot });
-      try {
-        await rename2(lifecycleRoot, stagingRoot);
-      } catch {
-        if (await fileState(lifecycleRoot) || !await fingerprintAt(stagingRoot, candidateFingerprint)) {
-          return recoveryFailure({ lifecycleRoot, stagingRoot });
-        }
-      }
-    } else if (await fileState(lifecycleRoot)) {
-      return recoveryFailure({ lifecycleRoot, stagingRoot });
-    }
-    await cleanupStage(stagingRoot);
-    return ok();
-  } catch {
-    return recoveryFailure({ lifecycleRoot, stagingRoot });
-  }
-};
-var ensureParentDirectories = async (root, locator) => {
-  const parent = dirname4(locator);
-  if (parent === ".") return;
-  let current = root;
-  for (const segment of parent.split("/")) {
-    current = join7(current, segment);
-    const state = await fileState(current);
-    if (state === null) await mkdir2(current);
-    else if (!state.isDirectory() || state.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
-    const physical = await realpath8(current);
-    if (!inside6(root, physical)) throw pathError2("PATH_SYMLINK_ESCAPE");
-  }
-};
-var fingerprintAt = async (path, expected) => {
-  try {
-    return (await snapshotTree(path)).fingerprint === expected;
-  } catch {
-    return false;
-  }
-};
-var cleanupStage = async (stage) => {
-  if (stage && await fileState(stage)) await rm(stage, { recursive: true, force: true });
-};
-var preserveTreeTimestamps = async (sourceRoot, targetRoot, entries) => {
-  const ordinary = entries.filter(({ type }) => type === "file" || type === "directory").sort((left, right) => right.locator.length - left.locator.length);
-  for (const entry2 of ordinary) {
-    const locator = entry2.type === "directory" ? entry2.locator.slice(0, -1) : entry2.locator;
-    const source = await stat(join7(sourceRoot, locator), { bigint: true });
-    await utimes(
-      join7(targetRoot, locator),
-      Number(source.atimeNs) / 1e9,
-      Number(source.mtimeNs) / 1e9
-    );
-  }
-};
-var recoveryFailure = async ({ lifecycleRoot, stagingRoot, backupRoot }) => {
-  const labels = [];
-  for (const [label, path] of [["backup", backupRoot], ["live", lifecycleRoot], ["stage", stagingRoot]]) {
-    if (path && await fileState(path).catch(() => true)) labels.push(label);
-  }
-  return failure8(
-    "LAYOUT_RESTORE_FAILED",
-    "/recovery",
-    `Recovery required; preserved artifacts: ${labels.join(", ") || "unknown"}.`
-  );
-};
-var restoreOriginal = async ({
-  lifecycleRoot,
-  stagingRoot,
-  backupRoot,
-  originalFingerprint,
-  candidateFingerprint,
-  restoreRename
-}) => {
-  try {
-    if (await fingerprintAt(lifecycleRoot, originalFingerprint)) {
-      await cleanupStage(stagingRoot);
-      return ok();
-    }
-    if (!backupRoot || !await fingerprintAt(backupRoot, originalFingerprint)) {
-      return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
-    }
-    if (await fingerprintAt(lifecycleRoot, candidateFingerprint)) {
-      if (await fileState(stagingRoot)) return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
-      await rename2(lifecycleRoot, stagingRoot);
-      if (await fileState(lifecycleRoot) || !await fingerprintAt(stagingRoot, candidateFingerprint)) {
-        return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
-      }
-    } else if (await fileState(lifecycleRoot)) {
-      return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
-    }
-    try {
-      await restoreRename(backupRoot, lifecycleRoot);
-    } catch {
-      if (!await fingerprintAt(lifecycleRoot, originalFingerprint) || await fileState(backupRoot)) {
-        return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
-      }
-    }
-    if (!await fingerprintAt(lifecycleRoot, originalFingerprint) || await fileState(backupRoot)) {
-      return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
-    }
-    await cleanupStage(stagingRoot);
-    return ok();
-  } catch {
-    return recoveryFailure({ lifecycleRoot, stagingRoot, backupRoot });
-  }
-};
-var applyLayoutTransaction = async (input = {}, operations = {}) => {
-  const inputValidation = validateInputs(input);
-  if (!inputValidation.ok) return inputValidation;
-  const write = operations.atomicWriteValidated ?? atomicWriteValidated;
-  const publishRename = operations.rename ?? rename2;
-  const restoreRename = operations.restoreRename ?? rename2;
-  const copyTree = operations.copy ?? cp;
-  const afterPublish = operations.afterPublish ?? (async () => {
-  });
-  const inspectTransition = operations.inspectTransition ?? (async () => ({ ok: true }));
-  const removeBackup = operations.removeBackup ?? ((path) => rm(path, { recursive: true, force: true }));
-  let paths;
-  let current;
-  try {
-    paths = await lifecyclePaths(input.repositoryRoot, { allowMissing: input.initialize === true });
-    current = paths.exists ? await snapshotTree(paths.lifecycleRoot) : { fingerprint: hash(JSON.stringify([])), entries: [] };
-  } catch (error) {
-    return failure8(error?.code ?? "LAYOUT_ROOT_INVALID", "/", "The lifecycle tree could not be inspected safely.");
-  }
-  if (input.expectedFingerprint && input.expectedFingerprint !== current.fingerprint) {
-    return failure8("LAYOUT_FINGERPRINT_STALE", "/expectedFingerprint", "The lifecycle tree changed before publication.");
-  }
-  const currentByLocator = new Map(current.entries.map((entry2) => [entry2.locator, entry2]));
-  const candidateDirectories = input.candidateDirectories ?? [];
-  const writes = input.candidateFiles.filter((entry2) => currentByLocator.get(entry2.locator)?.hash !== hash(entry2.content)).sort((left, right) => compareCodePoints(left.locator, right.locator));
-  const deletes = input.deleteLocators.filter((locator) => currentByLocator.has(locator) || currentByLocator.has(`${locator}/`)).sort(compareCodePoints);
-  const directoriesToCreate = candidateDirectories.filter((locator) => currentByLocator.get(`${locator}/`)?.type !== "directory").sort(compareCodePoints);
-  const directoriesToPrune = (input.pruneDirectories ?? []).filter((locator) => currentByLocator.get(`${locator}/`)?.type === "directory").sort((left, right) => right.length - left.length || compareCodePoints(left, right));
-  const unchanged = [
-    ...input.candidateFiles.filter((entry2) => !writes.includes(entry2)).map(({ locator }) => locator),
-    ...input.deleteLocators.filter((locator) => !deletes.includes(locator)),
-    ...candidateDirectories.filter((locator) => !directoriesToCreate.includes(locator)).map((locator) => `${locator}/`),
-    ...(input.pruneDirectories ?? []).filter((locator) => !directoriesToPrune.includes(locator)).map((locator) => `${locator}/`)
-  ].sort(compareCodePoints);
-  if (writes.length === 0 && deletes.length === 0 && directoriesToCreate.length === 0 && directoriesToPrune.length === 0) {
-    try {
-      const validation = await input.validateCandidate({ lifecycleRoot: paths.lifecycleRoot });
-      if (validation?.ok !== true) return failure8("LAYOUT_CANDIDATE_INVALID", "/", "The complete lifecycle candidate is invalid.");
-      return ok({ changed: [], unchanged, cleanup_pending: false, recovery_artifacts: [] });
-    } catch {
-      return failure8("LAYOUT_CANDIDATE_INVALID", "/", "The complete lifecycle candidate is invalid.");
-    }
-  }
-  let stagingRoot;
-  let backupRoot;
-  let candidateFingerprint;
-  let publicationStarted = false;
-  let initializationPublished = false;
-  try {
-    stagingRoot = await mkdtemp(join7(paths.docsRoot, ".project-lifecycle-layout-stage-"));
-    if (paths.exists) {
-      await copyTree(paths.lifecycleRoot, stagingRoot, {
-        recursive: true,
-        dereference: false,
-        preserveTimestamps: true,
-        force: false,
-        verbatimSymlinks: true
-      });
-      await preserveTreeTimestamps(paths.lifecycleRoot, stagingRoot, current.entries);
-    }
-    await snapshotTree(stagingRoot);
-    for (const locator of directoriesToCreate) {
-      await ensureParentDirectories(stagingRoot, `${locator}/placeholder`);
-      const target = join7(stagingRoot, locator);
-      const state = await fileState(target);
-      if (state === null) await mkdir2(target);
-      else if (!state.isDirectory() || state.isSymbolicLink()) throw pathError2("PATH_SYMLINK_ESCAPE");
-    }
-    for (const locator of deletes) {
-      const target = await resolveInside(stagingRoot, locator);
-      await rm(target, { recursive: true, force: true });
-    }
-    for (const locator of directoriesToPrune) {
-      const target = await resolveInside(stagingRoot, locator);
-      await rmdir(target);
-    }
-    for (const entry2 of writes) {
-      await ensureParentDirectories(stagingRoot, entry2.locator);
-      await write({ root: stagingRoot, target: entry2.locator, content: entry2.content, validate: entry2.validate });
-    }
-    const candidateValidation = await input.validateCandidate({ lifecycleRoot: stagingRoot });
-    if (candidateValidation?.ok !== true) {
-      await cleanupStage(stagingRoot);
-      return failure8("LAYOUT_CANDIDATE_INVALID", "/", "The complete lifecycle candidate is invalid.");
-    }
-    candidateFingerprint = (await snapshotTree(stagingRoot)).fingerprint;
-    const originalIsCurrent = paths.exists ? await fingerprintAt(paths.lifecycleRoot, current.fingerprint) : await fileState(paths.lifecycleRoot) === null;
-    if (!originalIsCurrent) {
-      await cleanupStage(stagingRoot);
-      return failure8("LAYOUT_FINGERPRINT_STALE", "/expectedFingerprint", "The lifecycle tree changed before publication.");
-    }
-    if (!paths.exists) {
-      try {
-        await publishRename(stagingRoot, paths.lifecycleRoot);
-      } catch {
-        if (await fileState(stagingRoot) || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) {
-          throw pathError2("LAYOUT_TRANSACTION_FAILED");
-        }
-      }
-      publicationStarted = true;
-      initializationPublished = true;
-      const liveValidation2 = await input.validateCandidate({ lifecycleRoot: paths.lifecycleRoot });
-      if (liveValidation2?.ok !== true || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) {
-        throw pathError2("LAYOUT_TRANSACTION_FAILED");
-      }
-      await afterPublish({ lifecycleRoot: paths.lifecycleRoot });
-      return ok({
-        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
-        unchanged,
-        cleanup_pending: false,
-        recovery_artifacts: []
-      });
-    }
-    backupRoot = await mkdtemp(join7(paths.docsRoot, ".project-lifecycle-layout-backup-"));
-    await rmdir(backupRoot);
-    try {
-      await publishRename(paths.lifecycleRoot, backupRoot);
-    } catch {
-      if (await fileState(paths.lifecycleRoot) || !await fingerprintAt(backupRoot, current.fingerprint)) throw pathError2("LAYOUT_TRANSACTION_FAILED");
-    }
-    publicationStarted = true;
-    if (await fileState(paths.lifecycleRoot) || !await fingerprintAt(backupRoot, current.fingerprint)) {
-      throw pathError2("LAYOUT_TRANSACTION_FAILED");
-    }
-    if ((await inspectTransition({
-      phase: "backup-moved",
-      lifecycleRoot: paths.lifecycleRoot,
-      stagingRoot,
-      backupRoot
-    }))?.ok !== true) throw pathError2("LAYOUT_TRANSACTION_FAILED");
-    try {
-      await publishRename(stagingRoot, paths.lifecycleRoot);
-    } catch {
-      if (await fileState(stagingRoot) || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) throw pathError2("LAYOUT_TRANSACTION_FAILED");
-    }
-    if ((await inspectTransition({
-      phase: "candidate-moved",
-      lifecycleRoot: paths.lifecycleRoot,
-      stagingRoot,
-      backupRoot
-    }))?.ok !== true) throw pathError2("LAYOUT_TRANSACTION_FAILED");
-    const liveValidation = await input.validateCandidate({ lifecycleRoot: paths.lifecycleRoot });
-    if (liveValidation?.ok !== true || !await fingerprintAt(paths.lifecycleRoot, candidateFingerprint)) {
-      throw pathError2("LAYOUT_TRANSACTION_FAILED");
-    }
-    await afterPublish({ lifecycleRoot: paths.lifecycleRoot });
-    if (operations.retainBackup === true) {
-      return ok({
-        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
-        unchanged,
-        cleanup_pending: true,
-        recovery_artifacts: ["backup"],
-        retained_publication: {
-          lifecycle_root: paths.lifecycleRoot,
-          backup_root: backupRoot,
-          original_fingerprint: current.fingerprint,
-          candidate_fingerprint: candidateFingerprint
-        }
-      });
-    }
-    try {
-      await removeBackup(backupRoot);
-    } catch {
-    }
-    if (await fileState(backupRoot)) {
-      return ok({
-        changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
-        unchanged,
-        cleanup_pending: true,
-        recovery_artifacts: ["backup"]
-      });
-    }
-    backupRoot = null;
-    return ok({
-      changed: [...writes.map(({ locator }) => locator), ...directoriesToCreate.map((locator) => `${locator}/`), ...directoriesToPrune.map((locator) => `${locator}/`), ...deletes].sort(compareCodePoints),
-      unchanged,
-      cleanup_pending: false,
-      recovery_artifacts: []
-    });
-  } catch (error) {
-    if (publicationStarted) {
-      const restored = initializationPublished ? await rollbackInitialization({
-        lifecycleRoot: paths.lifecycleRoot,
-        stagingRoot,
-        candidateFingerprint
-      }) : await restoreOriginal({
-        lifecycleRoot: paths.lifecycleRoot,
-        stagingRoot,
-        backupRoot,
-        originalFingerprint: current.fingerprint,
-        candidateFingerprint,
-        restoreRename
-      });
-      if (!restored.ok) return restored;
-    } else {
-      await cleanupStage(stagingRoot).catch(() => {
-      });
-    }
-    return failure8(
-      error?.code === "PATH_ESCAPE" || error?.code === "PATH_SYMLINK_ESCAPE" ? error.code : "LAYOUT_TRANSACTION_FAILED",
-      "/",
-      "The lifecycle layout transaction could not be completed."
-    );
-  }
-};
-var finalizeRetainedLayout = async ({ retained_publication: publication } = {}, operations = {}) => {
-  if (!publication?.backup_root) return failure8("LAYOUT_INPUT_INVALID", "/retained_publication", "A retained publication is required.");
-  try {
-    const removeBackup = operations.removeBackup ?? ((path) => rm(path, { recursive: true, force: true }));
-    if (!await fingerprintAt(publication.lifecycle_root, publication.candidate_fingerprint)) {
-      return failure8("LAYOUT_FINGERPRINT_STALE", "/retained_publication", "The published candidate changed before finalization.");
-    }
-    await removeBackup(publication.backup_root);
-    return await fileState(publication.backup_root) ? failure8("LAYOUT_TRANSACTION_FAILED", "/retained_publication", "The retained backup could not be finalized.") : ok(null);
-  } catch {
-    return failure8("LAYOUT_TRANSACTION_FAILED", "/retained_publication", "The retained backup could not be finalized.");
-  }
-};
-var rollbackRetainedLayout = async ({ retained_publication: publication } = {}, operations = {}) => {
-  if (!publication?.backup_root) return failure8("LAYOUT_INPUT_INVALID", "/retained_publication", "A retained publication is required.");
-  let stagingRoot;
-  try {
-    stagingRoot = await mkdtemp(join7(dirname4(publication.lifecycle_root), ".project-lifecycle-layout-rollback-"));
-    await rmdir(stagingRoot);
-  } catch {
-    return failure8("LAYOUT_RESTORE_FAILED", "/recovery", "Recovery staging could not be initialized.");
-  }
-  return restoreOriginal({
-    lifecycleRoot: publication.lifecycle_root,
-    stagingRoot,
-    backupRoot: publication.backup_root,
-    originalFingerprint: publication.original_fingerprint,
-    candidateFingerprint: publication.candidate_fingerprint,
-    restoreRename: operations.restoreRename ?? rename2
-  });
 };
 
 // scripts/delivery/delivery-layout-migration.mjs
@@ -27413,8 +28141,8 @@ var MAX_BYTES = 262144;
 var ID5 = /^[a-z][a-z0-9-]*$/u;
 var LANGUAGES = ["en", "zh-CN"];
 var ROOT_KINDS2 = /* @__PURE__ */ new Set(["prd", "non-prd-delivery"]);
-var failure9 = (code, path, message) => fail([createError(code, path, message)]);
-var hash2 = (value) => `sha256:${createHash4("sha256").update(value).digest("hex")}`;
+var failure10 = (code, path, message) => fail([createError(code, path, message)]);
+var hash3 = (value) => `sha256:${createHash5("sha256").update(value).digest("hex")}`;
 var freeze2 = (value) => {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
     Object.freeze(value);
@@ -27422,13 +28150,13 @@ var freeze2 = (value) => {
   }
   return value;
 };
-var inside7 = (root, candidate) => {
-  const path = relative8(root, candidate);
-  return path === "" || path !== ".." && !path.startsWith(`..${sep8}`) && !isAbsolute10(path);
+var inside8 = (root, candidate) => {
+  const path = relative9(root, candidate);
+  return path === "" || path !== ".." && !path.startsWith(`..${sep9}`) && !isAbsolute11(path);
 };
 var canonical = (value) => JSON.stringify(value);
-var renderDocument = (frontmatter, body) => `---
-${(0, import_yaml2.stringify)(frontmatter, { lineWidth: 0 }).trimEnd()}
+var renderDocument2 = (frontmatter, body) => `---
+${(0, import_yaml3.stringify)(frontmatter, { lineWidth: 0 }).trimEnd()}
 ---
 ${body.startsWith("\n") ? body : `
 ${body}`}`;
@@ -27442,23 +28170,23 @@ var parseDocument2 = (source) => {
   return { frontmatter: parsed.value, source: normalized, body: normalized.slice(closing + 5) };
 };
 var rootsFor = async (rootValue) => {
-  if (typeof rootValue !== "string" || !isAbsolute10(rootValue)) throw new Error("Absolute root required.");
-  const projectState = await lstat8(resolve7(rootValue));
-  const projectRoot = await realpath9(resolve7(rootValue));
-  const docsState = await lstat8(join8(projectRoot, "docs"));
-  const docsRoot = await realpath9(join8(projectRoot, "docs"));
-  const lifecycleState = await lstat8(join8(docsRoot, "project-lifecycle"));
-  const lifecycleRoot = await realpath9(join8(docsRoot, "project-lifecycle"));
-  if (!projectState.isDirectory() || projectState.isSymbolicLink() || !docsState.isDirectory() || docsState.isSymbolicLink() || !lifecycleState.isDirectory() || lifecycleState.isSymbolicLink() || !inside7(projectRoot, lifecycleRoot)) throw new Error("Bounded lifecycle root required.");
+  if (typeof rootValue !== "string" || !isAbsolute11(rootValue)) throw new Error("Absolute root required.");
+  const projectState = await lstat9(resolve9(rootValue));
+  const projectRoot = await realpath10(resolve9(rootValue));
+  const docsState = await lstat9(join9(projectRoot, "docs"));
+  const docsRoot = await realpath10(join9(projectRoot, "docs"));
+  const lifecycleState = await lstat9(join9(docsRoot, "project-lifecycle"));
+  const lifecycleRoot = await realpath10(join9(docsRoot, "project-lifecycle"));
+  if (!projectState.isDirectory() || projectState.isSymbolicLink() || !docsState.isDirectory() || docsState.isSymbolicLink() || !lifecycleState.isDirectory() || lifecycleState.isSymbolicLink() || !inside8(projectRoot, lifecycleRoot)) throw new Error("Bounded lifecycle root required.");
   return { projectRoot, lifecycleRoot };
 };
 var readLegacyRoot = async (lifecycleRoot, rootLocator, issues, operations, inventoryState) => {
   if (inventoryState.exceeded) return [];
-  const path = join8(lifecycleRoot, rootLocator);
+  const path = join9(lifecycleRoot, rootLocator);
   try {
-    const state = await lstat8(path);
-    const physical = await realpath9(path);
-    if (!state.isDirectory() || state.isSymbolicLink() || !inside7(lifecycleRoot, physical)) throw new Error();
+    const state = await lstat9(path);
+    const physical = await realpath10(path);
+    if (!state.isDirectory() || state.isSymbolicLink() || !inside8(lifecycleRoot, physical)) throw new Error();
     const files = [];
     for await (const entry2 of await operations.opendir(physical)) {
       inventoryState.entries += 1;
@@ -27471,7 +28199,7 @@ var readLegacyRoot = async (lifecycleRoot, rootLocator, issues, operations, inve
         issues.push({ code: "MIXED_LAYOUT", artifact_id: null, locator });
         continue;
       }
-      files.push({ path: join8(physical, entry2.name), locator, name: entry2.name, archived: rootLocator.startsWith("archive/") });
+      files.push({ path: join9(physical, entry2.name), locator, name: entry2.name, archived: rootLocator.startsWith("archive/") });
     }
     return files;
   } catch (error) {
@@ -27486,11 +28214,11 @@ var linksFrom = (body, source) => [...body.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+
     authority = new URL(href, "https://external.invalid").host || null;
   } catch {
   }
-  return { source, scheme, authority, href_hash: hash2(href) };
+  return { source, scheme, authority, href_hash: hash3(href) };
 });
 var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], legacyOperations = {} } = {}) => {
   if (!Array.isArray(mappings) || mappings.length > 200) {
-    return failure9("DELIVERY_MIGRATION_INPUT_INVALID", "/owner_mappings", "Owner mappings must be one bounded array.");
+    return failure10("DELIVERY_MIGRATION_INPUT_INVALID", "/owner_mappings", "Owner mappings must be one bounded array.");
   }
   let projectRoot;
   let lifecycleRoot;
@@ -27500,7 +28228,7 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], 
     tree = await inspectLifecycleTree({ repositoryRoot: projectRoot });
     if (!tree.ok) throw new Error();
   } catch {
-    return failure9("DELIVERY_MIGRATION_ROOT_INVALID", "/root", "Migration preview requires one bounded regular project root.");
+    return failure10("DELIVERY_MIGRATION_ROOT_INVALID", "/root", "Migration preview requires one bounded regular project root.");
   }
   const needsUser = [];
   let files;
@@ -27516,12 +28244,12 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], 
       files = [];
     }
   } catch {
-    return failure9("DELIVERY_MIGRATION_INVENTORY_INVALID", "/delivery", "Legacy delivery inventory is unsafe.");
+    return failure10("DELIVERY_MIGRATION_INVENTORY_INVALID", "/delivery", "Legacy delivery inventory is unsafe.");
   }
   const grouped = /* @__PURE__ */ new Map();
   const views = {};
   for (const file of files.slice(0, MAX_FILES + 1).sort((a, b) => compareCodePoints(a.locator, b.locator))) {
-    const state = await lstat8(file.path);
+    const state = await lstat9(file.path);
     if (state.size > MAX_BYTES) {
       needsUser.push({ code: "DOCUMENT_TOO_LARGE", artifact_id: null, locator: file.locator });
       continue;
@@ -27534,7 +28262,7 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], 
       needsUser.push({ code: "MIXED_LAYOUT", artifact_id: null, locator: file.locator });
       continue;
     }
-    const bytes = await readFile8(file.path);
+    const bytes = await readFile9(file.path);
     const document3 = parseDocument2(bytes.toString("utf8"));
     if (!document3) {
       needsUser.push({ code: "FRONTMATTER_INVALID", artifact_id: null, locator: file.locator });
@@ -27549,7 +28277,7 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], 
     const key = `${file.archived ? "archive" : "active"}:${id}`;
     const pair = grouped.get(key) ?? {};
     if (pair[language]) needsUser.push({ code: "DUPLICATE_ID", artifact_id: id, locator: file.locator });
-    pair[language] = { ...file, ...document3, body_hash: hash2(bytes) };
+    pair[language] = { ...file, ...document3, body_hash: hash3(bytes) };
     grouped.set(key, pair);
   }
   const supplied = /* @__PURE__ */ new Map();
@@ -27563,7 +28291,7 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], 
   const completeIds = /* @__PURE__ */ new Set();
   for (const [key, pair] of grouped) {
     const id = key.slice(key.indexOf(":") + 1);
-    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual5(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
+    if (!pair.en || !pair["zh-CN"] || !isDeepStrictEqual6(pair.en.frontmatter, pair["zh-CN"].frontmatter)) {
       needsUser.push({ code: "PAIR_INCOMPLETE", artifact_id: id, locator: pair.en?.locator ?? pair["zh-CN"]?.locator ?? null });
       continue;
     }
@@ -27623,7 +28351,7 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], 
       owner_artifact_id: null,
       from: { en: views.en.locator, "zh-CN": views["zh-CN"].locator },
       to: alignmentReviewPair(),
-      body_hashes: { en: hash2(await readFile8(views.en.path)), "zh-CN": hash2(await readFile8(views["zh-CN"].path)) }
+      body_hashes: { en: hash3(await readFile9(views.en.path)), "zh-CN": hash3(await readFile9(views["zh-CN"].path)) }
     });
   }
   moves.sort((a, b) => compareCodePoints(a.artifact_id, b.artifact_id));
@@ -27655,7 +28383,7 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], 
   managedReferenceRewrites.sort((a, b) => compareCodePoints(`${a.source}:${a.href}`, `${b.source}:${b.href}`));
   needsUser.sort((a, b) => compareCodePoints(`${a.code}:${a.artifact_id ?? ""}:${a.locator ?? ""}`, `${b.code}:${b.artifact_id ?? ""}:${b.locator ?? ""}`));
   unresolvedExternalLinks.sort((a, b) => compareCodePoints(`${a.source}:${a.href}`, `${b.source}:${b.href}`));
-  const candidateDirectories = [...new Set(moves.flatMap(({ to }) => LANGUAGES.map((language) => dirname5(to[language]))))].sort(compareCodePoints);
+  const candidateDirectories = [...new Set(moves.flatMap(({ to }) => LANGUAGES.map((language) => dirname6(to[language]))))].sort(compareCodePoints);
   const ownerRoots = moves.filter(({ artifact_kind: kind }) => ROOT_KINDS2.has(kind));
   const generatedWrites = [
     "delivery/INDEX-en.md",
@@ -27671,7 +28399,7 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], 
   const result = {
     route: needsUser.length > 0 ? "NEEDS_USER" : "NON_PRD_DELIVERY",
     selected_solution_id: "solution-owner-centric-delivery-layout-v2",
-    source_fingerprint: hash2(canonical(tree.value.entries)),
+    source_fingerprint: hash3(canonical(tree.value.entries)),
     moves,
     managed_reference_rewrites: managedReferenceRewrites,
     unresolved_external_links: unresolvedExternalLinks,
@@ -27680,7 +28408,7 @@ var inspectLegacyDeliveryLayout = async ({ root, owner_mappings: mappings = [], 
     generated_writes: generatedWrites,
     removals
   };
-  result.plan_hash = hash2(canonical(result));
+  result.plan_hash = hash3(canonical(result));
   return ok(freeze2(result));
 };
 var replaceManagedLinks = (source, rewrites) => rewriteMarkdownOutsideCode(source, (text4) => {
@@ -27722,7 +28450,7 @@ var inventoryForCandidate = (items) => {
 };
 var buildDeliveryMigrationCandidate = async ({ root, preview } = {}) => {
   if (!preview || preview.route !== "NON_PRD_DELIVERY" || !Array.isArray(preview.moves)) {
-    return failure9("DELIVERY_MIGRATION_INPUT_INVALID", "/preview", "One complete migration preview is required.");
+    return failure10("DELIVERY_MIGRATION_INPUT_INVALID", "/preview", "One complete migration preview is required.");
   }
   let lifecycleRoot;
   let tree;
@@ -27730,31 +28458,31 @@ var buildDeliveryMigrationCandidate = async ({ root, preview } = {}) => {
     ({ lifecycleRoot } = await rootsFor(root));
     tree = await inspectLifecycleTree({ repositoryRoot: root });
     if (!tree.ok || `sha256:${tree.value.fingerprint}` !== preview.source_fingerprint) {
-      return failure9("DELIVERY_MIGRATION_STALE", "/source_fingerprint", "Migration preview no longer matches the source tree.");
+      return failure10("DELIVERY_MIGRATION_STALE", "/source_fingerprint", "Migration preview no longer matches the source tree.");
     }
   } catch {
-    return failure9("DELIVERY_MIGRATION_ROOT_INVALID", "/root", "Migration candidate requires one bounded regular project root.");
+    return failure10("DELIVERY_MIGRATION_ROOT_INVALID", "/root", "Migration candidate requires one bounded regular project root.");
   }
   const files = [];
   const items = [];
   try {
     for (const move of preview.moves) {
       for (const language of LANGUAGES) {
-        const source = await readFile8(join8(lifecycleRoot, move.from[language]));
-        if (hash2(source) !== move.body_hashes[language]) {
-          return failure9("DELIVERY_MIGRATION_STALE", `/moves/${move.artifact_id}`, "A migration source changed after preview.");
+        const source = await readFile9(join9(lifecycleRoot, move.from[language]));
+        if (hash3(source) !== move.body_hashes[language]) {
+          return failure10("DELIVERY_MIGRATION_STALE", `/moves/${move.artifact_id}`, "A migration source changed after preview.");
         }
         let content3 = source.toString("utf8").replaceAll("\r\n", "\n");
         if (move.artifact_kind !== "generated-view") {
           const document3 = parseDocument2(content3);
-          if (!document3) return failure9("DELIVERY_MIGRATION_CANDIDATE_INVALID", `/moves/${move.artifact_id}`, "A migration source document is invalid.");
+          if (!document3) return failure10("DELIVERY_MIGRATION_CANDIDATE_INVALID", `/moves/${move.artifact_id}`, "A migration source document is invalid.");
           const frontmatter = {
             ...document3.frontmatter,
             schema_version: 2,
             ...move.owner_artifact_id === null ? {} : { owner_artifact_id: move.owner_artifact_id }
           };
           const rewrites = preview.managed_reference_rewrites.filter(({ source: locator }) => locator === move.from[language]);
-          content3 = renderDocument(frontmatter, replaceManagedLinks(document3.body, rewrites));
+          content3 = renderDocument2(frontmatter, replaceManagedLinks(document3.body, rewrites));
           if (language === "en") {
             items.push({
               artifact_id: move.artifact_id,
@@ -27771,7 +28499,7 @@ var buildDeliveryMigrationCandidate = async ({ root, preview } = {}) => {
           repository_id: null,
           locator: move.to[language],
           content: content3,
-          validate: async (candidate) => candidate === content3 ? ok(candidate) : failure9("DELIVERY_MIGRATION_CANDIDATE_INVALID", `/${move.to[language]}`, "Staged migration content changed.")
+          validate: async (candidate) => candidate === content3 ? ok(candidate) : failure10("DELIVERY_MIGRATION_CANDIDATE_INVALID", `/${move.to[language]}`, "Staged migration content changed.")
         });
       }
     }
@@ -27781,23 +28509,23 @@ var buildDeliveryMigrationCandidate = async ({ root, preview } = {}) => {
       repository_id: null,
       locator,
       content: content3,
-      validate: async (candidate) => candidate === content3 ? ok(candidate) : failure9("DELIVERY_MIGRATION_CANDIDATE_INVALID", `/${locator}`, "Staged delivery index changed.")
+      validate: async (candidate) => candidate === content3 ? ok(candidate) : failure10("DELIVERY_MIGRATION_CANDIDATE_INVALID", `/${locator}`, "Staged delivery index changed.")
     })));
     const marker = deliveryLayoutContent();
     files.push({
       repository_id: null,
       locator: "delivery/layout.json",
       content: marker,
-      validate: async (candidate) => candidate === marker ? ok(candidate) : failure9("DELIVERY_MIGRATION_CANDIDATE_INVALID", "/delivery/layout.json", "Staged delivery marker changed.")
+      validate: async (candidate) => candidate === marker ? ok(candidate) : failure10("DELIVERY_MIGRATION_CANDIDATE_INVALID", "/delivery/layout.json", "Staged delivery marker changed.")
     });
   } catch {
-    return failure9("DELIVERY_MIGRATION_CANDIDATE_INVALID", "/", "Migration candidate could not be built safely.");
+    return failure10("DELIVERY_MIGRATION_CANDIDATE_INVALID", "/", "Migration candidate could not be built safely.");
   }
   const targetLocators = new Set(files.map(({ locator }) => locator));
   const deleteLocators = [...new Set(preview.moves.flatMap(({ from }) => Object.values(from)))].filter((locator) => !targetLocators.has(locator)).sort(compareCodePoints);
   const candidateDirectories = [.../* @__PURE__ */ new Set([
     ...preview.candidate_directories,
-    ...files.map(({ locator }) => dirname5(locator))
+    ...files.map(({ locator }) => dirname6(locator))
   ])].filter((locator) => locator !== ".").sort(compareCodePoints);
   return ok({
     transaction: {
@@ -27813,7 +28541,7 @@ var buildDeliveryMigrationCandidate = async ({ root, preview } = {}) => {
           ...inventory.value.pairs,
           ...inventory.value.archived_pairs
         ].map(({ locator }) => locator));
-        return preview.moves.every(({ to }) => Object.values(to).every((locator) => locator.includes("/views/") || present.has(locator))) ? ok(inventory.value) : failure9("DELIVERY_MIGRATION_CANDIDATE_INVALID", "/", "Candidate inventory is incomplete.");
+        return preview.moves.every(({ to }) => Object.values(to).every((locator) => locator.includes("/views/") || present.has(locator))) ? ok(inventory.value) : failure10("DELIVERY_MIGRATION_CANDIDATE_INVALID", "/", "Candidate inventory is incomplete.");
       }
     }
   });
@@ -27823,7 +28551,7 @@ var validatePublishedDeliveryV2 = async ({ root, preview } = {}) => {
   try {
     ({ lifecycleRoot } = await rootsFor(root));
   } catch {
-    return failure9("DELIVERY_MIGRATION_ROOT_INVALID", "/root", "Published delivery validation requires one bounded regular project root.");
+    return failure10("DELIVERY_MIGRATION_ROOT_INVALID", "/root", "Published delivery validation requires one bounded regular project root.");
   }
   const inventory = await collectDeliveryInventory({ lifecycleRoot });
   if (!inventory.ok) return inventory;
@@ -27834,21 +28562,21 @@ var validatePublishedDeliveryV2 = async ({ root, preview } = {}) => {
   ].map((entry2) => typeof entry2 === "string" ? entry2 : entry2.locator));
   for (const move of preview?.moves ?? []) {
     if (!Object.values(move.to).every((locator) => present.has(locator))) {
-      return failure9("DELIVERY_MIGRATION_VALIDATION_FAILED", `/moves/${move.artifact_id}`, "A published migration target is missing.");
+      return failure10("DELIVERY_MIGRATION_VALIDATION_FAILED", `/moves/${move.artifact_id}`, "A published migration target is missing.");
     }
     for (const locator of Object.values(move.from)) {
       if (Object.values(move.to).includes(locator)) continue;
       try {
-        await lstat8(join8(lifecycleRoot, locator));
-        return failure9("DELIVERY_MIGRATION_VALIDATION_FAILED", `/moves/${move.artifact_id}`, "A legacy migration source remains published.");
+        await lstat9(join9(lifecycleRoot, locator));
+        return failure10("DELIVERY_MIGRATION_VALIDATION_FAILED", `/moves/${move.artifact_id}`, "A legacy migration source remains published.");
       } catch (error) {
-        if (error.code !== "ENOENT") return failure9("DELIVERY_MIGRATION_VALIDATION_FAILED", "/", "Published migration paths could not be verified.");
+        if (error.code !== "ENOENT") return failure10("DELIVERY_MIGRATION_VALIDATION_FAILED", "/", "Published migration paths could not be verified.");
       }
     }
   }
   return ok({
     layout_version: 2,
-    validation_ref: hash2(canonical({
+    validation_ref: hash3(canonical({
       moves: preview?.moves ?? [],
       owners: inventory.value.owners.map(({ artifact_id: id }) => id),
       feedbacks: inventory.value.feedbacks.map(({ artifact_id: id }) => id)
@@ -27857,18 +28585,18 @@ var validatePublishedDeliveryV2 = async ({ root, preview } = {}) => {
 };
 var migrateDeliveryLayout = async (input = {}, operations = {}) => {
   if (!isSafeReference(input.approval_ref) || !isSafeReference(input.backup_ref)) {
-    return failure9("DELIVERY_MIGRATION_APPROVAL_REQUIRED", "/approval_ref", "Migration requires explicit approval and a recoverable backup reference.");
+    return failure10("DELIVERY_MIGRATION_APPROVAL_REQUIRED", "/approval_ref", "Migration requires explicit approval and a recoverable backup reference.");
   }
   const inspection = await inspectLegacyDeliveryLayout(input);
   if (!inspection.ok) return inspection;
   if (inspection.value.route === "NEEDS_USER") {
-    return failure9("DELIVERY_MIGRATION_NEEDS_USER", "/owner_mappings", "Migration ownership must be resolved before publication.");
+    return failure10("DELIVERY_MIGRATION_NEEDS_USER", "/owner_mappings", "Migration ownership must be resolved before publication.");
   }
   if (input.selected_solution_id !== inspection.value.selected_solution_id) {
-    return failure9("DELIVERY_MIGRATION_SOLUTION_REQUIRED", "/selected_solution_id", "Migration requires the exact selected solution from the approved preview.");
+    return failure10("DELIVERY_MIGRATION_SOLUTION_REQUIRED", "/selected_solution_id", "Migration requires the exact selected solution from the approved preview.");
   }
   if (inspection.value.plan_hash !== input.plan_hash || inspection.value.source_fingerprint !== input.source_fingerprint) {
-    return failure9("DELIVERY_MIGRATION_STALE", "/plan_hash", "Migration preview no longer matches the source tree.");
+    return failure10("DELIVERY_MIGRATION_STALE", "/plan_hash", "Migration preview no longer matches the source tree.");
   }
   const candidate = await buildDeliveryMigrationCandidate({ root: input.root, preview: inspection.value });
   if (!candidate.ok) return candidate;
@@ -27895,547 +28623,32 @@ var migrateDeliveryLayout = async (input = {}, operations = {}) => {
   });
 };
 
-// scripts/delivery/materialize-asset.mjs
-var import_yaml3 = __toESM(require_dist(), 1);
-import { createHash as createHash5 } from "node:crypto";
-import { lstat as lstat9, mkdir as mkdir3, readFile as readFile9, realpath as realpath10, rmdir as rmdir2, unlink as unlink3 } from "node:fs/promises";
-import { dirname as dirname6, isAbsolute as isAbsolute11, join as join9, relative as relative9, sep as sep9 } from "node:path";
-import { isDeepStrictEqual as isDeepStrictEqual6 } from "node:util";
-var MAX_BODY_BYTES = 131072;
-var MAX_DOCUMENT_BYTES2 = MAX_BODY_BYTES * 2;
-var FEEDBACK_SOURCE_SECTIONS = ["original_problem", "scenario", "expectation"];
-var FEEDBACK_MUTABLE_SECTIONS = ["marking", "coverage"];
-var FEEDBACK_HASH_MARKER = /^<!-- project-lifecycle:feedback-source-hashes [^\n]+ -->\n?/u;
-var failure10 = (code, path, message) => fail([createError(code, path, message)]);
-var record5 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-var hash3 = (value) => createHash5("sha256").update(value).digest("hex");
-var boundedText = (value) => typeof value === "string" && value.trim().length > 0 && value.length <= 500 && !/[\p{Cc}\p{Cf}]/u.test(value);
-var inside8 = (root, candidate) => {
-  const path = relative9(root, candidate);
-  return path === "" || path !== ".." && !path.startsWith(`..${sep9}`) && !isAbsolute11(path);
-};
-var requireRegularDirectory = async (path, rootReal = null) => {
-  const state = await lstat9(path);
-  if (!state.isDirectory() || state.isSymbolicLink()) throw new Error("Unsafe delivery directory.");
-  const physical = await realpath10(path);
-  if (rootReal !== null && !inside8(rootReal, physical)) throw new Error("Delivery directory escapes project root.");
-  return physical;
-};
-var resolveLifecycleRoot2 = async (root) => {
-  const projectRoot = await requireRegularDirectory(root);
-  const docsRoot = await requireRegularDirectory(join9(root, "docs"), projectRoot);
-  const lifecycleRoot = await requireRegularDirectory(join9(root, "docs", "project-lifecycle"), projectRoot);
-  if (!inside8(docsRoot, lifecycleRoot)) throw new Error("Lifecycle root escapes docs root.");
-  const deliveryRoot = await requireRegularDirectory(join9(root, "docs", "project-lifecycle", "delivery"), lifecycleRoot);
-  if (!inside8(lifecycleRoot, deliveryRoot)) throw new Error("Delivery root escapes lifecycle root.");
-  return lifecycleRoot;
-};
-var headingLevels2 = (source) => [...source.matchAll(/^(#{1,6})[ \t]+\S.*$/gm)].map((match) => match[1].length);
-var sectionPattern2 = (id) => new RegExp(
-  `<!-- project-lifecycle:section ${id} -->\\n([\\s\\S]*?)\\n<!-- /project-lifecycle:section -->`,
-  "u"
-);
-var extractFeedbackSections = (body) => {
-  const normalized = withoutManagedFeedbackHash(body);
-  const visible = maskFencedMarkdown(normalized);
-  const sections = {};
-  for (const id of [...FEEDBACK_SOURCE_SECTIONS, ...FEEDBACK_MUTABLE_SECTIONS]) {
-    const matches = [...visible.matchAll(new RegExp(sectionPattern2(id).source, "gu"))];
-    if (matches.length !== 1 || matches[0][1].trim().length === 0) return null;
-    const opening = `<!-- project-lifecycle:section ${id} -->
-`;
-    const closing = "\n<!-- /project-lifecycle:section -->";
-    const start = matches[0].index + opening.length;
-    const end = matches[0].index + matches[0][0].length - closing.length;
-    sections[id] = normalized.slice(start, end).trim();
-  }
-  return sections;
-};
-var sourceHashes = (sections) => Object.fromEntries(
-  FEEDBACK_SOURCE_SECTIONS.map((id) => [id, hash3(sections[id])])
-);
-var feedbackHashMarker = (hashes) => `<!-- project-lifecycle:feedback-source-hashes ${FEEDBACK_SOURCE_SECTIONS.map((id) => `${id}=${hashes[id]}`).join(" ")} -->`;
-var withoutManagedFeedbackHash = (body) => {
-  const normalized = body.replaceAll("\r\n", "\n").replace(/^\n/u, "");
-  if (FEEDBACK_HASH_MARKER.test(normalized)) return normalized.replace(FEEDBACK_HASH_MARKER, "");
-  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(normalized);
-  if (title) {
-    const rest2 = normalized.slice(title[0].length);
-    return FEEDBACK_HASH_MARKER.test(rest2) ? `${title[0]}${rest2.replace(FEEDBACK_HASH_MARKER, "")}` : normalized;
-  }
-  const legacyPrefix = /^(<!-- project-lifecycle:section original_problem -->\n\n)/u.exec(normalized);
-  if (!legacyPrefix) return normalized;
-  const rest = normalized.slice(legacyPrefix[0].length);
-  return FEEDBACK_HASH_MARKER.test(rest) ? `${legacyPrefix[0]}${rest.replace(FEEDBACK_HASH_MARKER, "")}` : normalized;
-};
-var addFeedbackHashes = (body, hashes) => {
-  const withoutMarker = withoutManagedFeedbackHash(body);
-  const title = /^(#[ \t]+[^\n]+\n(?:\n)?)/u.exec(withoutMarker);
-  if (!title) return `${feedbackHashMarker(hashes)}
-${withoutMarker}`;
-  return `${title[0]}${feedbackHashMarker(hashes)}
-${withoutMarker.slice(title[0].length)}`;
-};
-var feedbackSkeleton = (body) => {
-  let output = withoutManagedFeedbackHash(body);
-  for (const id of FEEDBACK_MUTABLE_SECTIONS) {
-    output = output.replace(sectionPattern2(id), `<!-- project-lifecycle:section ${id} -->
-[MUTABLE]
-<!-- /project-lifecycle:section -->`);
-  }
-  return output.replaceAll("\r\n", "\n").replace(/^\n/u, "");
-};
-var withoutDocumentTitle = (body) => body.replaceAll("\r\n", "\n").replace(/^\n/u, "").replace(/^#[ \t]+[^\n]+\n(?:\n)?/u, "");
-var hasExactCoverageReference = (coverage, reference) => {
-  const tokens = coverage.split(/[\s;,；，]+/u).filter((token) => token.length > 0);
-  return tokens.includes(reference);
-};
-var feedbackFrame = (body) => {
-  let output = withoutManagedFeedbackHash(withoutDocumentTitle(body));
-  for (const id of [...FEEDBACK_SOURCE_SECTIONS, ...FEEDBACK_MUTABLE_SECTIONS]) {
-    output = output.replace(sectionPattern2(id), `<!-- project-lifecycle:section-frame ${id} -->`);
-  }
-  return output.replace(/\s+/gu, " ").trim();
-};
-var splitDocument = (source) => {
-  const normalized = source.replaceAll("\r\n", "\n");
-  if (!normalized.startsWith("---\n")) return null;
-  const closing = normalized.indexOf("\n---\n", 4);
-  if (closing === -1) return null;
-  const parsed = parseRestrictedYaml(normalized.slice(4, closing), "/frontmatter");
-  if (!parsed.ok) return null;
-  return { frontmatter: parsed.value, body: normalized.slice(closing + 5) };
-};
-var renderDocument2 = (frontmatter, body) => `---
-${(0, import_yaml3.stringify)(frontmatter, { lineWidth: 0 }).trimEnd()}
----
-${body.startsWith("\n") ? body : `
-${body}`}`;
-var validateRendered = (source, expectedFrontmatter, expectedBody) => {
-  const parsed = splitDocument(source);
-  if (!parsed || !isDeepStrictEqual6(parsed.frontmatter, expectedFrontmatter) || parsed.body !== (expectedBody.startsWith("\n") ? expectedBody : `
-${expectedBody}`)) {
-    return failure10("DELIVERY_DOCUMENT_INVALID", "/", "Rendered delivery document does not match its validated request.");
-  }
-  return validateJson("delivery-frontmatter", parsed.frontmatter);
-};
-var compatibleRoute = ({ artifact_kind: kind, primary_route: route }) => {
-  if (route === "KNOWLEDGE_UPDATE") return kind === "feedback";
-  if (route === "OUTSIDE_PLUGIN") return false;
-  if (kind === "prd") return route === "PRD_DELIVERY";
-  if (kind === "non-prd-delivery") return route === "NON_PRD_DELIVERY";
-  return ["PRD_DELIVERY", "NON_PRD_DELIVERY"].includes(route);
-};
-var validateMaterializationRequest = (input = {}) => {
-  if (!record5(input) || !record5(input.frontmatter) || !record5(input.body) || typeof input.body.en !== "string" || typeof input.body["zh-CN"] !== "string" || !boundedText(input.reason)) {
-    return failure10("ASSET_REQUEST_INVALID", "/", "A bounded explicit delivery asset request is required.");
-  }
-  if (input.frontmatter.schema_version !== 2) {
-    return failure10("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/frontmatter/schema_version", "Delivery layout v2 is required before durable writes.");
-  }
-  if (["prd", "non-prd-delivery"].includes(input.frontmatter.artifact_kind) && Object.hasOwn(input.frontmatter, "owner_artifact_id")) {
-    const rootOwnership = validatePhysicalOwner(input.frontmatter);
-    if (!rootOwnership.ok) return rootOwnership;
-  }
-  const frontmatter = validateJson("delivery-frontmatter", input.frontmatter);
-  if (!frontmatter.ok) return failure10("ASSET_FRONTMATTER_INVALID", "/frontmatter", "Delivery Frontmatter must satisfy the shared contract.");
-  const ownership = validatePhysicalOwner(input.frontmatter);
-  if (!ownership.ok) return ownership;
-  if (input.canonical_purpose_satisfied === true) {
-    return failure10("ASSET_REDUNDANT", "/canonical_purpose_satisfied", "An active owner already satisfies this canonical purpose.");
-  }
-  if (input.frontmatter.artifact_kind === "prd") {
-    if (!["explicit_user", "agent_inferred"].includes(input.creation_origin)) {
-      return failure10("ASSET_REQUEST_INVALID", "/creation_origin", "PRD creation origin must be explicit.");
-    }
-    if (input.creation_origin === "agent_inferred" && !isSafeReference(input.creation_approval_ref)) {
-      return failure10("PRD_APPROVAL_REQUIRED", "/creation_approval_ref", "Agent-inferred PRD creation requires explicit confirmation.");
-    }
-  }
-  if (input.frontmatter.artifact_kind === "architecture" && !isSafeReference(input.changed_contract_ref)) {
-    return failure10("ARCHITECTURE_DECLARATION_REQUIRED", "/changed_contract_ref", "Architecture requires an exact changed-contract declaration.");
-  }
-  for (const language of ["en", "zh-CN"]) {
-    const body = input.body[language];
-    if (body.trim().length === 0 || Buffer.byteLength(body) > MAX_BODY_BYTES) {
-      return failure10("ASSET_BODY_INVALID", `/body/${language}`, "Localized delivery body must be non-empty and bounded.");
-    }
-    if (Buffer.byteLength(renderDocument2(input.frontmatter, body)) > MAX_DOCUMENT_BYTES2) {
-      return failure10("ASSET_BODY_INVALID", `/body/${language}`, "Complete localized delivery document must remain bounded.");
-    }
-  }
-  if (!isDeepStrictEqual6(headingLevels2(input.body.en), headingLevels2(input.body["zh-CN"]))) {
-    return failure10("PAIR_SECTION_MISMATCH", "/body", "Localized delivery bodies require matching heading structure.");
-  }
-  if (input.frontmatter.artifact_kind === "feedback") {
-    for (const language of ["en", "zh-CN"]) {
-      if (!extractFeedbackSections(input.body[language])) {
-        return failure10("FEEDBACK_STRUCTURE_INVALID", `/body/${language}`, "Feedback requires exact source, marking, and coverage sections.");
-      }
-    }
-    const alignment = validateAlignmentFeedbackPair({
-      frontmatter: input.frontmatter,
-      bodies: input.body
-    });
-    if (!alignment.ok) return alignment;
-    if (alignment.value.marker !== null && input.frontmatter.retention_tier !== "active") {
-      return failure10(
-        "ALIGNMENT_RETENTION_INVALID",
-        "/frontmatter/retention_tier",
-        "Feedback with an active alignment marker must remain active until validated marker removal."
-      );
-    }
-  }
-  if (input.frontmatter.artifact_kind === "closure-summary") {
-    const managedHashes = ["en", "zh-CN"].map((language) => extractClosureSummaryHash(input.body[language]));
-    if (input.closure_summary === void 0 && managedHashes.some((digest) => digest !== null)) {
-      return failure10("CLOSURE_SUMMARY_INVALID", "/closure_summary", "Managed closure proof cannot be supplied as body text.");
-    }
-    const summary = input.closure_summary;
-    const feedbackIds = summary?.feedback_coverage?.map(({ feedback_id: feedbackId }) => feedbackId).sort();
-    if (summary !== void 0 && (!validateClosureSummary(summary).ok || summary.artifact_id !== input.frontmatter.artifact_id || summary.owner_artifact_id !== input.frontmatter.owner_artifact_id || !isDeepStrictEqual6(feedbackIds, [...input.frontmatter.relationships.feedback_ids].sort()) || summary.owner_artifact_id.startsWith("prd-") && !input.frontmatter.relationships.prd_ids.includes(summary.owner_artifact_id))) {
-      return failure10("CLOSURE_SUMMARY_INVALID", "/closure_summary", "Persisted closure proof must match the closure-summary asset identity.");
-    }
-  } else if (input.closure_summary !== void 0) {
-    return failure10("CLOSURE_SUMMARY_INVALID", "/closure_summary", "Persisted closure proof requires a closure-summary asset.");
-  }
-  if (!compatibleRoute(input.frontmatter)) {
-    return failure10("ROUTE_ASSET_MISMATCH", "/frontmatter/primary_route", "The supplied route cannot own this durable asset kind.");
-  }
-  return ok(input);
-};
-var existingFile = async (path, lifecycleRoot) => {
-  try {
-    const stats = await lstat9(path);
-    if (stats.isSymbolicLink() || !stats.isFile()) throw Object.assign(new Error("Unsafe existing delivery target."), { code: "ASSET_PATH_INVALID" });
-    if (!inside8(lifecycleRoot, await realpath10(path))) {
-      throw Object.assign(new Error("Existing delivery target escapes lifecycle root."), { code: "ASSET_PATH_INVALID" });
-    }
-    return await readFile9(path, "utf8");
-  } catch (error) {
-    if (error.code === "ENOENT") return null;
-    throw error;
-  }
-};
-var ensureManagedDirectory = async (lifecycleRoot, locator) => {
-  const rootReal = await realpath10(lifecycleRoot);
-  const created = [];
-  try {
-    let current = lifecycleRoot;
-    for (const segment of dirname6(locator).split("/")) {
-      current = join9(current, segment);
-      try {
-        const state = await lstat9(current);
-        if (!state.isDirectory() || state.isSymbolicLink()) throw new Error("Unsafe managed delivery directory.");
-      } catch (error) {
-        if (error.code !== "ENOENT") throw error;
-        await mkdir3(current);
-        created.push(current);
-      }
-      if (!inside8(rootReal, await realpath10(current))) throw new Error("Managed delivery directory escapes lifecycle root.");
-    }
-    return created;
-  } catch (error) {
-    await cleanupManagedDirectories(created);
-    throw error;
-  }
-};
-var cleanupManagedDirectories = async (directories) => {
-  for (const directory of [...directories].reverse()) {
-    try {
-      await rmdir2(directory);
-    } catch (error) {
-      if (!["ENOENT", "ENOTEMPTY"].includes(error.code)) throw error;
-    }
-  }
-};
-var discoverAlignmentResolutionInventory = async (lifecycleRoot, feedbackId) => {
-  const collected = await collectDeliveryInventory({ lifecycleRoot });
-  if (!collected.ok) throw new Error("Delivery owner inventory is invalid.");
-  const owners = [...collected.value.pairs, ...collected.value.archived_pairs].filter(({ language, frontmatter }) => language === "en" && ["prd", "non-prd-delivery"].includes(frontmatter.artifact_kind) && frontmatter.relationships.feedback_ids.includes(feedbackId)).map(({ frontmatter }) => frontmatter);
-  const closureIds = /* @__PURE__ */ new Set();
-  for (const closure of collected.value.closed_summaries.filter(({ frontmatter }) => frontmatter.relationships.feedback_ids.includes(feedbackId))) {
-    const hashes = [];
-    for (const language of ["en", "zh-CN"]) {
-      const source = await existingFile(join9(lifecycleRoot, closure.locators[language]), lifecycleRoot);
-      if (source === null || Buffer.byteLength(source) > MAX_DOCUMENT_BYTES2) {
-        throw new Error("Closure inventory contains an invalid file.");
-      }
-      const document3 = splitDocument(source);
-      if (!document3 || !isDeepStrictEqual6(document3.frontmatter, closure.frontmatter)) {
-        throw new Error("Closure inventory changed after validation.");
-      }
-      hashes.push(extractClosureSummaryHash(document3.body));
-    }
-    if (hashes[0] !== null && hashes[0] === hashes[1]) {
-      closureIds.add(`${closure.artifact_id}:${hashes[0]}`);
-    }
-  }
-  return { owners, closureIds };
-};
-var rollbackFirstWrite = async ({ write, lifecycleRoot, locator, original }) => {
-  const path = join9(lifecycleRoot, locator);
-  if (original === null) {
-    await unlink3(path);
-    try {
-      await lstat9(path);
-      throw new Error("New delivery file still exists after rollback.");
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
-    }
-    return;
-  }
-  await write({
-    root: lifecycleRoot,
-    target: locator,
-    content: original,
-    validate: async (source) => {
-      const parsed = splitDocument(source);
-      return parsed ? ok(source) : failure10("DELIVERY_DOCUMENT_INVALID", "/", "Original delivery document could not be restored.");
-    }
-  });
-  if (await readFile9(path, "utf8") !== original) throw new Error("Original delivery file was not restored.");
-};
-async function materializeAsset(input = {}, operations = {}) {
-  const request = validateMaterializationRequest(input);
-  if (!request.ok) return request;
-  if (typeof input.root !== "string" || !isAbsolute11(input.root)) {
-    return failure10("ASSET_ROOT_INVALID", "/root", "Delivery materialization requires an absolute project root.");
-  }
-  let lifecycleRoot;
-  try {
-    lifecycleRoot = await resolveLifecycleRoot2(input.root);
-  } catch {
-    return failure10("ASSET_PATH_INVALID", "/root", "Delivery targets must be regular files beneath the fixed lifecycle root.");
-  }
-  const layout = await detectDeliveryLayout({ root: input.root });
-  if (!layout.ok || layout.value.kind !== "V2") {
-    return failure10("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/root", "Delivery layout v2 is required before durable writes.");
-  }
-  let owner = await resolvePhysicalOwner({ lifecycleRoot, frontmatter: input.frontmatter });
-  if (!owner.ok && input.frontmatter.artifact_kind === "closure-summary") {
-    const inventory = await collectDeliveryInventory({ lifecycleRoot });
-    if (inventory.ok) {
-      const retainedOwners = inventory.value.archived_pairs.filter(({ language, frontmatter }) => language === "en" && frontmatter.artifact_id === input.frontmatter.owner_artifact_id && frontmatter.owner_artifact_id === frontmatter.artifact_id && ["prd", "non-prd-delivery"].includes(frontmatter.artifact_kind));
-      if (retainedOwners.length === 1) {
-        owner = ok({
-          artifact_kind: retainedOwners[0].frontmatter.artifact_kind,
-          artifact_id: retainedOwners[0].frontmatter.artifact_id
-        });
-      }
-    }
-  }
-  if (!owner.ok) return owner;
-  const id = input.frontmatter.artifact_id;
-  const locators = activeDeliveryPair(input.frontmatter, { ownerKind: owner.value.artifact_kind });
-  const paths = Object.fromEntries(Object.entries(locators).map(([language, locator]) => [language, join9(lifecycleRoot, locator)]));
-  let existing;
-  try {
-    existing = {
-      en: await existingFile(paths.en, lifecycleRoot),
-      "zh-CN": await existingFile(paths["zh-CN"], lifecycleRoot)
-    };
-  } catch {
-    return failure10("ASSET_PATH_INVALID", "/root", "Delivery targets must be regular files beneath the fixed lifecycle root.");
-  }
-  if (existing.en === null !== (existing["zh-CN"] === null)) {
-    return failure10("PAIR_INCOMPLETE", "/delivery", "Delivery asset pairs must be created and updated together.");
-  }
-  const updating = existing.en !== null;
-  if (updating && input.frontmatter.artifact_kind !== "feedback") {
-    return failure10("ASSET_REDUNDANT", "/frontmatter/artifact_id", "An existing delivery owner cannot be recreated by materialization.");
-  }
-  const bodies = { ...input.body };
-  if (input.frontmatter.artifact_kind === "closure-summary" && input.closure_summary !== void 0) {
-    const digest = closureSummaryHash(input.closure_summary);
-    for (const language of ["en", "zh-CN"]) bodies[language] = addClosureSummaryHash(bodies[language], digest);
-  }
-  if (input.frontmatter.artifact_kind === "feedback") {
-    const nextAlignment = validateAlignmentFeedbackPair({
-      frontmatter: input.frontmatter,
-      bodies
-    });
-    if (!nextAlignment.ok) return nextAlignment;
-    let priorAlignment = null;
-    if (updating) {
-      const priorDocuments = {
-        en: splitDocument(existing.en),
-        "zh-CN": splitDocument(existing["zh-CN"])
-      };
-      if (!priorDocuments.en || !priorDocuments["zh-CN"]) {
-        return failure10("HISTORY_BODY_CHANGED", "/body", "Existing Feedback pair is malformed.");
-      }
-      priorAlignment = validateAlignmentFeedbackPair({
-        frontmatter: priorDocuments.en.frontmatter,
-        bodies: {
-          en: priorDocuments.en.body,
-          "zh-CN": priorDocuments["zh-CN"].body
-        }
-      });
-      if (!priorAlignment.ok) return priorAlignment;
-    }
-    const removingAlignment = priorAlignment?.value.marker !== null && priorAlignment?.value.marker !== void 0 && nextAlignment.value.marker === null;
-    if (Object.hasOwn(input, "alignment_resolution") && !removingAlignment) {
-      return failure10("ALIGNMENT_RESOLUTION_UNEXPECTED", "/alignment_resolution", "Resolution is allowed only while removing an active marker.");
-    }
-    if (removingAlignment) {
-      const suppliedOwners = input.alignment_owners ?? [];
-      if (!Array.isArray(suppliedOwners) || suppliedOwners.some((owner2) => {
-        const validation = validateJson("delivery-frontmatter", owner2);
-        return !validation.ok || !["prd", "non-prd-delivery"].includes(owner2.artifact_kind);
-      })) {
-        return failure10("ALIGNMENT_RESOLUTION_INVALID", "/alignment_owners", "Marker exit requires validated delivery owners.");
-      }
-      let inventory;
-      try {
-        inventory = await discoverAlignmentResolutionInventory(lifecycleRoot, input.frontmatter.artifact_id);
-      } catch {
-        return failure10("ALIGNMENT_OWNER_INVENTORY_INCOMPLETE", "/alignment_owners", "Marker exit requires a complete valid owner inventory from authoritative delivery assets.");
-      }
-      const suppliedOwnerById = new Map(suppliedOwners.map((owner2) => [owner2.artifact_id, owner2]));
-      if (suppliedOwnerById.size !== suppliedOwners.length || suppliedOwnerById.size !== inventory.owners.length || inventory.owners.some((owner2) => !isDeepStrictEqual6(
-        suppliedOwnerById.get(owner2.artifact_id),
-        owner2
-      ))) {
-        return failure10("ALIGNMENT_OWNER_INVENTORY_INCOMPLETE", "/alignment_owners", "Marker exit requires the exact persisted bilingual delivery-owner inventory.");
-      }
-      const linkedOwnerIds = new Set(inventory.owners.map(({ artifact_id: ownerId }) => ownerId));
-      const suppliedClosures = input.alignment_closures ?? [];
-      if (!Array.isArray(suppliedClosures) || suppliedClosures.some((closure) => !validateClosureSummary(closure).ok)) {
-        return failure10("ALIGNMENT_RESOLUTION_INVALID", "/alignment_closures", "Marker exit requires validated closure summaries.");
-      }
-      const suppliedClosureIds = new Set(Array.isArray(suppliedClosures) ? suppliedClosures.map(({ artifact_id: closureId }) => closureId) : []);
-      let suppliedClosureProofs;
-      try {
-        suppliedClosureProofs = new Set(suppliedClosures.map((closure) => `${closure.artifact_id}:${closureSummaryHash(closure)}`));
-      } catch {
-        return failure10("ALIGNMENT_RESOLUTION_INVALID", "/alignment_closures", "Marker exit requires serializable closure summaries.");
-      }
-      const authoritativeClosureProofs = new Set([...inventory.closureIds].filter((proof) => {
-        const closureId = proof.slice(0, proof.indexOf(":"));
-        return closureId.startsWith("closure-") && linkedOwnerIds.has(closureId.slice("closure-".length));
-      }));
-      if (suppliedClosureIds.size !== suppliedClosureProofs.size || suppliedClosureProofs.size !== authoritativeClosureProofs.size || [...suppliedClosureProofs].some((proof) => !authoritativeClosureProofs.has(proof))) {
-        return failure10("ALIGNMENT_CLOSURE_INVENTORY_INCOMPLETE", "/alignment_closures", "Marker exit requires exact persisted bilingual closure-summary evidence.");
-      }
-      const exit2 = validateAlignmentExit({
-        feedbackId: input.frontmatter.artifact_id,
-        feedbackProjectId: input.frontmatter.current_project_id ?? input.frontmatter.project_id_at_creation,
-        resolution: input.alignment_resolution,
-        owners: inventory.owners,
-        closures: suppliedClosures,
-        knowledgeResults: input.alignment_knowledge_results ?? [],
-        ownerInventoryComplete: true
-      });
-      if (!exit2.ok) return exit2;
-      const requiredEvidence = exit2.value.disposition === "NO_REMEDIATION_ACCEPTED" ? [
-        exit2.value.disposition,
-        exit2.value.human_approval_ref,
-        ...exit2.value.knowledge_resolution_refs
-      ] : [
-        exit2.value.disposition,
-        ...exit2.value.closure_refs,
-        ...exit2.value.knowledge_resolution_refs
-      ];
-      for (const language of ["en", "zh-CN"]) {
-        const coverage = extractFeedbackSections(bodies[language])?.coverage;
-        if (!coverage || requiredEvidence.some((reference) => !hasExactCoverageReference(coverage, reference))) {
-          return failure10(
-            "ALIGNMENT_RESOLUTION_EVIDENCE_MISSING",
-            `/body/${language}/coverage`,
-            "Alignment exit must retain its disposition, closure or approval, and knowledge resolution references in Feedback coverage."
-          );
-        }
-      }
-    } else if (!updating && input.frontmatter.primary_route === "KNOWLEDGE_UPDATE" && nextAlignment.value.marker === null) {
-      return failure10("ROUTE_ASSET_MISMATCH", "/frontmatter/primary_route", "Knowledge-controlled Feedback requires an active alignment marker.");
-    }
-    for (const language of ["en", "zh-CN"]) {
-      const sections = extractFeedbackSections(bodies[language]);
-      bodies[language] = addFeedbackHashes(bodies[language], sourceHashes(sections));
-      if (updating) {
-        const prior = splitDocument(existing[language]);
-        if (!prior || !isDeepStrictEqual6(prior.frontmatter, input.frontmatter)) {
-          return failure10("HISTORY_BODY_CHANGED", `/body/${language}`, "Feedback identity and source history cannot be rewritten.");
-        }
-        const priorSections = extractFeedbackSections(prior.body);
-        const nextSections = extractFeedbackSections(bodies[language]);
-        const titleMigration = priorAlignment.value.marker === null && nextAlignment.value.marker !== null && priorAlignment.value.titles[language] === null;
-        const priorSkeleton = feedbackSkeleton(prior.body);
-        const nextSkeleton = feedbackSkeleton(
-          titleMigration ? withoutDocumentTitle(bodies[language]) : bodies[language]
-        );
-        const skeletonMatches = titleMigration ? feedbackFrame(prior.body) === feedbackFrame(bodies[language]) : priorSkeleton === nextSkeleton;
-        if (!priorSections || !nextSections || !isDeepStrictEqual6(sourceHashes(priorSections), sourceHashes(nextSections)) || !skeletonMatches) {
-          return failure10("HISTORY_BODY_CHANGED", `/body/${language}`, "Feedback source history cannot change without an erratum or successor.");
-        }
-      }
-    }
-  }
-  const documents = {
-    en: renderDocument2(input.frontmatter, bodies.en),
-    "zh-CN": renderDocument2(input.frontmatter, bodies["zh-CN"])
-  };
-  for (const language of ["en", "zh-CN"]) {
-    if (Buffer.byteLength(documents[language]) > MAX_DOCUMENT_BYTES2) {
-      return failure10("ASSET_BODY_INVALID", `/body/${language}`, "Complete localized delivery document must remain bounded.");
-    }
-  }
-  const write = operations.atomicWriteValidated ?? atomicWriteValidated;
-  let createdDirectories = [];
-  try {
-    createdDirectories = await ensureManagedDirectory(lifecycleRoot, locators.en);
-  } catch {
-    return failure10("ASSET_PATH_INVALID", "/root", "Delivery targets must be regular files beneath the fixed lifecycle root.");
-  }
-  try {
-    await write({
-      root: lifecycleRoot,
-      target: locators.en,
-      content: documents.en,
-      validate: (source) => validateRendered(source, input.frontmatter, bodies.en)
-    });
-    try {
-      await write({
-        root: lifecycleRoot,
-        target: locators["zh-CN"],
-        content: documents["zh-CN"],
-        validate: (source) => validateRendered(source, input.frontmatter, bodies["zh-CN"])
-      });
-    } catch (error) {
-      try {
-        await rollbackFirstWrite({
-          write,
-          lifecycleRoot,
-          locator: locators.en,
-          original: existing.en
-        });
-      } catch {
-        return failure10("ASSET_ROLLBACK_FAILED", "/delivery", "Delivery pair rollback failed; manual recovery is required.");
-      }
-      throw error;
-    }
-  } catch {
-    try {
-      await cleanupManagedDirectories(createdDirectories);
-    } catch {
-      return failure10("ASSET_ROLLBACK_FAILED", "/delivery", "Delivery pair rollback failed; manual recovery is required.");
-    }
-    return failure10("ASSET_WRITE_FAILED", "/delivery", "Delivery pair could not be written and validated.");
-  }
-  return ok({
-    artifact_id: id,
-    locators,
-    status: updating ? "updated" : "created"
-  });
-}
-
 // scripts/bin/project-lifecycle-source.mjs
-var version = "0.6.0";
+var version = "0.7.0";
 var MAX_ALIGNMENT_DOCUMENT_BYTES = 262144;
 var command = process.argv[2] ?? "help";
 var cliFailure = (code, path, message) => fail([createError(code, path, message)]);
 var publicDiagnosticMessages = Object.freeze({
+  DELIVERY_OWNER_MISMATCH: "Exactly one valid physical owner pair is required. Create or repair the owner before creating its child asset.",
+  DELIVERY_OWNER_REQUIRED: "Supply owner_artifact_id for this owned delivery asset.",
+  DELIVERY_OWNER_FORBIDDEN: "Feedback is independent and must not declare owner_artifact_id.",
+  ASSET_REDUNDANT: "The target already exists with a different request, or standalone creation would duplicate it. Inspect the saved document; exact retries use --update-indexes.",
+  LAYOUT_SOURCE_CHANGED: "The lifecycle tree changed during publication. Reinspect it and retry the identical request.",
+  LAYOUT_TREE_LIMIT_EXCEEDED: "The lifecycle tree exceeds the supported size, depth, or entry limit. Inspect retained files before retrying.",
+  PATH_SYMLINK_ESCAPE: "A managed path is a symbolic link or escapes its root. Inspect the path before retrying.",
+  DELIVERY_FRONTMATTER_MALFORMED: "A bounded, valid restricted YAML Frontmatter block is required.",
+  DELIVERY_FRONTMATTER_INVALID: "The indicated Frontmatter field is missing, unsupported, invalid, or inconsistent with ownership; check the delivery template and schema.",
+  DELIVERY_INDEX_OCCUPIED: "The index path contains a non-generated file. Preserve or relocate it before generating indexes; do not overwrite it automatically.",
+  DELIVERY_INVENTORY_PATH_MISMATCH: "The delivery path must match artifact_id, artifact_kind, and owner_artifact_id.",
+  DELIVERY_INVENTORY_PAIR_INVALID: "Both language files are required and their complete Frontmatter must match.",
+  DELIVERY_INVENTORY_OWNER_MISSING: "An owned delivery asset requires its physical owner document pair.",
+  DELIVERY_INVENTORY_OWNER_MISMATCH: "The asset directory and physical owner kind must match.",
+  DELIVERY_INVENTORY_DUPLICATE: "Delivery artifact IDs and language files must be unique.",
+  DELIVERY_INVENTORY_INVALID: "The delivery inventory contains an unsupported file or directory, unsafe path, or exceeds its bounds.",
+  DELIVERY_LAYOUT_MIGRATION_REQUIRED: "A valid layout-v2 marker and schema-v2 delivery documents are required; inspect the layout before migration.",
+  ASSET_FRONTMATTER_INVALID: "Delivery Frontmatter must match the delivery template and schema.",
+  ARCHITECTURE_DECLARATION_REQUIRED: "Supply changed_contract_ref with an exact changed-contract declaration reference.",
+  ASSET_REQUEST_INVALID: "Supply frontmatter, bilingual body, reason, and PRD creation_origin when applicable.",
   [ERROR_CODES.CURRENT_EVIDENCE_MISSING]: "Current fact evidence is missing.",
   [ERROR_CODES.FACT_BLOCK_MALFORMED]: "Fact Markdown validation failed.",
   [ERROR_CODES.FACT_ID_DUPLICATE]: "Duplicate fact identifier.",
@@ -28454,7 +28667,7 @@ var redactFailureDiagnostics = (result) => {
     ...result,
     errors: result.errors.map((error) => ({
       ...error,
-      message: error.code.startsWith("CLI_") || error.code === ERROR_CODES.REFERENCE_MISSING && error.path === "/governance_locator" && error.message === "Unable to resolve governance locator." ? error.message : publicDiagnosticMessages[error.code] ?? "Validation failed."
+      message: error.code.startsWith("CLI_") || error.code === ERROR_CODES.REFERENCE_MISSING && error.path === "/governance_locator" && error.message === "Unable to resolve governance locator." ? error.message : ["DELIVERY_FRONTMATTER_INVALID", "ASSET_FRONTMATTER_INVALID"].includes(error.code) && Object.hasOwn(FIELD_DIAGNOSTICS, error.reason ?? "") ? FIELD_DIAGNOSTICS[error.reason].message : publicDiagnosticMessages[error.code] ?? "Validation failed."
     }))
   };
 };
@@ -28524,7 +28737,7 @@ var resolvePointerMap = async (pointerFile, locator) => {
       "Unable to resolve governance locator."
     );
   }
-  const mapFile = resolve8(dirname7(resolve8(pointerFile)), locator);
+  const mapFile = resolve10(dirname7(resolve10(pointerFile)), locator);
   let source;
   try {
     source = await readFile10(mapFile, "utf8");
@@ -28585,6 +28798,7 @@ if (command === "help") {
       "materialize-delivery-asset",
       "migrate-delivery-layout",
       "parse-facts",
+      "preview-delivery-asset",
       "preview-delivery-layout-migration",
       "sync-alignment-review",
       "validate-alignment-feedback",
@@ -28608,8 +28822,8 @@ if (command === "help") {
     emit(cliFailure("CLI_PATH_INVALID", "/arguments", "Root and output paths must be absolute."), 2);
   } else {
     try {
-      const lexicalLifecycleRoot = resolve8(options["--root"], "docs/project-lifecycle");
-      const lexicalOutput = resolve8(options["--output"]);
+      const lexicalLifecycleRoot = resolve10(options["--root"], "docs/project-lifecycle");
+      const lexicalOutput = resolve10(options["--output"]);
       if (isInside(lexicalLifecycleRoot, lexicalOutput)) {
         emit(cliFailure(
           "CLI_OUTPUT_FORBIDDEN",
@@ -28620,8 +28834,8 @@ if (command === "help") {
         const root = await realpath11(options["--root"]);
         const outputParent = await realpath11(dirname7(options["--output"]));
         const outputName = basename3(options["--output"]);
-        const output = resolve8(outputParent, outputName);
-        const lifecycleRoot = resolve8(root, "docs/project-lifecycle");
+        const output = resolve10(outputParent, outputName);
+        const lifecycleRoot = resolve10(root, "docs/project-lifecycle");
         const physicalLifecycleRoots = [lifecycleRoot];
         try {
           physicalLifecycleRoots.push(await realpath11(lifecycleRoot));
@@ -28743,7 +28957,7 @@ if (command === "help") {
     if (!layout.ok || layout.value.kind !== "V2") {
       emit(layout.ok ? cliFailure("DELIVERY_LAYOUT_MIGRATION_REQUIRED", "/root", "Delivery layout v2 is required.") : layout);
     } else {
-      const inventory = await collectDeliveryInventory({ lifecycleRoot: resolve8(options["--root"], "docs/project-lifecycle") });
+      const inventory = await collectDeliveryInventory({ lifecycleRoot: resolve10(options["--root"], "docs/project-lifecycle") });
       emit(inventory.ok ? ok({
         layout_version: inventory.value.layout_version,
         feedback_count: inventory.value.feedbacks.length,
@@ -28752,13 +28966,17 @@ if (command === "help") {
       }) : inventory);
     }
   }
-} else if (command === "materialize-delivery-asset") {
-  const options = deliveryOptions();
-  if (!options) {
-    emit(cliFailure("CLI_USAGE", "/arguments", "Usage: materialize-delivery-asset --root <absolute-project-root> --input <absolute-json-envelope>."), 2);
+} else if (command === "materialize-delivery-asset" || command === "preview-delivery-asset") {
+  const args = process.argv.slice(3);
+  const updateIndexes = command === "materialize-delivery-asset" && args.includes("--update-indexes");
+  const flagCount = args.filter((arg) => arg === "--update-indexes").length;
+  const options = parseNamedOptions(updateIndexes ? args.filter((arg) => arg !== "--update-indexes") : args, ["--root", "--input"]);
+  if (!options || flagCount > 1 || !isAbsolute12(options["--root"]) || !isAbsolute12(options["--input"])) {
+    emit(cliFailure("CLI_USAGE", "/arguments", "Usage: preview-delivery-asset --root <absolute-project-root> --input <absolute-json-envelope>, or materialize-delivery-asset with optional --update-indexes."), 2);
   } else {
     const input = await readBoundedEnvelope(options["--input"]);
-    emit(input.ok ? await materializeAsset({ ...input.value, root: options["--root"] }) : input, input.ok ? void 0 : 2);
+    const action = command === "preview-delivery-asset" ? previewDeliveryAsset : updateIndexes ? materializeDeliveryWithIndexes : materializeAsset;
+    emit(input.ok ? await action({ ...input.value, root: options["--root"] }) : input, input.ok ? void 0 : 2);
   }
 } else if (command === "close-delivery") {
   const options = deliveryOptions();
@@ -28773,36 +28991,7 @@ if (command === "help") {
   if (!options || !isAbsolute12(options["--root"])) {
     emit(cliFailure("CLI_USAGE", "/arguments", "Usage: generate-delivery-indexes --root <absolute-project-root>."), 2);
   } else {
-    const lifecycleRoot = resolve8(options["--root"], "docs/project-lifecycle");
-    const [inventory, tree] = await Promise.all([
-      collectDeliveryInventory({ lifecycleRoot }),
-      inspectLifecycleTree({ repositoryRoot: options["--root"] })
-    ]);
-    if (!inventory.ok || !tree.ok) emit(!inventory.ok ? inventory : tree);
-    else {
-      const indexes = await generateDeliveryIndexes({ inventory: inventory.value });
-      if (!indexes.ok) emit(indexes);
-      else {
-        const published = await applyLayoutTransaction({
-          repositoryRoot: options["--root"],
-          expectedFingerprint: tree.value.fingerprint,
-          candidateFiles: indexes.value.files.map(({ locator, content: content3 }) => ({
-            repository_id: null,
-            locator,
-            content: content3,
-            validate: async (candidate) => candidate === content3 ? ok(candidate) : cliFailure("DELIVERY_INDEX_INVALID", `/${locator}`, "Generated index changed.")
-          })),
-          candidateDirectories: [],
-          deleteLocators: [],
-          validateCandidate: ({ lifecycleRoot: candidateRoot }) => collectDeliveryInventory({ lifecycleRoot: candidateRoot })
-        });
-        emit(published.ok ? ok({
-          layout_version: 2,
-          locators: indexes.value.files.map(({ locator }) => locator),
-          changed: published.value.changed
-        }) : published);
-      }
-    }
+    emit(await publishDeliveryIndexes({ root: options["--root"] }));
   }
 } else if (command === "validate-pair") {
   const [enPath, zhPath, mapPath] = process.argv.slice(3);

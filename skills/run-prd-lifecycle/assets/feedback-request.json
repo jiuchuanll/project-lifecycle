@@ -1,0 +1,27 @@
+{
+  "frontmatter": {
+    "schema_version": 2,
+    "artifact_id": "feedback-template",
+    "artifact_kind": "feedback",
+    "primary_route": "PRD_DELIVERY",
+    "project_id_at_creation": "sample-project",
+    "current_project_id": "sample-project",
+    "domain_ids": [
+      "sample-domain"
+    ],
+    "knowledge_baseline": "replace-with-baseline",
+    "relationships": {
+      "feedback_ids": [],
+      "prd_ids": [],
+      "legacy_artifact_refs": []
+    },
+    "retention_tier": "active",
+    "reclassified_from_refs": [],
+    "obligations": []
+  },
+  "body": {
+    "en": "# Feedback title\n\n<!-- project-lifecycle:section original_problem -->\n## Original problem\nRecord the user's original problem without solution rewriting.\n<!-- /project-lifecycle:section -->\n\n<!-- project-lifecycle:section scenario -->\n## Scenario\nRecord when and where the problem occurs.\n<!-- /project-lifecycle:section -->\n\n<!-- project-lifecycle:section expectation -->\n## Expectation\nRecord the user's expected outcome.\n<!-- /project-lifecycle:section -->\n\n<!-- project-lifecycle:section marking -->\n## Marking\nRecord standardized status markings only.\n\n> Optional: insert this marker only after the business-to-implementation divergence is confirmed. This fenced example is inert.\n\n```text\n<!-- project-lifecycle:alignment\nschema_version: 1\nclassification: BUSINESS_IMPLEMENTATION_DIVERGENCE\nprimary_domain_id: sample-domain\n-->\n```\n<!-- /project-lifecycle:section -->\n\n<!-- project-lifecycle:section coverage -->\n## Coverage\nLink exact covered, deferred, rejected, or superseded portions.\n<!-- /project-lifecycle:section -->\n",
+    "zh-CN": "# 反馈标题\n\n<!-- project-lifecycle:section original_problem -->\n## 原始问题\n原样记录用户问题，不按解决方案重写。\n<!-- /project-lifecycle:section -->\n\n<!-- project-lifecycle:section scenario -->\n## 场景\n记录问题发生的时间与位置。\n<!-- /project-lifecycle:section -->\n\n<!-- project-lifecycle:section expectation -->\n## 期望\n记录用户期望的结果。\n<!-- /project-lifecycle:section -->\n\n<!-- project-lifecycle:section marking -->\n## 标记\n仅记录标准化状态标记。\n\n> 可选：仅在业务—实现差异得到确认后插入该标记。以下 fenced 示例不会生效。\n\n```text\n<!-- project-lifecycle:alignment\nschema_version: 1\nclassification: BUSINESS_IMPLEMENTATION_DIVERGENCE\nprimary_domain_id: sample-domain\n-->\n```\n<!-- /project-lifecycle:section -->\n\n<!-- project-lifecycle:section coverage -->\n## 覆盖\n关联已覆盖、延后、拒绝或被替代的具体部分。\n<!-- /project-lifecycle:section -->\n"
+  },
+  "reason": "Replace with the reason for this confirmed delivery asset"
+}

@@ -784,3 +784,15 @@ git commit -m "docs: adopt owner-centric delivery layout"
 ```
 
 Do not push, release, or update the locally installed plugin in this task unless the user separately authorizes those actions after review and verification. If a future authorized release is merged, follow the repository instruction to upgrade through native plugin management, verify the installed version and dependency-free cache entrypoint, and tell the user to start a fresh session for the new Skill snapshot.
+
+## Delivery usability follow-up (2026-09-16)
+
+Approved scope: precise recoverable diagnostics, bounded multi-error collection, executable request examples, read-only preview, and optional create-with-index publication. Preserve existing standalone materialization semantics; new workflow permits exact-content replay only and never overwrites a different existing owner.
+
+- [x] Add shared delivery Frontmatter diagnostics with stable reason, field path and recovery action; do not echo values. Aggregate at most 50 inventory errors while retaining fail-closed traversal.
+- [x] Extract the existing index publication transaction into a reusable delivery function, retaining fingerprint validation and candidate validation.
+- [x] Add read-only `preview-delivery-asset` and `materialize-delivery-asset --update-indexes`. Reuse materializer preparation and rendered candidate inventory. Explain request versus existing-tree blockers, report write state, and retry index publication after exact-content replay.
+- [x] Add executable Feedback and architecture request examples alongside PRD; document commands, partial success and recovery, and update paired design records.
+- [x] Cover multiple errors, preview no-write behavior, historical blockers, creation/index success, partial publication failure, exact retries and changed-input rejection. Build bundle and local package, then run project checks and bundled CLI regressions.
+
+Verification: full project check passed (799 tests), bundled CLI workflow regression passed (7 tests), including read-only preview, exact retries and shipped request examples. This is local branch work; no commit, push, release or installed-cache update.

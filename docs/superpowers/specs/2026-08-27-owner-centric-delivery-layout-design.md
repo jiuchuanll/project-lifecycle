@@ -242,3 +242,19 @@ The change must not redesign route vocabulary, Feedback semantics, Knowledge Dif
 ## Recovery
 
 Before executing migration on a real project, retain a verified recoverable snapshot outside the target tree or use the repository's existing recoverable version-control state. The migration result must report the backup or recovery reference, layout version, exact moved paths, validation result, and any unresolved external links. Recovery restores the pre-migration tree and removes the unpublished or invalid v2 layout marker; it never rewrites unrelated project assets.
+
+### Creation-to-Index Contract Clarification
+
+Schema-valid artifact IDs may end in `-en`. Inventory determines language by comparing the actual locator with the canonical pair derived from validated Frontmatter, never by stripping a filename suffix before reading metadata. This applies to active and retained assets.
+
+Frontmatter parse/schema failures are distinct from canonical-path failures. Diagnostics identify the document and, for schema validation, the field path without returning private input values. The public CLI uses fixed actionable messages for these errors and for occupied non-generated index paths. Occupied files remain untouched; adding a generated marker is not a recovery procedure.
+
+The delivery Skill links templates and a complete materialization request example at the creation step. Request-only fields such as `creation_origin` and `changed_contract_ref` remain outside Frontmatter. Create physical owners before children, validate delivery layout, then generate indexes. Regression coverage exercises this sequence through the CLI, including legal suffix IDs, schema failures, diagnostic redaction, occupied indexes, and repeatable generation.
+
+### Recoverable Delivery Workflow
+
+`preview-delivery-asset` accepts the same request as materialization and performs complete preparation without writing. It reports canonical paths, request validity, and candidate inventory blockers. Existing-versus-candidate error origin is determined against a read-only baseline inventory. Unsafe traversal remains an immediate stop. Otherwise inventory collects at most 50 independent issues with an explicit truncation indicator; dependent checks run after their prerequisites are valid. Frontmatter diagnostics include stable reason and recovery action, and schema-owned expected types, without input values.
+
+`materialize-delivery-asset --update-indexes` previews, saves the document pair, then publishes indexes using the existing fingerprint-bound transaction. The original creation-only command remains compatible. This is intentionally two publications: an index failure reports that the pair is saved and provides a recovery action. Identical rendered bilingual content permits a retry without rewriting the pair; different content cannot replace an existing non-Feedback owner. Feedback retains its source-history and update rules. Rollback failure reports uncertain save state. Read-only preview is neither authorization nor a concurrency reservation.
+
+Editable Feedback, PRD and architecture request JSON examples are shipped in Skill assets and executed by CLI regression tests. Validation covers no-write preview, multiple field errors, historical blockers, exact retry, changed-input rejection, and index failure after successful pair publication.

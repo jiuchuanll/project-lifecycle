@@ -1,20 +1,26 @@
-# Project Lifecycle 0.6.0 candidate notes
+# Project Lifecycle 0.7.0 candidate notes
 
 Publication status: **PUBLIC PRE-RELEASE EVALUATION CANDIDATE**
 
 Host support gate: **NON-RELEASE CANDIDATE**
 
-Version `0.6.0` adds a DeepSeek Harness bundle adapter to the `0.5.0`
-owner-centric delivery layout. Feedback remains independent, while each PRD or
-non-PRD root owns one
-stable directory containing its architecture, guidance, batches, test reports,
-and closure evidence. Existing schema-v1 delivery trees are handled through an
-explicit preview, approval-bound atomic migration, live validation, and
-rollback rather than silent rearrangement. The self-contained installed runtime
-introduced in `0.3.1` remains intact, so no npm dependency installation is
-required inside a host cache. This version remains private npm metadata and is
-published as repository source plus a deterministic release archive; the
-version bump does not upgrade any native-host support claim.
+Version `0.7.0` improves delivery creation and index recovery on the `0.6.0`
+DeepSeek Harness and owner-centric delivery foundation. It fixes misleading
+Frontmatter diagnostics and language-suffix IDs, adds read-only asset preview,
+and connects document creation to index publication with explicit partial-success
+and exact-content retry semantics. The installed runtime remains self-contained.
+This is a pre-release evaluation candidate, not a new native-host support claim.
+
+## Changes in 0.7.0
+
+- Field-level Frontmatter reasons, recovery actions and bounded multi-error inventory reports.
+- Correct canonical language detection for artifact IDs ending in `-en`.
+- `preview-delivery-asset` checks requests and candidate inventory without writing.
+- `materialize-delivery-asset --update-indexes` preserves standalone compatibility,
+  reports saved documents separately from failed index updates, and supports exact retries.
+- Executable Feedback, PRD and architecture JSON request examples and updated bilingual guidance.
+- Regression coverage for read-only preview, historical blockers, occupied indexes,
+  diagnostic privacy, safe retries and publication failure after document persistence.
 
 ## What changed
 
@@ -178,7 +184,7 @@ must complete both approved migrations.
   and temporary questions with no durable write.
 - Codex `0.147.0-alpha.6.5` and Kimi Code `0.29.2` retained traces were produced
   for `0.1.0`. Their recorded failures and bounded remediation results remain
-  historical evidence and are not relabeled as `0.6.0` runs.
+  historical evidence and are not relabeled as `0.7.0` runs.
 - Claude Code, Cursor, DeepSeek Harness, and ZCode remain `NOT_TESTED` because
   native executables were unavailable. Structural passes never produce a
   `SUPPORTED` claim.
