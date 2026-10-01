@@ -1,19 +1,11 @@
 import { createHash } from 'node:crypto';
 import {
-  cp,
   lstat,
-  mkdtemp,
   readFile,
-  readdir,
-  readlink,
   realpath,
-  rename,
-  rm,
-  rmdir,
 } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
-import { atomicWriteValidated } from '../lib/atomic-write.mjs';
 import { validateBilingualPair } from '../lib/bilingual-pair.mjs';
 import { compareCodePoints } from '../lib/deterministic-order.mjs';
 import { createError } from '../lib/errors.mjs';
@@ -24,6 +16,13 @@ import { fail, ok } from '../lib/result.mjs';
 import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
 import { generateIndexesFromRoot } from './generate-indexes.mjs';
+import { planKnowledgeLayout } from './layout-planner.mjs';
+import {
+  applyLayoutTransaction,
+  finalizeRetainedLayout,
+  inspectLifecycleTree,
+  rollbackRetainedLayout,
+} from './layout-transaction.mjs';
 
 const LANGUAGES = ['en', 'zh-CN'];
 const envelopeFields = new Set([
@@ -33,6 +32,7 @@ const envelopeFields = new Set([
   'approval_receipt',
   'resolution_receipts',
   'knowledge_updates',
+  'repository_roots',
 ]);
 const mutationKinds = new Set(['ADD', 'REWRITE', 'SUPERSEDE']);
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -75,15 +75,6 @@ const validReceipt = (receipt, fields = receiptFields) => isRecord(receipt)
   && /^[a-z][a-z0-9-]*:/u.test(receipt.ref)
   && receipt.verified === true
   && /^sha256:[0-9a-f]{64}$/u.test(receipt.candidate_commitment ?? '');
-
-const fileState = async (path) => {
-  try {
-    return await lstat(path);
-  } catch (error) {
-    if (error.code === 'ENOENT') return null;
-    throw error;
-  }
-};
 
 const inside = (root, candidate) => {
   const path = relative(root, candidate);
@@ -143,6 +134,10 @@ const validateEnvelope = (input) => {
         || !Number.isInteger(receipt.conflict_revision)
         || receipt.conflict_revision < 1))) {
     return failure('ABSORPTION_CONFLICT_MISMATCH', '/resolution_receipts', 'Resolution receipts must bind exact pending conflict identities and revisions.');
+  }
+  if (Object.hasOwn(input, 'repository_roots') && (!isRecord(input.repository_roots)
+    || Object.values(input.repository_roots).some((root) => typeof root !== 'string' || !isAbsolute(root)))) {
+    return failure('ABSORPTION_ENVELOPE_INVALID', '/repository_roots', 'Repository roots must be explicit absolute project directories.');
   }
   return ok(null);
 };
@@ -223,7 +218,7 @@ const documentFrame = (document, identityMap = new Map(), omitted = new Set()) =
   (_unit, factId) => omitted.has(factId) ? '' : `<!-- fact-unit:${identityMap.get(factId) ?? factId} -->\n`,
 ));
 
-const validateCandidateUpdates = async ({ lifecycleRoot, map, input }) => {
+const validateCandidateUpdates = async ({ rootsByRepository, map, input }) => {
   const updates = new Map();
   const currentDocuments = new Map();
   const currentFactOwners = new Map();
@@ -231,6 +226,10 @@ const validateCandidateUpdates = async ({ lifecycleRoot, map, input }) => {
   for (const domain of map.domains.filter(({ domain_state: state }) => state === 'materialized')) {
     if (!domain.paired_assets || !domain.baseline) {
       return failure('ABSORPTION_OWNER_MISMATCH', `/domains/${domain.id}`, 'Every current fact owner requires one canonical bilingual asset.');
+    }
+    const lifecycleRoot = rootsByRepository.get(domain.paired_assets.repository_id)?.lifecycleRoot;
+    if (!lifecycleRoot) {
+      return failure('ABSORPTION_ROOT_INVALID', `/repository_roots/${domain.paired_assets.repository_id}`, 'Every materialized owner repository requires one explicit local root.');
     }
     const currentPair = await validateBilingualPair(
       join(lifecycleRoot, domain.paired_assets.en),
@@ -612,69 +611,40 @@ const pendingEntry = ({ diff, newBaseline, target, revision, commitment, openedA
   };
 };
 
-const directoryFingerprint = async (root) => {
-  const entries = [];
-  const visit = async (directory, prefix = '') => {
-    const children = (await readdir(directory, { withFileTypes: true }))
-      .toSorted((left, right) => compareCodePoints(left.name, right.name));
-    for (const child of children) {
-      const path = join(directory, child.name);
-      const locator = prefix ? `${prefix}/${child.name}` : child.name;
-      const state = await lstat(path);
-      if (state.isDirectory() && !state.isSymbolicLink()) {
-        entries.push({ locator: `${locator}/`, type: 'directory' });
-        await visit(path, locator);
-      } else if (state.isFile()) {
-        entries.push({ locator, type: 'file', hash: createHash('sha256').update(await readFile(path)).digest('hex') });
-      } else if (state.isSymbolicLink()) {
-        entries.push({ locator, type: 'symlink', target: await readlink(path) });
-      } else throw new Error('Unsupported lifecycle filesystem entry.');
-    }
-  };
-  const state = await lstat(root);
-  if (!state.isDirectory() || state.isSymbolicLink()) throw new Error('Regular lifecycle root required.');
-  await visit(root);
-  return JSON.stringify(entries);
-};
-
-const fingerprintMatches = async (path, expected) => {
-  try { return await directoryFingerprint(path) === expected; } catch { return false; }
-};
-
 const validateIndex = (source, expected, map) => source === expected
   && source.endsWith('\n')
-  && map.domains.every(({ id }) => source.includes(`\`${id}\``))
   ? ok(source)
   : failure('ABSORPTION_INDEX_INVALID', '/', 'Generated indexes are incomplete.');
 
-const validateCandidateRoot = async ({ lifecycleRoot, expectedMap, expectedPending, expectedIndexes }) => {
+const validateCandidateRoot = async ({ lifecycleRoot, expectedMap, expectedPending, expectedIndexFiles, repositoryId }) => {
   try {
-    const [map, pending, englishIndex, chineseIndex] = await Promise.all([
-      readJson(join(lifecycleRoot, 'project-map.json')),
-      readJson(join(lifecycleRoot, 'pending-changes.json')),
-      readFile(join(lifecycleRoot, 'INDEX-en.md'), 'utf8'),
-      readFile(join(lifecycleRoot, 'INDEX.md'), 'utf8'),
-    ]);
-    if (!same(map, expectedMap) || !same(pending, expectedPending)
-      || englishIndex !== expectedIndexes.en || chineseIndex !== expectedIndexes['zh-CN']) {
-      return failure('ABSORPTION_CANDIDATE_INVALID', '/', 'Staged root differs from the accepted absorption write set.');
+    if (repositoryId === null) {
+      const [map, pending] = await Promise.all([
+        readJson(join(lifecycleRoot, 'project-map.json')),
+        readJson(join(lifecycleRoot, 'pending-changes.json')),
+      ]);
+      if (!same(map, expectedMap) || !same(pending, expectedPending)) {
+        return failure('ABSORPTION_CANDIDATE_INVALID', '/', 'Staged root differs from the accepted absorption write set.');
+      }
+      const mapValidation = validateJson('project-map', map);
+      if (!mapValidation.ok) return mapValidation;
+      const pendingValidation = validateJson('pending-changes', pending);
+      if (!pendingValidation.ok) return pendingValidation;
     }
-    const mapValidation = validateJson('project-map', map);
-    if (!mapValidation.ok) return mapValidation;
-    const pendingValidation = validateJson('pending-changes', pending);
-    if (!pendingValidation.ok) return pendingValidation;
-    const owners = new Set();
-    for (const domain of map.domains.filter(({ domain_state: state }) => state === 'materialized')) {
+    for (const file of expectedIndexFiles) {
+      if (await readFile(join(lifecycleRoot, file.locator), 'utf8') !== file.content) {
+        return failure('ABSORPTION_INDEX_INVALID', '/', 'Published hierarchical indexes are incomplete.');
+      }
+    }
+    for (const domain of expectedMap.domains.filter(({ domain_state: state, paired_assets: pair }) => (
+      state === 'materialized' && pair.repository_id === repositoryId
+    ))) {
       const pair = await validateBilingualPair(
         join(lifecycleRoot, domain.paired_assets.en),
         join(lifecycleRoot, domain.paired_assets['zh-CN']),
-        map,
+        expectedMap,
       );
       if (!pair.ok) return pair;
-      for (const factId of pair.value.fact_ids) {
-        if (owners.has(factId)) return failure('ABSORPTION_FACT_DUPLICATE', `/facts/${factId}`, 'A stable fact identity has more than one canonical owner.');
-        owners.add(factId);
-      }
     }
     return ok(null);
   } catch {
@@ -682,165 +652,119 @@ const validateCandidateRoot = async ({ lifecycleRoot, expectedMap, expectedPendi
   }
 };
 
-const cleanupOwned = async (projectRoot, path) => {
-  if (!path || !await fileState(path)) return;
-  const physical = await realpath(path);
-  if (!inside(projectRoot, physical)) throw new Error('Transaction path escaped project root.');
-  await rm(path, { recursive: true, force: true });
-};
-
-const inspectTransitionState = async ({ phase, projectRoot, lifecycleRoot, stageRoot, backupRoot, originalFingerprint, expectedCandidate }) => {
-  if (phase === 'backup-moved') {
-    const [live, stageBounded, backupBounded, backupOriginal] = await Promise.all([
-      fileState(lifecycleRoot),
-      boundedDirectory(projectRoot, stageRoot),
-      boundedDirectory(projectRoot, backupRoot),
-      fingerprintMatches(backupRoot, originalFingerprint),
-    ]);
-    return { ok: live === null && stageBounded && backupBounded && backupOriginal };
+const publishCandidate = async ({ rootsByRepository, map, pending, indexFilesByRepository, updates, operations = {}, result }) => {
+  const layout = planKnowledgeLayout({ map });
+  if (!layout.ok) return failure('ABSORPTION_INDEX_INVALID', '/', 'Accepted topology has no canonical layout.');
+  const repositoryIds = [...new Set([
+    ...updates.map((update) => map.domains.find(({ id }) => id === update.domain_id).paired_assets.repository_id),
+    null,
+  ])].sort((left, right) => left === null ? 1 : right === null ? -1 : compareCodePoints(left, right));
+  const fingerprints = new Map();
+  for (const repositoryId of repositoryIds) {
+    const repositoryRoots = rootsByRepository.get(repositoryId);
+    if (!repositoryRoots) return failure('ABSORPTION_ROOT_INVALID', `/repository_roots/${repositoryId}`, 'A participating repository root is missing.');
+    const inspected = await inspectLifecycleTree({ repositoryRoot: repositoryRoots.projectRoot });
+    if (!inspected.ok) return failure('ABSORPTION_ROOT_INVALID', '/', 'A lifecycle root changed before publication.');
+    fingerprints.set(repositoryId, inspected.value.fingerprint);
   }
-  if (phase === 'candidate-moved') {
-    const [stage, liveBounded, backupBounded, backupOriginal, liveCandidate] = await Promise.all([
-      fileState(stageRoot),
-      boundedDirectory(projectRoot, lifecycleRoot),
-      boundedDirectory(projectRoot, backupRoot),
-      fingerprintMatches(backupRoot, originalFingerprint),
-      validateCandidateRoot({ lifecycleRoot, ...expectedCandidate }),
-    ]);
-    return { ok: stage === null && liveBounded && backupBounded && backupOriginal && liveCandidate.ok };
-  }
-  return { ok: false };
-};
-
-const restoreFailure = async ({ lifecycleRoot, stageRoot, backupRoot }) => {
-  const labels = [];
-  for (const [label, path] of [['backup', backupRoot], ['live', lifecycleRoot], ['stage', stageRoot]]) {
-    if (!path) continue;
-    try { if (await fileState(path)) labels.push(label); } catch { labels.push(label); }
-  }
-  return failure('ABSORPTION_RESTORE_FAILED', '/recovery', `Recovery required; preserved artifacts: ${labels.length > 0 ? labels.join(', ') : 'unknown'}.`);
-};
-
-const reconcileOriginal = async ({ projectRoot, lifecycleRoot, stageRoot, backupRoot, originalFingerprint, expectedCandidate, restoreRename }) => {
-  try {
-    if (await fingerprintMatches(lifecycleRoot, originalFingerprint)) {
-      await cleanupOwned(projectRoot, stageRoot);
-      return { ok: true };
-    }
-    if (!backupRoot || !await fingerprintMatches(backupRoot, originalFingerprint)
-      || !await boundedDirectory(projectRoot, backupRoot)) {
-      return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
-    }
-    if (await fileState(lifecycleRoot)) {
-      const liveCandidate = await validateCandidateRoot({ lifecycleRoot, ...expectedCandidate });
-      if (!liveCandidate.ok || await fileState(stageRoot)) {
-        return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
-      }
-      await rename(lifecycleRoot, stageRoot);
-      const preserved = await validateCandidateRoot({ lifecycleRoot: stageRoot, ...expectedCandidate });
-      if (await fileState(lifecycleRoot) || !preserved.ok) {
-        return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
-      }
-    }
-    try {
-      await restoreRename(backupRoot, lifecycleRoot);
-    } catch {
-      if (!await fingerprintMatches(lifecycleRoot, originalFingerprint) || await fileState(backupRoot)) {
-        return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
-      }
-    }
-    if (!await fingerprintMatches(lifecycleRoot, originalFingerprint) || await fileState(backupRoot)) {
-      return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
-    }
-    await cleanupOwned(projectRoot, stageRoot);
-    return { ok: true };
-  } catch {
-    return { ok: false, result: await restoreFailure({ lifecycleRoot, stageRoot, backupRoot }) };
-  }
-};
-
-const publishCandidate = async ({ roots, originalFingerprint, map, pending, indexes, updates, operations = {}, result }) => {
-  const write = operations.atomicWriteValidated ?? atomicWriteValidated;
-  const publish = operations.rename ?? rename;
-  const afterPublish = operations.afterPublish ?? (async () => {});
-  const inspectTransition = operations.inspectTransition ?? inspectTransitionState;
-  const restoreRename = operations.restoreRename ?? rename;
-  const removeBackup = operations.removeBackup ?? ((path) => cleanupOwned(roots.projectRoot, path));
-  let stageRoot;
-  let backupRoot;
-  const expectedCandidate = { expectedMap: map, expectedPending: pending, expectedIndexes: indexes };
-  try {
-    stageRoot = await mkdtemp(join(roots.docsRoot, '.project-lifecycle-absorption-stage-'));
-    await cp(roots.lifecycleRoot, stageRoot, { recursive: true, force: false, verbatimSymlinks: true });
-    for (const update of updates) {
-      for (const language of LANGUAGES) {
-        await write({
-          root: stageRoot,
-          target: update[language].locator,
-          content: update[language].content,
-          validate: async (source) => source === update[language].content
-            ? ok(source)
-            : failure('ABSORPTION_PAIR_INVALID', '/', 'Localized candidate changed during staging.'),
-        });
-      }
-    }
-    await write({
-      root: stageRoot,
-      target: 'project-map.json',
-      content: jsonContent(map),
-      validate: async (source) => {
-        try { return validateJson('project-map', JSON.parse(source)); } catch { return failure('SCHEMA_INVALID', '/', 'Invalid staged project map.'); }
+  const retained = [];
+  const changed = [];
+  let cleanupPending = false;
+  const recoveryArtifacts = [];
+  for (const repositoryId of repositoryIds) {
+    const repositoryRoots = rootsByRepository.get(repositoryId);
+    const indexFiles = indexFilesByRepository.get(repositoryId) ?? [];
+    const repositoryUpdates = updates.filter((update) => (
+      map.domains.find(({ id }) => id === update.domain_id).paired_assets.repository_id === repositoryId
+    ));
+    const candidateFiles = [
+      ...repositoryUpdates.flatMap((update) => LANGUAGES.map((language) => ({
+        repository_id: repositoryId,
+        locator: update[language].locator,
+        content: update[language].content,
+        validate: async (source) => source === update[language].content
+          ? ok(source)
+          : failure('ABSORPTION_PAIR_INVALID', '/', 'Localized candidate changed during staging.'),
+      }))),
+      ...indexFiles.map((file) => ({
+        repository_id: repositoryId,
+        locator: file.locator,
+        content: file.content,
+        validate: async (source) => validateIndex(source, file.content, map),
+      })),
+      ...(repositoryId === null ? [{
+        repository_id: null, locator: 'project-map.json', content: jsonContent(map),
+        validate: async (source) => {
+          try { return validateJson('project-map', JSON.parse(source)); } catch { return failure('SCHEMA_INVALID', '/', 'Invalid staged project map.'); }
+        },
+      }, {
+        repository_id: null, locator: 'pending-changes.json', content: jsonContent(pending),
+        validate: async (source) => {
+          try { return validateJson('pending-changes', JSON.parse(source)); } catch { return failure('SCHEMA_INVALID', '/', 'Invalid staged pending changes.'); }
+        },
+      }] : []),
+    ];
+    let publicationRejected = null;
+    const transaction = await applyLayoutTransaction({
+      repositoryRoot: repositoryRoots.projectRoot,
+      expectedFingerprint: fingerprints.get(repositoryId),
+      candidateDirectories: layout.value.directories
+        .filter(({ repository_id: id }) => id === repositoryId)
+        .map(({ locator }) => locator),
+      candidateFiles,
+      deleteLocators: [],
+      validateCandidate: ({ lifecycleRoot }) => validateCandidateRoot({
+        lifecycleRoot, expectedMap: map, expectedPending: pending, expectedIndexFiles: indexFiles, repositoryId,
+      }),
+    }, {
+      ...operations,
+      retainBackup: repositoryId !== null,
+      ...(operations.rename ? {
+        rename: async (...args) => {
+          try {
+            return await operations.rename(...args);
+          } catch (error) {
+            publicationRejected = error;
+            throw error;
+          }
+        },
+      } : {}),
+      afterPublish: async (context) => {
+        if (publicationRejected) throw publicationRejected;
+        await operations.afterPublish?.({ ...context, repository_id: repositoryId });
+        await operations.afterRepositoryPublish?.({ ...context, repository_id: repositoryId });
       },
     });
-    await write({
-      root: stageRoot,
-      target: 'pending-changes.json',
-      content: jsonContent(pending),
-      validate: async (source) => {
-        try { return validateJson('pending-changes', JSON.parse(source)); } catch { return failure('SCHEMA_INVALID', '/', 'Invalid staged pending changes.'); }
-      },
-    });
-    await write({ root: stageRoot, target: 'INDEX-en.md', content: indexes.en, validate: async (source) => validateIndex(source, indexes.en, map) });
-    await write({ root: stageRoot, target: 'INDEX.md', content: indexes['zh-CN'], validate: async (source) => validateIndex(source, indexes['zh-CN'], map) });
-    const staged = await validateCandidateRoot({ lifecycleRoot: stageRoot, ...expectedCandidate });
-    if (!staged.ok) throw Object.assign(new Error('Staged absorption candidate invalid.'), { result: staged });
-
-    backupRoot = await mkdtemp(join(roots.docsRoot, '.project-lifecycle-absorption-backup-'));
-    await rmdir(backupRoot);
-    await publish(roots.lifecycleRoot, backupRoot);
-    if ((await inspectTransition({ phase: 'backup-moved', projectRoot: roots.projectRoot, lifecycleRoot: roots.lifecycleRoot, stageRoot, backupRoot, originalFingerprint, expectedCandidate }))?.ok !== true) {
-      throw new Error('Original transition invalid.');
+    if (!transaction.ok) {
+      for (const prior of retained.reverse()) {
+        const restored = await rollbackRetainedLayout(prior, operations);
+        if (!restored.ok) return failure('ABSORPTION_RESTORE_FAILED', '/', 'A repository shard could not be restored.');
+      }
+      const code = transaction.errors[0]?.code === 'LAYOUT_RESTORE_FAILED' ? 'ABSORPTION_RESTORE_FAILED' : 'ABSORPTION_WRITE_FAILED';
+      return failure(code, transaction.errors[0]?.path ?? '/', transaction.errors[0]?.message ?? 'Accepted Knowledge Diff could not be applied.');
     }
-    await publish(stageRoot, roots.lifecycleRoot);
-    if ((await inspectTransition({ phase: 'candidate-moved', projectRoot: roots.projectRoot, lifecycleRoot: roots.lifecycleRoot, stageRoot, backupRoot, originalFingerprint, expectedCandidate }))?.ok !== true) {
-      throw new Error('Candidate transition invalid.');
+    changed.push(...transaction.value.changed.map((locator) => ({ repository_id: repositoryId, locator })));
+    if (transaction.value.retained_publication) retained.push(transaction.value);
+    else {
+      cleanupPending ||= transaction.value.cleanup_pending;
+      recoveryArtifacts.push(...transaction.value.recovery_artifacts);
     }
-    const live = await validateCandidateRoot({ lifecycleRoot: roots.lifecycleRoot, ...expectedCandidate });
-    if (!live.ok) throw Object.assign(new Error('Published absorption candidate invalid.'), { result: live });
-    await afterPublish({ lifecycleRoot: roots.lifecycleRoot });
-
-    let cleanupComplete = false;
-    try { await removeBackup(backupRoot); } catch {}
-    try { cleanupComplete = await fileState(backupRoot) === null; } catch {}
-    stageRoot = null;
-    if (!cleanupComplete) {
-      return ok({ ...result, cleanup_state: 'pending', recovery_artifacts: ['backup'] });
-    }
-    backupRoot = null;
-    return ok({ ...result, cleanup_state: 'complete' });
-  } catch (error) {
-    const recovery = await reconcileOriginal({
-      projectRoot: roots.projectRoot,
-      lifecycleRoot: roots.lifecycleRoot,
-      stageRoot,
-      backupRoot,
-      originalFingerprint,
-      expectedCandidate,
-      restoreRename,
-    });
-    if (!recovery.ok) return recovery.result;
-    return error?.result ?? failure('ABSORPTION_WRITE_FAILED', '/', 'Accepted Knowledge Diff could not be applied.');
   }
+  for (const prior of retained) {
+    const finalized = await finalizeRetainedLayout(prior, operations);
+    if (!finalized.ok) {
+      cleanupPending = true;
+      recoveryArtifacts.push('backup');
+    }
+  }
+  return ok({
+    ...result,
+    changed,
+    cleanup_state: cleanupPending ? 'pending' : 'complete',
+    ...(recoveryArtifacts.length > 0
+      ? { recovery_artifacts: [...new Set(recoveryArtifacts)] }
+      : {}),
+  });
 };
 
 /**
@@ -862,23 +786,31 @@ export async function applyKnowledgeDiff(input, operations = {}) {
   let map;
   let pending;
   let indexes;
-  let originalFingerprint;
   try {
     roots = await resolveRoots(input.root);
-    [map, pending, indexes, originalFingerprint] = await Promise.all([
+    [map, pending, indexes] = await Promise.all([
       readJson(join(roots.lifecycleRoot, 'project-map.json')),
       readJson(join(roots.lifecycleRoot, 'pending-changes.json')),
       Promise.all([
         readFile(join(roots.lifecycleRoot, 'INDEX-en.md'), 'utf8'),
         readFile(join(roots.lifecycleRoot, 'INDEX.md'), 'utf8'),
       ]),
-      directoryFingerprint(roots.lifecycleRoot),
     ]);
   } catch (error) {
     return failure(error?.code === 'PATH_SYMLINK_ESCAPE' ? error.code : 'ABSORPTION_ROOT_INVALID', '/', 'A complete bounded lifecycle root is required.');
   }
   const mapValidation = validateJson('project-map', map);
   if (!mapValidation.ok) return mapValidation;
+  const rootsByRepository = new Map([[null, roots]]);
+  try {
+    for (const repository of map.repositories) {
+      const repositoryRoot = input.repository_roots?.[repository.id];
+      if (!isNonEmptyString(repositoryRoot)) continue;
+      rootsByRepository.set(repository.id, await resolveRoots(repositoryRoot));
+    }
+  } catch (error) {
+    return failure(error?.code === 'PATH_SYMLINK_ESCAPE' ? error.code : 'ABSORPTION_ROOT_INVALID', '/repository_roots', 'A repository shard root is invalid.');
+  }
   const pendingValidation = validateJson('pending-changes', pending);
   if (!pendingValidation.ok) return pendingValidation;
   if (input.knowledge_diff.knowledge_baseline !== map.knowledge_baseline) {
@@ -903,7 +835,7 @@ export async function applyKnowledgeDiff(input, operations = {}) {
     return failure('ABSORPTION_BASELINE_INVALID', '/new_baseline', 'Accepted mutation requires one exact advancing baseline reference.');
   }
 
-  const candidateState = await validateCandidateUpdates({ lifecycleRoot: roots.lifecycleRoot, map, input });
+  const candidateState = await validateCandidateUpdates({ rootsByRepository, map, input });
   if (!candidateState.ok) return candidateState;
   const operationResult = validateOperations({ diff: input.knowledge_diff, candidateState: candidateState.value });
   if (!operationResult.ok) return operationResult;
@@ -973,11 +905,13 @@ export async function applyKnowledgeDiff(input, operations = {}) {
     const nextValidation = validateJson('pending-changes', nextPending);
     if (!nextValidation.ok) return nextValidation;
     return publishCandidate({
-      roots,
-      originalFingerprint,
+      rootsByRepository,
       map,
       pending: nextPending,
-      indexes: { en: indexes[0], 'zh-CN': indexes[1] },
+      indexFilesByRepository: new Map([[null, [
+        { repository_id: null, locator: 'INDEX-en.md', content: indexes[0] },
+        { repository_id: null, locator: 'INDEX.md', content: indexes[1] },
+      ]]]),
       updates: [],
       operations,
       result: {
@@ -1043,18 +977,37 @@ export async function applyKnowledgeDiff(input, operations = {}) {
   const candidatePendingValidation = validateJson('pending-changes', candidatePending);
   if (!candidatePendingValidation.ok) return candidatePendingValidation;
 
-  const overlays = Object.fromEntries(input.knowledge_updates.flatMap((update) => (
-    LANGUAGES.map((language) => [update[language].locator, update[language].content])
-  )));
-  const generated = await generateIndexesFromRoot({ map: candidateMap, lifecycleRoot: roots.lifecycleRoot, overlays });
-  if (!generated.ok) return failure('ABSORPTION_INDEX_INVALID', '/', 'Canonical indexes cannot be regenerated from the accepted candidate.');
+  const participatingRepositoryIds = [...new Set([
+    ...input.knowledge_updates.map((update) => (
+      candidateMap.domains.find(({ id }) => id === update.domain_id).paired_assets.repository_id
+    )),
+    null,
+  ])];
+  const indexFilesByRepository = new Map();
+  for (const repositoryId of participatingRepositoryIds) {
+    const repositoryRoots = rootsByRepository.get(repositoryId);
+    if (!repositoryRoots) return failure('ABSORPTION_ROOT_INVALID', `/repository_roots/${repositoryId}`, 'A participating repository root is missing.');
+    const repositoryUpdates = input.knowledge_updates.filter((update) => (
+      candidateMap.domains.find(({ id }) => id === update.domain_id).paired_assets.repository_id === repositoryId
+    ));
+    const overlays = Object.fromEntries(repositoryUpdates.flatMap((update) => (
+      LANGUAGES.map((language) => [update[language].locator, update[language].content])
+    )));
+    const generated = await generateIndexesFromRoot({
+      map: candidateMap,
+      lifecycleRoot: repositoryRoots.lifecycleRoot,
+      overlays,
+      repository_id: repositoryId,
+    });
+    if (!generated.ok) return failure('ABSORPTION_INDEX_INVALID', '/', 'Canonical indexes cannot be regenerated from the accepted candidate.');
+    indexFilesByRepository.set(repositoryId, generated.value.files);
+  }
 
   return publishCandidate({
-    roots,
-    originalFingerprint,
+    rootsByRepository,
     map: candidateMap,
     pending: candidatePending,
-    indexes: { en: generated.value.en, 'zh-CN': generated.value['zh-CN'] },
+    indexFilesByRepository,
     updates: input.knowledge_updates,
     operations,
     result: {

@@ -4,6 +4,8 @@ import test from 'node:test';
 
 import { parse as parseYaml } from 'yaml';
 
+import { maskFencedMarkdown } from '../../scripts/lib/markdown.mjs';
+
 const skillUrl = new URL('../../skills/run-prd-lifecycle/SKILL.md', import.meta.url);
 const referenceRoot = new URL('../../skills/run-prd-lifecycle/references/', import.meta.url);
 const expectedReferences = [
@@ -41,6 +43,19 @@ test('declares the canonical PRD lifecycle Skill identity and delivery triggers'
   for (const trigger of ['Feedback', 'PRD', 'non-PRD', 'architecture', 'testing', 'closure']) {
     assert.match(frontmatter.description, new RegExp(trigger, 'i'));
   }
+});
+
+test('routes installed validator calls through the dependency-free plugin runtime', async () => {
+  const { body } = await loadSkill();
+  const runtime = body.match(/<!-- plugin-runtime-contract\n([\s\S]*?)\n-->/)?.[1];
+
+  assert.ok(runtime, 'root Skill must expose the installed plugin runtime contract');
+  assert.deepEqual(parseYaml(runtime), {
+    installed_cli: 'bin/project-lifecycle',
+    node_fallback: 'dist/project-lifecycle.mjs',
+    source_cli: 'repository-development-only',
+    cache_dependency_install: 'forbidden',
+  });
 });
 
 test('links exactly six focused one-level references', async () => {
@@ -99,7 +114,8 @@ test('keeps the four routes and temporary NEEDS_USER stop canonical in intake ro
 
   for (const reference of expectedReferences.filter((name) => name !== 'intake-routing.md')) {
     const source = await readFile(new URL(reference, referenceRoot), 'utf8');
-    for (const route of routes) assert.doesNotMatch(source, new RegExp(`\\b${route}\\b`));
+    // Request examples may use route values; route definitions remain centralized.
+    for (const route of routes) assert.doesNotMatch(maskFencedMarkdown(source), new RegExp(`\\b${route}\\b`));
     assert.doesNotMatch(source, /\bNEEDS_USER\b/);
   }
 });
@@ -138,4 +154,38 @@ test('exposes the closed native decision contract before reference routing', asy
     intent_materialized_without_acceptance: false,
   });
   assert.ok(body.indexOf('<!-- lifecycle-decision-contract') < body.indexOf('## Reference Routing'));
+});
+
+test('defines the sparse alignment projection and knowledge-writeback exit gate', async () => {
+  const assets = await readFile(new URL('delivery-assets.md', referenceRoot), 'utf8');
+  const closure = await readFile(new URL('closure-and-retention.md', referenceRoot), 'utf8');
+  for (const field of ['feedback_id', 'title', 'primary_domain_id', 'alignment_phase', 'owner_ref']) {
+    assert.match(assets, new RegExp(`\\b${field}\\b`));
+  }
+  for (const phase of ['REVIEW_REQUIRED', 'DELIVERY_OPEN', 'KNOWLEDGE_WRITEBACK', 'DEFERRED']) {
+    assert.match(assets, new RegExp(`\\b${phase}\\b`, 'u'));
+  }
+  assert.match(assets, /`DEFERRED` applies only while no required linked owner exists[^\n]*linked owner state takes precedence/iu);
+  assert.match(assets, /A row remains `DELIVERY_OPEN`[^\n]*It reaches `KNOWLEDGE_WRITEBACK`/u);
+  assert.match(closure, /every required linked owner.*Knowledge Diff/is);
+});
+
+test('defines owner-centric delivery v2, migration gates, retention, and installed commands', async () => {
+  const { body } = await loadSkill();
+  const assets = await readFile(new URL('delivery-assets.md', referenceRoot), 'utf8');
+  const closure = await readFile(new URL('closure-and-retention.md', referenceRoot), 'utf8');
+
+  for (const command of [
+    'inspect-delivery-layout', 'preview-delivery-layout-migration', 'migrate-delivery-layout',
+    'validate-delivery-layout', 'materialize-delivery-asset', 'close-delivery',
+    'generate-delivery-indexes',
+  ]) assert.match(body, new RegExp(`\\b${command}\\b`, 'u'));
+  assert.match(assets, /`delivery\/layout\.json`/u);
+  assert.match(assets, /`owner_artifact_id`/u);
+  assert.match(assets, /exactly one physical owner/iu);
+  assert.match(assets, /`delivery\/feedback\/<feedback-id>-en\.md`/u);
+  assert.match(assets, /`delivery\/views\/alignment-review-en\.md`/u);
+  assert.match(assets, /preview.*plan hash.*source fingerprint.*approval.*backup/is);
+  assert.match(closure, /mirrored owner path under `archive\/delivery\/`/iu);
+  assert.match(closure, /default retrieval.*does not read.*archived bod/iu);
 });

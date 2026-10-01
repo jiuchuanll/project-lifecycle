@@ -2,16 +2,18 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { closeDelivery } from '../../scripts/delivery/close-delivery.mjs';
+import { closeDelivery, validateClosureSummary } from '../../scripts/delivery/close-delivery.mjs';
 import { createKnowledgeDiffCandidate } from '../../scripts/delivery/create-knowledge-diff.mjs';
 import { createRetentionPlan } from '../../scripts/delivery/retention.mjs';
 import { validateJson } from '../../scripts/lib/validate-json.mjs';
 
 const casesUrl = new URL('../fixtures/delivery/closure/outcome-cases.json', import.meta.url);
-const owner = (overrides = {}) => ({
-  schema_version: 1,
+const owner = (overrides = {}) => {
+  const value = {
+  schema_version: 2,
   artifact_id: 'prd-wiki-layout',
   artifact_kind: 'prd',
+  owner_artifact_id: 'prd-wiki-layout',
   primary_route: 'PRD_DELIVERY',
   project_id_at_creation: 'sample-project',
   current_project_id: 'sample-project',
@@ -26,7 +28,10 @@ const owner = (overrides = {}) => ({
   reclassified_from_refs: [],
   obligations: [],
   ...overrides,
-});
+  };
+  if (!Object.hasOwn(overrides, 'owner_artifact_id')) value.owner_artifact_id = value.artifact_id;
+  return value;
+};
 const noChange = (overrides = {}) => ({
   schema_version: 1,
   diff_id: 'diff-prd-wiki-layout',
@@ -105,7 +110,12 @@ const closure = (overrides = {}) => ({
   detailed_artifacts: [{
     artifact_id: 'prd-wiki-layout',
     artifact_kind: 'prd',
-    locators: { en: 'delivery/prd-wiki-layout-en.md', 'zh-CN': 'delivery/prd-wiki-layout.md' },
+    owner_artifact_id: 'prd-wiki-layout',
+    owner_artifact_kind: 'prd',
+    locators: {
+      en: 'delivery/prds/prd-wiki-layout/prd-wiki-layout-en.md',
+      'zh-CN': 'delivery/prds/prd-wiki-layout/prd-wiki-layout.md',
+    },
     body_hashes: { en: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'zh-CN': 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' },
     evidence_refs: ['verification:wiki-layout'],
   }],
@@ -165,13 +175,32 @@ test('closes accepted PRD work with a change and an accepted no-change repair', 
 
   const repairOwner = owner({ artifact_id: 'wiki-layout-repair', artifact_kind: 'non-prd-delivery', primary_route: 'NON_PRD_DELIVERY' });
   const repairDiff = noChange({ diff_id: 'diff-wiki-layout-repair', owner_delivery_id: 'wiki-layout-repair' });
-  const repair = closeDelivery(closure({
+  const repairInput = closure({
     owner: repairOwner,
     impact: impact({ owner_artifact_id: 'wiki-layout-repair', owner_kind: 'non-prd-delivery' }),
     knowledge_handoff: candidate(repairDiff),
-  }));
+  });
+  assert.equal(closeDelivery(repairInput).errors[0].code, 'FEEDBACK_COVERAGE_INVALID');
+  repairInput.feedback_coverage[0].covering_prd_ids = ['wiki-layout-repair'];
+  const repair = closeDelivery(repairInput);
   assert.equal(repair.ok, true);
   assert.equal(repair.value.summary.knowledge_handoff.outcome, 'NO_CHANGE');
+  assert.deepEqual(repair.value.summary.feedback_coverage[0].covering_prd_ids, ['wiki-layout-repair']);
+});
+
+test('normalizes successful closure summaries to their closed consumer contract', () => {
+  const result = closeDelivery(closure({
+    outcome: { ...closure().outcome, private_note: 'ignored' },
+    verification: { ...closure().verification, runner: 'local' },
+    acceptance_units: [{ ...closure().acceptance_units[0], note: 'ignored' }],
+    feedback_coverage: [{ ...closure().feedback_coverage[0], note: 'ignored' }],
+    conflict_disposition: { ...closure().conflict_disposition, note: 'ignored' },
+    baseline: { ...closure().baseline, note: 'ignored' },
+  }));
+  assert.equal(result.ok, true);
+  assert.equal(validateClosureSummary(result.value.summary).ok, true);
+  assert.equal(JSON.stringify(result.value.summary).includes('ignored'), false);
+  assert.equal(JSON.stringify(result.value.summary).includes('local'), false);
 });
 
 test('binds the validated impact owner, baselines, and accepted evidence to closure', () => {
@@ -221,7 +250,7 @@ test('creates an immutable compact summary, archive transitions, and exact clean
   const result = closeDelivery(closure());
   assert.equal(result.ok, true);
   assert.equal(Object.isFrozen(result.value.summary), true);
-  assert.equal(result.value.retention.archive_transitions[0].to.en, 'archive/delivery/prd-wiki-layout-en.md');
+  assert.equal(result.value.retention.archive_transitions[0].to.en, 'archive/delivery/prds/prd-wiki-layout/prd-wiki-layout-en.md');
   assert.deepEqual(result.value.retention.retained_unique_evidence_refs, ['verification:wiki-layout']);
   assert.equal(result.value.cleanup_authorization.owner_status, 'CLOSED');
   assert.equal(result.value.cleanup_authorization.knowledge_handoff.kind, 'NO_CHANGE');
@@ -236,4 +265,13 @@ test('retention rejects bodyless identity, unsafe locators, and evidence deletio
   const unsafe = structuredClone(base.detailed_artifacts);
   unsafe[0].locators.en = '../escape.md';
   assert.equal(createRetentionPlan({ summary, artifacts: unsafe, delete_evidence_refs: [] }).ok, false);
+  const foreignOwner = structuredClone(base.detailed_artifacts);
+  foreignOwner[0].locators = {
+    en: 'delivery/prds/prd-other/prd-wiki-layout-en.md',
+    'zh-CN': 'delivery/prds/prd-other/prd-wiki-layout.md',
+  };
+  assert.equal(
+    createRetentionPlan({ summary, artifacts: foreignOwner, delete_evidence_refs: [] }).errors[0].code,
+    'RETENTION_OWNER_MISMATCH',
+  );
 });

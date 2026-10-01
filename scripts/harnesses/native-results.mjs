@@ -60,7 +60,7 @@ export function extractGoldObservation(source) {
 
 export function validateNativeResults({ scenarios, matrix, traces } = {}) {
   if (!Array.isArray(scenarios) || scenarios.length !== 7 || !record(matrix)
-    || matrix.schema_version !== 1 || matrix.plugin_version !== '0.1.0'
+    || matrix.schema_version !== 1 || !isSafeReference(matrix.plugin_version)
     || !record(matrix.hosts) || !Array.isArray(traces)) {
     return failure('NATIVE_RESULTS_INVALID', '/', 'Native result set is incomplete.');
   }
@@ -107,6 +107,7 @@ export function validateNativeResults({ scenarios, matrix, traces } = {}) {
       const runs = hostTraces.filter((trace) => trace.scenario_id === scenario.scenario_id)
         .sort((left, right) => left.run_number - right.run_number);
       if (runs.length !== 3 || runs.some((trace, index) => trace.run_number !== index + 1
+        || trace.plugin.version !== matrix.plugin_version
         || trace.host.version !== entry.observed_version || trace.result !== 'PASS'
         || trace.invariant_evaluation.status !== 'PASS' || trace.semantic_review.status !== 'PASS')) {
         return failure('NATIVE_SUPPORT_UNPROVEN', `/hosts/${host}`, 'Every scenario requires three independent structural and semantic passes.');

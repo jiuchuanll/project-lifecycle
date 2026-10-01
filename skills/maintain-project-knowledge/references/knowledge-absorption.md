@@ -34,7 +34,7 @@ Broad relevance or repeated links do not move a domain fact. Propose a project-l
 
 ## Apply and Verify
 
-One approved semantic decision authorizes only its declared atomic write set: paired capability updates, matching map metadata or markers, and regenerated bilingual indexes. Validate every changed contract before replacing the accepted files. If any write or validation fails, do not claim absorption complete; preserve or restore the last accepted set using the repository adapter's bounded transaction behavior.
+One approved semantic decision authorizes only its declared atomic write set: paired capability updates, matching map metadata or markers, and regenerated bilingual indexes. In a multi-repository project, resolve every materialized owner through explicit `repository_roots`, validate facts against their canonical shards, publish affected shards before governance, and retain cross-shard rollback until the governance map succeeds. Validate every changed contract before replacing the accepted files. If any write or validation fails, do not claim absorption complete; preserve or restore the last accepted set using the repository adapter's bounded transaction behavior.
 
 Report the applied fact IDs and revisions, owner domains, new knowledge baseline, evidence references, derived view updates, `NO_CHANGE` when applicable, and any remaining limits. Do not copy the PRD, test report, process log, or evidence body into capability knowledge.
 

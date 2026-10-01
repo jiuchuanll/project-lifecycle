@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "project_id": "sample-app",
   "identity_lineage": [],
   "repositories": [],
@@ -17,8 +17,9 @@
       "evidence_refs": ["test:wiki-layout"],
       "known_gaps": [],
       "paired_assets": {
-        "en": "wiki-workspace-en.md",
-        "zh-CN": "wiki-workspace.md"
+        "repository_id": null,
+        "en": "knowledge/wiki-workspace-en.md",
+        "zh-CN": "knowledge/wiki-workspace.md"
       },
       "baseline": "abc123"
     }

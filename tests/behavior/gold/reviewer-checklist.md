@@ -15,6 +15,8 @@ Use this checklist after structural evaluation. Review the retained raw output a
 - The response used only the scenario's allowed context and reported explicit unknowns instead of filling gaps.
 - The selected route or stop matches the user's intent; a typo or new word alone did not trigger an unnecessary question.
 - Durable files stayed within the declared write set, and bilingual assets remained paired.
+- V2 navigation followed only the lifecycle root, repository Knowledge root or shard, and direct-child indexes on the selected branch; it never inferred topology from directories.
+- A flat-layout migration used one explicit approval, preserved both languages, removed old canonical copies, and did not introduce a public migration CLI.
 - Evidence and approval references came from the fixture or retained interaction evidence.
 - Every stable fact kept its declared owner, so vertical propagation and horizontal coordination remained correct.
 - Every required human gate was surfaced before the governed action.

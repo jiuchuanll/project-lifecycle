@@ -32,8 +32,8 @@
       "validator": "bilingual-pair",
       "expected_code": "PAIR_MACHINE_MISMATCH",
       "inputs": {
-        "en": "wiki-workspace-en.md",
-        "zh-CN": "wiki-workspace.md",
+        "en": "knowledge/wiki-workspace-en.md",
+        "zh-CN": "knowledge/wiki-workspace.md",
         "project_map": "../valid/project-map.json"
       }
     },
@@ -42,8 +42,8 @@
       "validator": "bilingual-pair",
       "expected_code": "OK",
       "inputs": {
-        "en": "wiki-workspace-en.md",
-        "zh-CN": "wiki-workspace.md",
+        "en": "knowledge/wiki-workspace-en.md",
+        "zh-CN": "knowledge/wiki-workspace.md",
         "project_map": "project-map.json"
       }
     },

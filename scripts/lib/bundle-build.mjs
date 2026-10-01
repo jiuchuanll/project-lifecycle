@@ -5,7 +5,7 @@ import { build } from 'esbuild';
 export const bundleOutput = (repositoryRoot) => resolve(repositoryRoot, 'dist/project-lifecycle.mjs');
 
 export const buildBundle = async ({ repositoryRoot, write = true }) => build({
-  entryPoints: [resolve(repositoryRoot, 'scripts/bin/project-lifecycle.mjs')],
+  entryPoints: [resolve(repositoryRoot, 'scripts/bin/project-lifecycle-source.mjs')],
   outfile: bundleOutput(repositoryRoot),
   bundle: true,
   platform: 'node',

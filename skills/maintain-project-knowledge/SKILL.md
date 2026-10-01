@@ -9,6 +9,19 @@ Construct and maintain the accepted project-knowledge line. Keep it separate fro
 
 Use the fixed project-owned root `docs/project-lifecycle/`. If neither its authoritative `project-map.json` nor a resolvable compact project pointer exists, bootstrap from bounded project evidence; do not search the user's machine for another knowledge base. Do not use this Skill for an ephemeral action with no durable knowledge effect or to recreate the delivery lifecycle.
 
+Canonical knowledge uses `project-map.json` schema v2. `parent_id` is the only vertical-topology source; directories and generated indexes never define or override containment. A v1 flat layout must stop normal routing until one explicitly approved internal migration moves the complete bilingual tree. Do not expose, require, or invent a migration CLI.
+
+## Installed Runtime
+
+When deterministic validation is needed from an installed plugin, resolve `<plugin-root>` by ascending two directories from the directory that contains this `SKILL.md`, then execute `<plugin-root>/bin/project-lifecycle`. If the host cannot execute that wrapper, use `node <plugin-root>/dist/project-lifecycle.mjs` as the only fallback. Never invoke files under `<plugin-root>/scripts/`, run package scripts, install dependencies, or modify a plugin cache; source entry points are repository-development-only.
+
+<!-- plugin-runtime-contract
+installed_cli: bin/project-lifecycle
+node_fallback: dist/project-lifecycle.mjs
+source_cli: repository-development-only
+cache_dependency_install: forbidden
+-->
+
 ## Native Decision Contract
 
 Keep this contract in working context even when no routing reference is loaded. For work this Skill owns, the normal route is `KNOWLEDGE_UPDATE`; use another value only when handing the request to its actual owner.
@@ -39,10 +52,13 @@ Load only the one reference needed for the current decision. Load another refere
 | --- | --- |
 | Select the smallest current context, resolve a project pointer, decide task sufficiency, or return the PRD knowledge handoff | [Context routing](references/context-routing.md) |
 | Enter a project without a map, survey it lightly, present candidate boundaries, or run initial/ongoing calibration | [Bootstrap and calibration](references/bootstrap-and-calibration.md) |
+| Explain domain complexity, honor an explicit deep-thinking request, run whole-map consistency review, or review semantic content quality | [Deep domain calibration](references/deep-domain-calibration.md) |
 | Deepen a confirmed boundary, decide whether durable knowledge is justified, or create/update a bilingual capability asset | [Materialization](references/materialization.md) |
 | Add or change a node, owner, relationship, propagated constraint, semantic ID, or descendant disposition | [Topology and constraints](references/topology-and-constraints.md) |
 | Validate and apply an accepted delivery Knowledge Diff, record `NO_CHANGE`, or consider project-level ownership promotion | [Knowledge absorption](references/knowledge-absorption.md) |
 | Current knowledge, task-linked active work, and a closed summary are insufficient for an audit, regression, incident, explicit ID, or historical comparison | [Archive retrieval](references/archive-retrieval.md) |
+
+Complexity is assessed per candidate domain. Load deep calibration only for an explained recommendation, an explicit user request, the authorized second pass, or semantic quality review; a clear domain continues through the ordinary focused reference.
 
 ## Ordered Lifecycle
 
@@ -58,6 +74,8 @@ Follow the states in order. Resume at the earliest state invalidated by new evid
 | ROUTE/MAINTAIN | The smallest context is sufficient, or one material ambiguity/change candidate has a focused stop. | [Context routing](references/context-routing.md) | Evidence-backed non-semantic maintenance, or the exact approved semantic write set. | Confirm boundary, ownership, routing-impacting alias, or other semantic change. |
 | ABSORB | The candidate Knowledge Diff is accepted and applied, explicitly `NO_CHANGE`, or stopped for baseline, ownership, evidence, topology, or conflict. | [Knowledge absorption](references/knowledge-absorption.md) | Canonical fact updates and mechanically derived synchronized views in one accepted write set. | Explicit approval for semantic writeback and every material conflict disposition. |
 | VERIFY | Relevant Phase 1 validators pass and durable files agree on IDs, baselines, ownership, evidence, pairing, topology, and state. | [Materialization](references/materialization.md) | Mechanical bilingual/index repair already authorized by the accepted semantic decision. | Validation never substitutes for unresolved semantic approval. |
+
+The generated navigation has three bounded classes: lifecycle-root `INDEX.md`/`INDEX-en.md`, repository-local `knowledge/INDEX.md`/`INDEX-en.md`, and a direct-child index pair inside every domain directory that has children. A directory and index may represent an unmaterialized parent; they never authorize or fabricate a parent body.
 
 ## Non-Negotiable Gates
 

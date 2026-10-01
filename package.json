@@ -1,8 +1,9 @@
 {
   "name": "project-lifecycle",
-  "version": "0.1.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
+  "main": "./dsh/index.js",
   "engines": {
     "node": ">=22"
   },
@@ -17,13 +18,19 @@
     "test": "node --test",
     "test:delivery": "node --test tests/delivery/*.test.mjs",
     "test:governance": "node --test tests/governance/*.test.mjs",
-    "validate:fixtures": "node scripts/bin/project-lifecycle.mjs validate-fixtures tests/fixtures",
+    "validate:fixtures": "node scripts/bin/project-lifecycle-source.mjs validate-fixtures tests/fixtures",
     "check:privacy": "node scripts/check-privacy.mjs",
     "check": "npm test && npm run validate:fixtures && npm run check:privacy"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
   },
   "dependencies": {
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
+    "mdast-util-from-markdown": "2.0.3",
     "yaml": "2.9.0"
   },
   "devDependencies": {

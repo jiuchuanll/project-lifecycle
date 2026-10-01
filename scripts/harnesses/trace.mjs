@@ -18,7 +18,7 @@ export function validateTrace(value) {
   if (!exactKeys(value, keys)) return failure('/');
   if (!isSafeReference(value.run_id) || !isSafeReference(value.scenario_id)
     || !Number.isInteger(value.run_number) || value.run_number < 1 || value.run_number > 3
-    || !exactKeys(value.plugin, ['commit', 'version']) || value.plugin.version !== '0.1.0'
+    || !exactKeys(value.plugin, ['commit', 'version']) || !isSafeReference(value.plugin.version)
     || !/^[0-9a-f]{40,64}$/u.test(value.plugin.commit ?? '')
     || !exactKeys(value.host, ['id', 'version']) || !isSafeReference(value.host.id) || !isSafeReference(value.host.version)
     || !exactKeys(value.model, ['identity', 'revision'])

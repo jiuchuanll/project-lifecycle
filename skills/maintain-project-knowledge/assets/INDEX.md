@@ -7,9 +7,13 @@
 
 - 无。
 
-## 领域入口
+## 知识
 
-- 无。
+- [知识](knowledge/INDEX.md)
+
+## 交付
+
+- [交付](delivery/INDEX.md)
 
 ## 进行中的变更
 

@@ -9,10 +9,11 @@ import { isSafeLocator } from '../lib/reference-safety.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { resolveInside } from '../lib/safe-path.mjs';
 import { validateJson } from '../lib/validate-json.mjs';
+import { activeDeliveryPair, archivedDeliveryPair } from '../delivery/delivery-layout.mjs';
 
 const ID = /^[a-z][a-z0-9-]*$/u;
 const HASH = /^sha256:[0-9a-f]{64}$/u;
-const DELIVERY_LOCATOR = /^delivery\/[a-z][a-z0-9-]*-en\.md$/u;
+const DELIVERY_LOCATOR = /^(?:delivery|archive\/delivery)\/(?:feedback\/[a-z][a-z0-9-]*-en\.md|(?:prds|non-prd)\/[a-z][a-z0-9-]*(?:\/(?:architecture|batches|closure|guidance|test-reports))?\/[a-z][a-z0-9-]*-en\.md)$/u;
 const RETAINED = new Set(['archive', 'closed-summary']);
 const failure = (code, path, message) => fail([createError(code, path, message)]);
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -23,6 +24,21 @@ const inside = (root, candidate) => {
 };
 
 const hashOf = (content) => `sha256:${createHash('sha256').update(content).digest('hex')}`;
+const canonicalLocator = (frontmatter, locator) => {
+  const ownerKind = locator.includes('/prds/')
+    ? 'prd'
+    : locator.includes('/non-prd/')
+      ? 'non-prd-delivery'
+      : null;
+  try {
+    const pair = frontmatter.retention_tier === 'archive'
+      ? archivedDeliveryPair(frontmatter, { ownerKind })
+      : activeDeliveryPair(frontmatter, { ownerKind });
+    return pair.en === locator;
+  } catch {
+    return false;
+  }
+};
 
 const parseDeliveryFrontmatter = (content) => {
   const normalized = content.toString('utf8').replaceAll('\r\n', '\n');
@@ -147,7 +163,8 @@ export async function buildArchiveCatalog({ root, delivery_locators: locators, o
       const content = await readFile(physical);
       onRead({ locator, section: 'artifact-hash' });
       const frontmatter = parseDeliveryFrontmatter(content);
-      if (!frontmatter || !RETAINED.has(frontmatter.retention_tier)) {
+      if (!frontmatter || !RETAINED.has(frontmatter.retention_tier)
+        || !canonicalLocator(frontmatter, locator)) {
         return failure('ARCHIVE_FRONTMATTER_INVALID', '/delivery_locators', 'Catalog sources require validated retained delivery Frontmatter.');
       }
       if (frontmatter.project_id_at_creation !== map.project_id
@@ -175,3 +192,4 @@ export async function buildArchiveCatalog({ root, delivery_locators: locators, o
 export const archiveContentHash = hashOf;
 export const archiveFrontmatter = parseDeliveryFrontmatter;
 export const archiveLifecycleRoot = resolveLifecycleRoot;
+export const archiveLocatorMatchesFrontmatter = canonicalLocator;

@@ -1,6 +1,7 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "artifact_id": "prd-wiki-layout-v2",
+  "owner_artifact_id": "prd-wiki-layout-v2",
   "artifact_kind": "prd",
   "primary_route": "PRD_DELIVERY",
   "project_id_at_creation": "knowledge-vault-agent-app",

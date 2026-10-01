@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "project_id": "sample-project",
   "knowledge_baseline": "baseline-7",
   "project_identity": {

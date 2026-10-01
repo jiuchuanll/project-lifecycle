@@ -1,6 +1,7 @@
 ---
-schema_version: 1
+schema_version: 2
 artifact_id: batch-template
+owner_artifact_id: prd-template
 artifact_kind: batch
 primary_route: PRD_DELIVERY
 project_id_at_creation: sample-project

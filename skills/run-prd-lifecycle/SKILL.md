@@ -11,6 +11,19 @@ Use the fixed project-owned root `docs/project-lifecycle/` for durable delivery 
 
 This Skill owns Feedback, PRD and non-PRD delivery assets, architecture and guidance deltas, execution and test evidence, acceptance, closure, the runtime Context Receipt, and the candidate Knowledge Diff. `maintain-project-knowledge` owns accepted knowledge selection and accepted knowledge writeback.
 
+## Installed Runtime
+
+When deterministic validation is needed from an installed plugin, resolve `<plugin-root>` by ascending two directories from the directory that contains this `SKILL.md`, then execute `<plugin-root>/bin/project-lifecycle`. If the host cannot execute that wrapper, use `node <plugin-root>/dist/project-lifecycle.mjs` as the only fallback. Never invoke files under `<plugin-root>/scripts/`, run package scripts, install dependencies, or modify a plugin cache; source entry points are repository-development-only.
+
+The installed delivery commands are `inspect-delivery-layout`, `preview-delivery-layout-migration`, `migrate-delivery-layout`, `validate-delivery-layout`, `preview-delivery-asset`, `materialize-delivery-asset`, `close-delivery`, and `generate-delivery-indexes`. Inspection and preview are read-only. For normal creation, use `preview-delivery-asset` followed by `materialize-delivery-asset --update-indexes` with the same JSON request. Exact-content retries of the integrated command are safe; its result distinguishes a saved document pair from a failed index update. Migration requires the exact preview plan hash and source fingerprint plus explicit approval and backup references. Materialization and index generation require a validated layout-v2 tree. Before creating delivery files, follow the template and JSON-envelope workflow in [Delivery assets](references/delivery-assets.md#creation-and-indexing-workflow); do not invent Frontmatter fields or handwrite generated indexes.
+
+<!-- plugin-runtime-contract
+installed_cli: bin/project-lifecycle
+node_fallback: dist/project-lifecycle.mjs
+source_cli: repository-development-only
+cache_dependency_install: forbidden
+-->
+
 ## Native Decision Contract
 
 Keep this contract in working context before consulting a deeper routing reference.

@@ -12,9 +12,17 @@ Produce one schema-valid Knowledge Diff candidate from accepted delivery evidenc
 
 The candidate is not current truth. Only `maintain-project-knowledge` may validate conflicts, obtain the required semantic approval, and apply accepted knowledge writeback.
 
+## Alignment Exit
+
+An active alignment marker and projection row exit only after every required linked owner has accepted closure with explicit Feedback coverage, every accepted closure has a persisted canonical bilingual closure-summary pair whose managed digest matches the compact closure object, every corresponding Knowledge Diff application or accepted no-change result has an exact externally verified binding, the Feedback disposition is explicit, and canonical knowledge represents the final business and implementation state. A consciously accepted no-remediation result additionally requires an explicit human approval reference and an externally verified accepted knowledge no-change or residual-divergence result. Derive owner and closure inventory from both active and retained authoritative delivery pairs.
+
+PRD creation, code merge, or owner closure alone is insufficient. Remove the marker only through the validated resolution transition, then regenerate both projection languages together. Durable history remains in Feedback and closure assets; do not append it to the active projection.
+
 ## Retention
 
 Keep active material while delivery or a bounded repair remains open. At closure, retain a compact summary containing identity, outcome, acceptance, evidence, coverage, residual risk, and knowledge-handoff reference. Move detailed delivery evidence to archive only when policy requires retention; superseded or redundant intermediate artifacts leave default retrieval.
+
+Retained detailed pairs keep the same `owner_artifact_id` and move to the mirrored owner path under `archive/delivery/`; do not flatten, rename, or reassign their physical owner during closure. The compact closure summary and generated indexes retain exact locators. Default retrieval uses active metadata and compact closure evidence and does not read archived bodies. A later historical investigation still requires the knowledge Skill's Archive Access Receipt.
 
 Archive lookup later is receipt-gated by the knowledge Skill. Do not keep large bodies in active indexes merely because they existed during delivery.
 

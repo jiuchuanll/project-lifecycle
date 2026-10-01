@@ -20,7 +20,7 @@ const fixtureRoot = join(repositoryRoot, 'tests', 'fixtures');
 
 const runCli = (root) => new Promise((resolve, reject) => {
   const child = spawn(process.execPath, [
-    'scripts/bin/project-lifecycle.mjs',
+    'scripts/bin/project-lifecycle-source.mjs',
     'validate-fixtures',
     root,
   ], { cwd: repositoryRoot });

@@ -11,32 +11,32 @@ verification_refs: []
 
 ## Purpose and current boundary
 
-Describe the capability purpose and its accepted boundary.
+State the owned outcome, included and excluded scope, and the distinction from parent and peer domains.
 
 ## Current facts
 
-Add only durable facts with structured fact metadata and explicit limits.
+Add only durable facts. For each independently addressable fact, retain its stable ID and revision, current statement, evidence references, verification baseline, and explicit limits. Do not fill missing knowledge with placeholder prose.
 
 ## System and data relationships
 
-Describe the system and data relationships that affect this capability.
+Describe only the containment, horizontal collaboration, shared data, interfaces, and constraints that affect this capability.
 
 ## Implementation and resource map
 
-List the smallest stable implementation and resource entry points.
+List the smallest stable implementation and resource entry points; link instead of duplicating implementation prose.
 
 ## Quality state
 
-Describe the verified quality state and evidence coverage.
+State verified coverage, supporting checks, and any unmet semantic quality gate.
 
 ## Dependencies
 
-Describe the declared major dependencies used for routing.
+Identify the canonical owner and declared major dependencies used for routing.
 
 ## Known limits and unknowns
 
-State explicit limits, unknowns, confidence bounds, and unresolved risks.
+State evidence-bounded limits, confidence limits, known extension seams, unknowns, and unresolved risks.
 
 ## Provenance
 
-Summarize the authoritative evidence and human decisions behind the asset.
+Summarize authoritative evidence and human decisions without copying Feedback, PRD, test-report, delivery, or historical bodies.

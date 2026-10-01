@@ -41,6 +41,35 @@ test('keeps every fixture bounded and every scenario positive plus adversarial',
   }
 });
 
+test('covers the four v2 hierarchical knowledge behaviors with explicit outcomes', () => {
+  const cases = scenarios.map(({ v2_behavior_case: behavior }) => behavior).filter(Boolean);
+  assert.deepEqual(cases.map(({ case_id: caseId }) => caseId).sort(), [
+    'existing-flat-layout-migration',
+    'new-two-level-progressive-materialization',
+    'temporary-question-no-write',
+    'three-level-bounded-routing',
+  ]);
+  for (const behavior of cases) {
+    assert.equal((behavior.expected_route === null) !== (behavior.expected_stop === null), true);
+    assert.ok(Array.isArray(behavior.selected_context_ids));
+    assert.ok(Array.isArray(behavior.durable_files_written));
+    assert.ok(Array.isArray(behavior.archive_paths_read));
+    assert.ok(Array.isArray(behavior.human_gates));
+    assert.ok(Array.isArray(behavior.forbidden_writes));
+  }
+});
+
+test('gates complex calibration without forcing deepening on every domain', () => {
+  const complex = scenarios.find(({ scenario_id: id }) => id === 'reconnaissance-calibration');
+  const evidenceClear = scenarios.find(({ scenario_id: id }) => id === 'professional-domain-materialization');
+
+  assert.ok(complex.required_human_gates.includes('DEEP_CALIBRATION_CONSENT'));
+  assert.ok(complex.required_human_gates.includes('WHOLE_MAP_CONSISTENCY_REVIEW'));
+  assert.ok(complex.completion_unit_ids.includes('unit:whole-map-consistency-review'));
+  assert.ok(complex.required_durable_files.every((path) => !/brainstorm|calibration-log|interview/u.test(path)));
+  assert.equal(evidenceClear.required_human_gates.includes('DEEP_CALIBRATION_CONSENT'), false);
+});
+
 test('accepts the declared positive observation for every scenario', () => {
   for (const scenario of scenarios) {
     const result = evaluateGoldObservation(scenario, scenario.positive_path.observation);

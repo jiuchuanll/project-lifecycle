@@ -16,13 +16,46 @@ Evidence may include code, resources, configuration, existing authoritative docu
 
 ## Canonical Ownership
 
-Use `project-map.json` for structure and routing, generated `INDEX.md`/`INDEX-en.md` for navigation, and paired Markdown for knowledge. The map must not become a second knowledge body. Capability Frontmatter proves the asset's matching ID, state, pair, baseline, entry points, and verification evidence; the body explains current product, architecture, implementation, quality, dependencies, provenance, and owned constraints.
+Use schema-v2 `project-map.json` for structure and routing, generated `INDEX.md`/`INDEX-en.md` for navigation, and paired Markdown for knowledge. The map must not become a second knowledge body. Capability Frontmatter proves the asset's matching ID, state, pair, baseline, entry points, and verification evidence; the body explains current product, architecture, implementation, quality, dependencies, provenance, and owned constraints.
+
+Canonical paths come only from the accepted topology and repository owner. A top-level leaf uses `knowledge/<id>-en.md`; a node with children owns `knowledge/<ancestor...>/<id>/<id>-en.md`; its direct children share that directory, recursively. The Chinese path follows the same rule without `-en`. `paired_assets.repository_id` is `null` for governance or the exact registered owner. Caller-chosen paths, filesystem nesting, and old flat locations never override the planner.
+
+For a repository-owned domain, bind the registered owner to an explicit local `repository_roots` entry. Stage and validate the body plus shard indexes there, retain its rollback backup, and publish the governance map only after the shard succeeds. A failure restores any shard already published.
 
 One independently verifiable or changeable semantic subject may receive a stable structured `fact_id`. Keep that ID when the accepted answer changes but the subject remains the same, and advance its revision. Replacement, split, merge, ownership transfer, or semantic-scope change creates a reviewed transition rather than recycling an identity. Do not add a global fact index or an exhaustive fact-ID array to Frontmatter.
+
+## Semantic Content Quality Gate
+
+A candidate must pass all six semantic gates before promotion to `current`:
+
+1. **Boundary clarity:** purpose, included and excluded scope, and distinction from parent and peer domains are understandable.
+2. **Durable fact coverage:** stable facts likely to support future retrieval and decisions are present without placeholder prose.
+3. **Evidence quality:** every current fact has supporting evidence, a verification baseline, and limits proportional to risk.
+4. **Relationship clarity:** canonical owner, parentage, major dependencies, shared constraints, and repository ownership are explicit.
+5. **Extension readiness:** stable identities, likely change seams, known extensions, unknowns, and unresolved risks are clear.
+6. **Concision:** link instead of duplicating map, Feedback, PRD, test-report, delivery, or other domain bodies.
+
+Do not combine these gates into a numeric score. A failed critical gate leaves the asset absent or non-current and reports the smallest actionable gap. User acceptance of risk does not turn unsupported content into verified truth. Structural validation cannot override this semantic review.
+
+<!-- semantic-content-quality-contract
+promotion: all-required
+aggregation: non-numeric
+on_failure: absent-or-non-current
+user_risk_acceptance_overrides_truth: false
+gates:
+  - BOUNDARY_CLARITY
+  - DURABLE_FACT_COVERAGE
+  - EVIDENCE_QUALITY
+  - RELATIONSHIP_CLARITY
+  - EXTENSION_READINESS
+  - CONCISION
+-->
 
 ## Truth and Bilingual Gates
 
 `current` means an accepted fact integrated into the authoritative baseline. `in-progress` belongs to delivery, `proposed` remains unconfirmed, and `superseded` leaves default retrieval. A confirmed domain boundary does not imply a current fact.
+
+When an accepted business decision conflicts with the inspected code baseline, canonical knowledge records the accepted business decision and the verified implementation state separately. Put the accepted disposition in current facts, retain the smallest current implementation entry points in the implementation map, and link the unresolved alignment Feedback from known limits. The asset must not claim that implementation or runtime behavior has been removed before accepted delivery and verification establish that result. Open alignment Feedback does not by itself block `current` when this dual-truth wording is accurate and its limits and provenance are explicit.
 
 Read English by default. Chinese and English files are one logical asset: their stable IDs, state, baseline, fact metadata, dependencies, section structure, and evidence relationships must align. Update the pair in one atomic change. A missing or semantically divergent mirror blocks promotion to current.
 

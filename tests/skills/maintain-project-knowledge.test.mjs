@@ -9,6 +9,7 @@ const expectedReferences = [
   'archive-retrieval.md',
   'bootstrap-and-calibration.md',
   'context-routing.md',
+  'deep-domain-calibration.md',
   'knowledge-absorption.md',
   'materialization.md',
   'topology-and-constraints.md',
@@ -33,7 +34,7 @@ const requiredGateStatements = [
 const referenceReadAction = String.raw`(?:preload(?:ing)?|load(?:ing)?|read(?:ing)?|open(?:ing)?)`;
 const wholeReferenceSet = [
   String.raw`(?:all(?:\s+of\s+the)?|every|each)(?:\s+(?:other|sibling))?\s+references?`,
-  String.raw`(?:(?:all|the)\s+)?six\s+references?`,
+  String.raw`(?:(?:all|the)\s+)?seven\s+references?`,
   String.raw`(?:the\s+)?(?:whole|entire|full)\s+(?:reference\s+set|set\s+of\s+references)`,
   String.raw`(?:other|sibling)\s+references`,
 ].join('|');
@@ -67,6 +68,19 @@ test('declares the canonical bootstrap and maintenance Skill identity', async ()
   assert.match(frontmatter.description, /maintain|maintenance/i);
 });
 
+test('routes installed validator calls through the dependency-free plugin runtime', async () => {
+  const { body } = await loadSkill();
+  const runtime = body.match(/<!-- plugin-runtime-contract\n([\s\S]*?)\n-->/)?.[1];
+
+  assert.ok(runtime, 'root Skill must expose the installed plugin runtime contract');
+  assert.deepEqual(parseYaml(runtime), {
+    installed_cli: 'bin/project-lifecycle',
+    node_fallback: 'dist/project-lifecycle.mjs',
+    source_cli: 'repository-development-only',
+    cache_dependency_install: 'forbidden',
+  });
+});
+
 test('advertises receipt-gated archive retrieval for bounded historical investigations', async () => {
   const { frontmatter } = await loadSkill();
 
@@ -76,7 +90,7 @@ test('advertises receipt-gated archive retrieval for bounded historical investig
   }
 });
 
-test('links exactly six focused references one level below the Skill', async () => {
+test('links exactly seven focused references one level below the Skill', async () => {
   const { body } = await loadSkill();
   const references = [...body.matchAll(/\]\(references\/([^)]+\.md)\)/g)]
     .map(([, reference]) => reference);
@@ -99,8 +113,8 @@ for (const [source, expected] of [
   ['Preload the whole reference set.', true],
   ['Open each sibling reference.', true],
   ['Load all other references.', true],
-  ['Load all six references.', true],
-  ['Load the six references.', true],
+  ['Load all seven references.', true],
+  ['Load the seven references.', true],
   ['Preload the full reference set.', true],
   ['Read all of the references.', true],
 ]) {
@@ -145,6 +159,105 @@ test('makes the five knowledge safety gates explicit', async () => {
   const { body } = await loadSkill();
 
   for (const statement of requiredGateStatements) assert.ok(body.includes(statement));
+});
+
+test('defines the recursive v2 layout, migration, and repository-shard contracts', async () => {
+  const { body } = await loadSkill();
+  const context = await readFile(new URL('../../skills/maintain-project-knowledge/references/context-routing.md', import.meta.url), 'utf8');
+  const bootstrap = await readFile(new URL('../../skills/maintain-project-knowledge/references/bootstrap-and-calibration.md', import.meta.url), 'utf8');
+  const materialization = await readFile(new URL('../../skills/maintain-project-knowledge/references/materialization.md', import.meta.url), 'utf8');
+  const topology = await readFile(new URL('../../skills/maintain-project-knowledge/references/topology-and-constraints.md', import.meta.url), 'utf8');
+
+  assert.match(body, /schema v2/);
+  assert.match(body, /`parent_id` is the only vertical-topology source/);
+  assert.match(body, /three bounded classes/);
+  assert.match(context, /repository-local Knowledge root or shard index/);
+  assert.match(context, /`portable_locator`/);
+  assert.match(bootstrap, /ask once for migration approval/);
+  assert.match(bootstrap, /ordinary temporary question performs no migration and no durable write/);
+  assert.match(materialization, /`knowledge\/<id>-en\.md`/);
+  assert.match(materialization, /`paired_assets\.repository_id`/);
+  assert.match(topology, /Adding the first child promotes/);
+  assert.match(topology, /removing or reparenting the last child demotes/);
+  assert.match(topology, /Never synthesize governance ancestor directories/);
+});
+
+test('defines a closed user-controlled deep-domain calibration contract', async () => {
+  const { body } = await loadSkill();
+  const source = await readFile(
+    new URL('../../skills/maintain-project-knowledge/references/deep-domain-calibration.md', import.meta.url),
+    'utf8',
+  ).catch(() => '');
+  const contract = source.match(/<!-- deep-domain-calibration-contract\n([\s\S]*?)\n-->/)?.[1];
+
+  assert.ok(contract, 'deep calibration reference must expose its machine-readable contract');
+  assert.deepEqual(parseYaml(contract), {
+    scope: 'per-domain',
+    invocation: {
+      signal_action: 'recommend',
+      explicit_request: 'authorized',
+      choices: ['BRAINSTORMING', 'GRILL_ME', 'BUILT_IN', 'DEFER', 'CONTINUE_LIGHT'],
+    },
+    capability_install: {
+      authorization: 'separate-explicit',
+      source: 'exact-trusted',
+      unavailable_fallback: 'BUILT_IN',
+      cache_edit: 'forbidden',
+    },
+    persistence: {
+      reasoning_transcripts: 'transient',
+      complexity_score: 'forbidden',
+      calibration_log: 'forbidden',
+    },
+    intervention_points: [
+      'INITIAL_COVERAGE_CALIBRATION',
+      'COMPLEXITY_ESCALATION_CHOICE',
+      'APPROACH_SELECTION',
+      'TACIT_KNOWLEDGE_QUESTION',
+      'DOMAIN_BOUNDARY_CONFIRMATION',
+      'WHOLE_MAP_CONSISTENCY_REVIEW',
+      'CURRENT_TRUTH_PROMOTION',
+    ],
+    quality_gates: [
+      'BOUNDARY_CLARITY',
+      'DURABLE_FACT_COVERAGE',
+      'EVIDENCE_QUALITY',
+      'RELATIONSHIP_CLARITY',
+      'EXTENSION_READINESS',
+      'CONCISION',
+    ],
+  });
+
+  const routingRow = body.split('\n').find((line) => line.includes('(references/deep-domain-calibration.md)'));
+  assert.ok(routingRow, 'root Skill must route deep-domain calibration');
+  for (const trigger of ['complex', 'explicit', 'whole-map', 'quality']) {
+    assert.match(routingRow, new RegExp(trigger, 'i'));
+  }
+});
+
+test('connects bootstrap to user-controlled deepening and affected-only second-pass review', async () => {
+  const source = await readFile(
+    new URL('../../skills/maintain-project-knowledge/references/bootstrap-and-calibration.md', import.meta.url),
+    'utf8',
+  );
+  const contract = source.match(/<!-- deep-calibration-bootstrap-contract\n([\s\S]*?)\n-->/)?.[1];
+
+  assert.ok(contract, 'bootstrap reference must expose its deep-calibration handoff');
+  assert.deepEqual(parseYaml(contract), {
+    complexity_scope: 'per-domain',
+    signal_action: 'recommend-and-wait',
+    explicit_request: 'authorized',
+    decline: {
+      progress: 'verified-only',
+      current_promotion: 'evidence-required',
+      repeated_persuasion: 'forbidden',
+    },
+    second_pass: {
+      timing: 'after-authorized-deepening',
+      write_gate: 'before-complex-skeleton',
+      reopen: 'affected-only',
+    },
+  });
 });
 
 test('defines only the narrow knowledge-selection handoff to PRD Lifecycle', async () => {
@@ -195,4 +308,31 @@ test('keeps the native decision contract at the root without duplicating obligat
   ]) {
     assert.doesNotMatch(body, new RegExp(`\\b${value}\\b`));
   }
+});
+
+test('keeps knowledge control during confirmed alignment Feedback capture', async () => {
+  const bootstrap = await readFile(
+    new URL('../../skills/maintain-project-knowledge/references/bootstrap-and-calibration.md', import.meta.url),
+    'utf8',
+  );
+  const materialization = await readFile(
+    new URL('../../skills/maintain-project-knowledge/references/materialization.md', import.meta.url),
+    'utf8',
+  );
+  assert.match(bootstrap, /Feedback captured[^\n]*PRD materialized[^\n]*delivery started/i);
+  assert.match(bootstrap, /return control to knowledge (?:construction|maintenance)/i);
+  assert.match(materialization, /accepted business decision[^\n]*verified implementation state/i);
+  assert.match(materialization, /must not claim[^\n]*implementation[^\n]*removed/i);
+});
+
+test('recognizes the explicit owner-centric delivery migration boundary', async () => {
+  const bootstrap = await readFile(
+    new URL('../../skills/maintain-project-knowledge/references/bootstrap-and-calibration.md', import.meta.url),
+    'utf8',
+  );
+  assert.match(bootstrap, /`delivery\/layout\.json`/u);
+  assert.match(bootstrap, /preview-delivery-layout-migration/u);
+  assert.match(bootstrap, /selected solution ID.*plan hash.*source fingerprint/is);
+  assert.match(bootstrap, /ambiguous.*owner.*NEEDS_USER/is);
+  assert.match(bootstrap, /run-prd-lifecycle.*durable migration/is);
 });

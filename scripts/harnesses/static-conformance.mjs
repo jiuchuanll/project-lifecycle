@@ -8,7 +8,7 @@ import { createError } from '../lib/errors.mjs';
 import { fail, ok } from '../lib/result.mjs';
 
 const exec = promisify(execFile);
-const hosts = ['claude', 'codex', 'cursor', 'kimi', 'zcode'];
+const hosts = ['claude', 'codex', 'cursor', 'dsh', 'kimi', 'zcode'];
 const manifests = Object.freeze({
   claude: '.claude-plugin/plugin.json', codex: '.codex-plugin/plugin.json',
   cursor: '.cursor-plugin/plugin.json', kimi: '.kimi-plugin/plugin.json', zcode: '.zcode-plugin/plugin.json',
@@ -32,8 +32,14 @@ export async function runStaticConformance({ root } = {}) {
       }
     }
     for (const host of hosts) {
-      const manifest = await json(root, manifests[host]);
-      if (manifest.name !== packageJson.name || manifest.version !== packageJson.version) return failure();
+      if (host === 'dsh') {
+        if (packageJson.dsh?.bundle?.patch !== './cordis.patch.yml') return failure();
+        if (!(await lstat(join(root, 'cordis.patch.yml'))).isFile()) return failure();
+        if (!(await lstat(join(root, 'dsh', 'index.js'))).isFile()) return failure();
+      } else {
+        const manifest = await json(root, manifests[host]);
+        if (manifest.name !== packageJson.name || manifest.version !== packageJson.version) return failure();
+      }
       const entries = await readdir(join(root, 'integrations', host), { recursive: true });
       if (entries.some((path) => path.endsWith('SKILL.md'))) return failure();
     }

@@ -4,13 +4,16 @@ Use this reference to select the smallest accepted knowledge context for a task 
 
 ## Inputs and Source Order
 
-1. Resolve `docs/project-lifecycle/project-map.json`, or a compact project pointer whose governance locator resolves to a matching accepted map.
-2. Read the English generated index and English capability assets by default. Treat the Chinese files as the user-facing mirrors.
-3. Route to the most specific confirmed node matching the user's language, purpose, scope, stable aliases, and current facts.
-4. Add only applicable global principles, declared dependencies, governing constraints, coordination seams touched by the task, and task-linked active delivery.
-5. Stop when the selected primary domain and necessary dependencies are current enough for this task and remaining unknowns cannot change the decision.
+1. Resolve `docs/project-lifecycle/project-map.json`, or a compact project pointer whose governance locator resolves to a matching accepted v2 map. A v1 map stops with migration required before any knowledge body is read.
+2. When the selected owner is another repository, follow its registered portable locator and continue with the accepted governance map plus the authenticated current repository ID. For a selection spanning owners, provide each discovered owner as an explicit authenticated `repositoryRoots` entry; read every index and body only against its canonical owner root. If any owner root is missing, stop with that owner's locator.
+3. Verify map-declared paired assets against the canonical layout, then read the English lifecycle-root index, repository-local Knowledge root or shard index, and only the direct-child indexes on the selected branch. Treat Chinese files as user-facing mirrors.
+4. Route to the most specific confirmed node matching the user's language, purpose, scope, stable aliases, and current facts.
+5. Add only applicable global principles, exact propagated constraint sections, declared dependencies, coordination seams touched by the task, and task-linked active delivery.
+6. Stop when the selected primary domain and necessary dependencies are current enough for this task and remaining unknowns cannot change the decision.
 
 Do not recursively read parents, children, neighbors, or delivery history. Parentage loads only applicable propagated constraints. A dependency is loaded only when the task relies on it; a coordination peer is loaded only when the shared seam is touched.
+
+For a domain owned by another repository, follow its registered `portable_locator` and continue at that repository's `knowledge/INDEX-en.md` shard. Governance remains centralized in the accepted map, while implementation knowledge bodies stay in their owning repository. Never mirror the body into governance or infer a governance ancestor directory inside the shard.
 
 ## Clarification Threshold
 
@@ -36,4 +39,4 @@ Routing is normally read-only. Only an evidence-backed, non-conflicting alias ma
 
 ### Bounded example
 
-A request to change the Wiki workspace layout selects the Wiki capability, its current layout fact, a desktop-shell constraint that actually propagates to Wiki, and a task-linked active layout delivery. It does not load the Inbox body, every desktop-shell fact, or archived layout PRDs.
+A request to change a three-level Wiki editor selects only the lifecycle index, Knowledge root, direct-child indexes on the Wiki editor branch, the editor capability, its current fact, a desktop-shell constraint that actually propagates, and any required declared dependency. It does not load sibling bodies, every descendant, the complete desktop-shell body, or archived layout PRDs.

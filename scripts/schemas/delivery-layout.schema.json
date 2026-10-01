@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "delivery-layout",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "layout_version"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "layout_version": { "const": 2 }
+  }
+}
