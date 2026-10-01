@@ -13,7 +13,7 @@ Project Lifecycle 是一个共享、宿主中立的插件，用于构建低噪�
 ## 项目状态
 
 > [!IMPORTANT]
-> 本仓库已经开源，但版本 `0.7.0` 仍是**预发布评估候选**。它尚未发布到 npm，且目前
+> 本仓库已经开源，但版本 `0.8.0` 仍是**预发布评估候选**。它尚未发布到 npm，且目前
 > 没有任何原生宿主满足发布支持门禁。安装说明仅用于评估，不代表生产支持承诺。
 
 源代码、确定性发布压缩包和保留的一致性证据均已公开，可供检查和贡献。所有支持声明
@@ -187,7 +187,7 @@ ID、引用、中英文配对、Fact 区块和 fixture 完整性；它不能替�
 | 宿主 | 状态 | 实测版本 | 证据 |
 | --- | --- | --- | --- |
 | codex | FAILED | 0.147.0-alpha.6.5 | invariant-failures:codex:8, targeted-regression:codex:4of4, trace-set:codex:ae5b5ad |
-| claude | NOT_TESTED | — | availability:claude:unavailable |
+| claude | FAILED | 2.1.286 | invariant-failures:claude:18, trace-set:claude:4adc72b |
 | cursor | NOT_TESTED | — | availability:cursor:unavailable |
 | dsh | NOT_TESTED | — |  |
 | kimi | FAILED | 0.29.2 | invariant-failures:kimi:15, targeted-regression:kimi:6of6, trace-set:kimi:ae5b5ad |
@@ -247,4 +247,4 @@ Project Lifecycle 使用 [Apache License 2.0](LICENSE) 开源。
 - KnowledgeVault 消费端迁移保持只读审计，直到至少一个宿主受支持且两个共享 Skill
   均被原生发现。详见[迁移方案](docs/migrations/knowledgevault-agent-app.md)。
 
-0.7.0 候选范围与升级说明见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。
+0.8.0 候选范围与升级说明见 [RELEASE-NOTES.md](RELEASE-NOTES.md)。

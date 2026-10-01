@@ -37,7 +37,7 @@ test('maps every operation once for each host without copying lifecycle semantic
 test('keeps install guides native, version-pinned, and honest about support', async () => {
   for (const host of hosts) {
     const guide = await read(`integrations/${host}/README.md`);
-    assert.match(guide, /0\.1\.0/u, host);
+    assert.match(guide, /0\.8\.0/u, host);
     assert.match(
       guide,
       new RegExp(`Evidence status: \`${supportMatrix.hosts[host].status}\``),

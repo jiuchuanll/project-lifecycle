@@ -1,17 +1,23 @@
-# Project Lifecycle 0.7.0 candidate notes
+# Project Lifecycle 0.8.0 candidate notes
 
 Publication status: **PUBLIC PRE-RELEASE EVALUATION CANDIDATE**
 
 Host support gate: **NON-RELEASE CANDIDATE**
 
-Version `0.7.0` improves delivery creation and index recovery on the `0.6.0`
-DeepSeek Harness and owner-centric delivery foundation. It fixes misleading
-Frontmatter diagnostics and language-suffix IDs, adds read-only asset preview,
-and connects document creation to index publication with explicit partial-success
-and exact-content retry semantics. The installed runtime remains self-contained.
-This is a pre-release evaluation candidate, not a new native-host support claim.
+Version `0.8.0` completes Claude Code adaptation work and records the first
+native Claude Code conformance run. It does not claim full Claude Code support:
+the retained native run for Claude Code `2.1.286` is `FAILED` (18 of 21 runs
+violated Gold invariants), so Claude Code stays below the `SUPPORTED` gate.
 
-## Changes in 0.7.0
+## Changes in 0.8.0
+
+- Claude Code marketplace manifest gains a top-level `description`; `claude plugin validate` passes without warnings.
+- Verified on Claude Code `2.1.286`: the plugin loads with `--plugin-dir`, both Skills are discovered, and `bin/project-lifecycle version` runs from the resolved plugin root.
+- First retained native Claude Code trace set (7 scenarios x 3 runs) under `tests/harnesses/traces/claude/`; support matrix and READMEs record `FAILED`.
+- Observed gaps: invented delivery paths and file names instead of the layout in `delivery-assets.md`, missing calibration gates, and `closure-migration-archive` timing out in all three runs. Fixtures and prompts for this run were synthesized from the scenario definitions, so results are not directly comparable with the Codex and Kimi sets.
+- Install-guide test now pins the current candidate version instead of `0.1.0`.
+
+## Earlier changes in 0.7.0
 
 - Field-level Frontmatter reasons, recovery actions and bounded multi-error inventory reports.
 - Correct canonical language detection for artifact IDs ending in `-en`.

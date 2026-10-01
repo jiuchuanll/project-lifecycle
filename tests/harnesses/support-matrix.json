@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "plugin_version": "0.7.0",
+  "plugin_version": "0.8.0",
   "hosts": {
-    "claude": { "status": "NOT_TESTED", "observed_version": null, "evidence_refs": ["availability:claude:unavailable"] },
+    "claude": { "status": "FAILED", "observed_version": "2.1.286", "evidence_refs": ["invariant-failures:claude:18", "trace-set:claude:4adc72b"] },
     "codex": { "status": "FAILED", "observed_version": "0.147.0-alpha.6.5", "evidence_refs": ["invariant-failures:codex:8", "targeted-regression:codex:4of4", "trace-set:codex:ae5b5ad"] },
     "cursor": { "status": "NOT_TESTED", "observed_version": null, "evidence_refs": ["availability:cursor:unavailable"] },
     "dsh": { "status": "NOT_TESTED", "observed_version": null, "evidence_refs": [] },

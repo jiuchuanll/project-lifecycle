@@ -28624,7 +28624,7 @@ var migrateDeliveryLayout = async (input = {}, operations = {}) => {
 };
 
 // scripts/bin/project-lifecycle-source.mjs
-var version = "0.7.0";
+var version = "0.8.0";
 var MAX_ALIGNMENT_DOCUMENT_BYTES = 262144;
 var command = process.argv[2] ?? "help";
 var cliFailure = (code, path, message) => fail([createError(code, path, message)]);

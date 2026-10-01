@@ -14,7 +14,7 @@ silently becoming accepted project truth.
 ## Project status
 
 > [!IMPORTANT]
-> This repository is open source, but version `0.7.0` remains a **pre-release
+> This repository is open source, but version `0.8.0` remains a **pre-release
 > evaluation candidate**. It is not published to npm, and no native host
 > currently satisfies the release support gate. Treat the installation guides
 > as evaluation instructions, not production-support claims.
@@ -215,7 +215,7 @@ the README diverges from that retained evidence.
 | Host | Status | Observed version | Evidence |
 | --- | --- | --- | --- |
 | codex | FAILED | 0.147.0-alpha.6.5 | invariant-failures:codex:8, targeted-regression:codex:4of4, trace-set:codex:ae5b5ad |
-| claude | NOT_TESTED | — | availability:claude:unavailable |
+| claude | FAILED | 2.1.286 | invariant-failures:claude:18, trace-set:claude:4adc72b |
 | cursor | NOT_TESTED | — | availability:cursor:unavailable |
 | dsh | NOT_TESTED | — |  |
 | kimi | FAILED | 0.29.2 | invariant-failures:kimi:15, targeted-regression:kimi:6of6, trace-set:kimi:ae5b5ad |
@@ -286,4 +286,4 @@ Project Lifecycle is licensed under the [Apache License 2.0](LICENSE).
   and both shared Skills are discovered natively. See the
   [migration recipe](docs/migrations/knowledgevault-agent-app.md).
 
-See [RELEASE-NOTES.md](RELEASE-NOTES.md) for the exact 0.7.0 candidate scope and upgrade notes.
+See [RELEASE-NOTES.md](RELEASE-NOTES.md) for the exact 0.8.0 candidate scope and upgrade notes.
