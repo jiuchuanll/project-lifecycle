@@ -60,6 +60,21 @@ Load only the one reference needed for the current decision. Load another refere
 
 Complexity is assessed per candidate domain. Load deep calibration only for an explained recommendation, an explicit user request, the authorized second pass, or semantic quality review; a clear domain continues through the ordinary focused reference.
 
+<!-- human-gate-vocabulary
+purpose: Report a required human gate by its identifier from this closed list, not by prose. The named state or reference remains authoritative for when the gate applies.
+gates:
+  - INITIAL_CALIBRATION
+  - DEEP_CALIBRATION_CONSENT
+  - DOMAIN_BOUNDARY_CONFIRMATION
+  - WHOLE_MAP_CONSISTENCY_REVIEW
+  - FACT_PROMOTION_APPROVAL
+  - CONSTRAINT_ID_REVIEW
+  - TOPOLOGY_CHANGE_APPROVAL
+  - ARCHIVE_ACCESS_APPROVAL
+-->
+
+Every durable asset is one English/Chinese logical pair: the English file ends in `-en.md` and the Chinese mirror is the same path without `-en` (never `-zh-CN.md` or a translated filename).
+
 ## Ordered Lifecycle
 
 Follow the states in order. Resume at the earliest state invalidated by new evidence; do not skip a stop or human gate.

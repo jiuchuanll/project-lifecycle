@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const root = new URL('../../', import.meta.url);
-const hosts = ['codex', 'claude', 'cursor', 'dsh', 'kimi', 'zcode'];
+const hosts = ['antigravity', 'codex', 'claude', 'cursor', 'dsh', 'kimi', 'zcode'];
 const operations = [
   'ASK_USER', 'CREATE_REVIEW_REQUEST', 'FETCH_REMOTE', 'READ_FILE',
   'RUN_COMMAND', 'RUN_VALIDATOR', 'SEARCH_FILES', 'WRITE_FILE',
@@ -17,7 +17,7 @@ test('defines the eight host-neutral harness operations exactly once', async () 
     [...contract.matchAll(/^### ([A-Z_]+)$/gmu)].map(([, id]) => id).sort(),
     operations,
   );
-  assert.doesNotMatch(contract, /Codex|Claude|Cursor|Kimi|ZCode/u);
+  assert.doesNotMatch(contract, /Antigravity|Codex|Claude|Cursor|Kimi|ZCode/u);
 });
 
 test('maps every operation once for each host without copying lifecycle semantics', async () => {
@@ -37,7 +37,7 @@ test('maps every operation once for each host without copying lifecycle semantic
 test('keeps install guides native, version-pinned, and honest about support', async () => {
   for (const host of hosts) {
     const guide = await read(`integrations/${host}/README.md`);
-    assert.match(guide, /0\.8\.0/u, host);
+    assert.match(guide, /0\.9\.0/u, host);
     assert.match(
       guide,
       new RegExp(`Evidence status: \`${supportMatrix.hosts[host].status}\``),
@@ -49,6 +49,7 @@ test('keeps install guides native, version-pinned, and honest about support', as
     assert.doesNotMatch(guide, /\/Users\/|[A-Za-z]:\\/u, host);
     assert.doesNotMatch(guide, /SUPPORTED/u, host);
   }
+  assert.match(await read('integrations/antigravity/README.md'), /agy plugin/u);
   assert.match(await read('integrations/codex/README.md'), /codex plugin add project-lifecycle@project-lifecycle/u);
   assert.match(await read('integrations/claude/README.md'), /claude --plugin-dir <absolute-repository-path>/u);
   assert.match(await read('integrations/kimi/README.md'), /\/plugins install/u);

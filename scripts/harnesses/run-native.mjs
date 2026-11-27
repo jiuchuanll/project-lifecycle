@@ -71,7 +71,7 @@ export async function runNativeScenario(input = {}) {
     const fixtureCopy = join(workingRoot, 'fixture');
     await cp(fixtureRoot, fixtureCopy, { recursive: true });
     const startedAt = input.clock();
-    const processResult = await runner.runProcess(resolved, args, { cwd: fixtureCopy, timeoutMs: 120_000 });
+    const processResult = await runner.runProcess(resolved, args, { cwd: fixtureCopy, timeoutMs: input.timeoutMs ?? 120_000 });
     const endedAt = input.clock();
     const traceDirectory = await traceDirectoryFor(traceRoot, [host, input.scenarioId]);
     const rawOutputLocator = `traces/${host}/${input.scenarioId}/${input.runNumber}.raw.json`;
@@ -93,7 +93,7 @@ export async function runNativeScenario(input = {}) {
       run_id: `${host}-${input.scenarioId}-${input.runNumber}`,
       scenario_id: input.scenarioId,
       run_number: input.runNumber,
-      plugin: { version: '0.8.0', commit: input.pluginCommit },
+      plugin: { version: '0.9.0', commit: input.pluginCommit },
       host: { id: host, version: input.version },
       model: input.model,
       parameters: input.parameters,
@@ -118,7 +118,7 @@ export async function runNativeScenario(input = {}) {
   }
 }
 
-const hostExecutables = Object.freeze({ claude: 'claude', codex: 'codex', cursor: 'cursor', kimi: 'kimi', zcode: 'zcode' });
+const hostExecutables = Object.freeze({ antigravity: 'agy', claude: 'claude', codex: 'codex', cursor: 'cursor', kimi: 'kimi', zcode: 'zcode' });
 const resolveExecutable = async (name) => {
   for (const directory of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
     const candidate = join(directory, name);

@@ -6,7 +6,7 @@
     {
       "name": "project-lifecycle",
       "source": "./",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "description": "Build low-noise project knowledge and run traceable PRD delivery lifecycles."
     }
   ]

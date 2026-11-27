@@ -25,7 +25,7 @@ test('runs the bundled validator from a clean managed-plugin copy without node_m
   }
   await chmod(join(install, 'bin/project-lifecycle'), 0o755);
   await cp(join(repositoryRoot, 'skills'), join(install, 'skills'), { recursive: true });
-  for (const directory of ['.codex-plugin', '.claude-plugin', '.cursor-plugin', '.kimi-plugin', '.zcode-plugin']) {
+  for (const directory of ['.antigravity-plugin', '.codex-plugin', '.claude-plugin', '.cursor-plugin', '.kimi-plugin', '.zcode-plugin']) {
     await cp(join(repositoryRoot, directory), join(install, directory), { recursive: true });
   }
   const fixtures = join(install, 'fixtures');
