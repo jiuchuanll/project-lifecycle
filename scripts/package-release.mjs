@@ -8,9 +8,10 @@ import { compareCodePoints } from './lib/deterministic-order.mjs';
 import { createError } from './lib/errors.mjs';
 import { fail, ok } from './lib/result.mjs';
 
-const HOST_ORDER = Object.freeze(['codex', 'claude', 'cursor', 'dsh', 'kimi', 'zcode']);
+const HOST_ORDER = Object.freeze(['antigravity', 'codex', 'claude', 'cursor', 'dsh', 'kimi', 'zcode']);
 const RELEASE_FILES = Object.freeze([
   ['.agents/plugins/marketplace.json', '.agents/plugins/marketplace.json'],
+  ['.antigravity-plugin/plugin.json', '.antigravity-plugin/plugin.json'],
   ['.claude-plugin/marketplace.json', '.claude-plugin/marketplace.json'],
   ['.claude-plugin/plugin.json', '.claude-plugin/plugin.json'],
   ['.codex-plugin/plugin.json', '.codex-plugin/plugin.json'],

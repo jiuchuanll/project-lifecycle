@@ -1,17 +1,31 @@
-# Project Lifecycle 0.7.0 candidate notes
+# Project Lifecycle 0.9.0 candidate notes
 
 Publication status: **PUBLIC PRE-RELEASE EVALUATION CANDIDATE**
 
-Host support gate: **NON-RELEASE CANDIDATE**
+Host support gate: **NON_RELEASE CANDIDATE**
 
-Version `0.7.0` improves delivery creation and index recovery on the `0.6.0`
-DeepSeek Harness and owner-centric delivery foundation. It fixes misleading
-Frontmatter diagnostics and language-suffix IDs, adds read-only asset preview,
-and connects document creation to index publication with explicit partial-success
-and exact-content retry semantics. The installed runtime remains self-contained.
-This is a pre-release evaluation candidate, not a new native-host support claim.
+Version `0.9.0` adds native Google Antigravity plugin adaptation (`.antigravity-plugin/plugin.json`, `integrations/antigravity/`, static conformance, `agy` availability probing, and deterministic release packaging). It does not claim Antigravity support: no `agy` executable or 7x3 retained native Gold trace set is available, so Antigravity remains `NOT_TESTED` below the `SUPPORTED` gate.
 
-## Changes in 0.7.0
+## Changes in 0.9.0
+
+- Added `.antigravity-plugin/plugin.json` using native Antigravity manifest fields (`name`, `displayName`, `version`, `description`, `repository`, `homepage`, `author`, and `suggestedPrompts`) while discovering the shared `skills/` directly without host-local Skill copies.
+- Added `integrations/antigravity/README.md` (covering `agy plugin` CLI and Customizations management) and `integrations/antigravity/tool-map.md` (mapping all eight host-neutral harness operations).
+- Wired `antigravity` into static conformance, native executable availability probing (`agy`), the support matrix (`NOT_TESTED`), bilingual READMEs, and the deterministic `0.9.0` release archive.
+
+## Earlier changes in 0.8.0
+
+Version `0.8.0` completed Claude Code adaptation work and recorded the first
+native Claude Code conformance run. It did not claim full Claude Code support:
+the retained native run for Claude Code `2.1.286` is `FAILED`, so Claude Code
+stays below the `SUPPORTED` gate.
+
+- Claude Code marketplace manifest gains a top-level `description`; `claude plugin validate` passes without warnings.
+- Verified on Claude Code `2.1.286`: the plugin loads with `--plugin-dir`, both Skills are discovered, and `bin/project-lifecycle version` runs from the resolved plugin root.
+- First retained native Claude Code trace set (7 scenarios x 3 runs) under `tests/harnesses/traces/claude/`; support matrix and READMEs record `FAILED`.
+- Observed gaps: invented delivery paths and file names instead of the layout in `delivery-assets.md`, missing calibration gates, and `closure-migration-archive` timing out in all three runs. Fixtures and prompts for this run were synthesized from the scenario definitions, so results are not directly comparable with the Codex and Kimi sets.
+- Install-guide test now pins the current candidate version instead of `0.1.0`.
+
+## Earlier changes in 0.7.0
 
 - Field-level Frontmatter reasons, recovery actions and bounded multi-error inventory reports.
 - Correct canonical language detection for artifact IDs ending in `-en`.
@@ -185,7 +199,8 @@ must complete both approved migrations.
 - Codex `0.147.0-alpha.6.5` and Kimi Code `0.29.2` retained traces were produced
   for `0.1.0`. Their recorded failures and bounded remediation results remain
   historical evidence and are not relabeled as `0.7.0` runs.
-- Claude Code, Cursor, DeepSeek Harness, and ZCode remain `NOT_TESTED` because
+- Claude Code `2.1.286` retained traces are recorded as `FAILED`.
+- Antigravity, Cursor, DeepSeek Harness, and ZCode remain `NOT_TESTED` because
   native executables were unavailable. Structural passes never produce a
   `SUPPORTED` claim.
 - A DeepSeek Harness bundle adapter (`cordis.patch.yml` plus `dsh/index.js`)
@@ -196,7 +211,7 @@ must complete both approved migrations.
 
 ## Release blocker
 
-A supported release tag still requires all six target hosts to be `SUPPORTED`
+A supported release tag still requires all seven target hosts to be `SUPPORTED`
 for exact tested versions, with three retained independent runs for every Gold
 scenario and completed semantic review. This candidate does not meet that
 support gate.

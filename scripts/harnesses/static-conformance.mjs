@@ -8,8 +8,9 @@ import { createError } from '../lib/errors.mjs';
 import { fail, ok } from '../lib/result.mjs';
 
 const exec = promisify(execFile);
-const hosts = ['claude', 'codex', 'cursor', 'dsh', 'kimi', 'zcode'];
+const hosts = ['antigravity', 'claude', 'codex', 'cursor', 'dsh', 'kimi', 'zcode'];
 const manifests = Object.freeze({
+  antigravity: '.antigravity-plugin/plugin.json',
   claude: '.claude-plugin/plugin.json', codex: '.codex-plugin/plugin.json',
   cursor: '.cursor-plugin/plugin.json', kimi: '.kimi-plugin/plugin.json', zcode: '.zcode-plugin/plugin.json',
 });

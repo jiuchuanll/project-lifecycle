@@ -1,0 +1,14 @@
+{
+  "name": "project-lifecycle",
+  "displayName": "Project Lifecycle",
+  "version": "0.9.0",
+  "description": "Build low-noise project knowledge and run traceable PRD delivery lifecycles.",
+  "repository": "https://github.com/jiuchuanll/project-lifecycle",
+  "homepage": "https://github.com/jiuchuanll/project-lifecycle",
+  "author": { "name": "jiuchuanll" },
+  "suggestedPrompts": [
+    "Inspect this project with a bounded evidence pass and propose an initial capability map for calibration.",
+    "Record this feedback, route it against current project knowledge, and help decide if it needs a PRD delivery.",
+    "Review the current project knowledge baseline and delivery alignment status."
+  ]
+}

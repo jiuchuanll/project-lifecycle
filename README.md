@@ -14,7 +14,7 @@ silently becoming accepted project truth.
 ## Project status
 
 > [!IMPORTANT]
-> This repository is open source, but version `0.7.0` remains a **pre-release
+> This repository is open source, but version `0.9.0` remains a **pre-release
 > evaluation candidate**. It is not published to npm, and no native host
 > currently satisfies the release support gate. Treat the installation guides
 > as evaluation instructions, not production-support claims.
@@ -32,7 +32,7 @@ Project Lifecycle separates two related workflows:
 | Build or update durable project knowledge | `maintain-project-knowledge` | A confirmed project map, bilingual capability knowledge, bounded pending changes, and low-noise context routing under `docs/project-lifecycle/` |
 | Turn feedback into an implementable and testable delivery | `run-prd-lifecycle` | Feedback, PRD, architecture, development guidance, implementation batches, test evidence, closure, and an explicit knowledge diff |
 
-The shared Skills are authoritative. Codex, Claude Code, Cursor, DeepSeek
+The shared Skills are authoritative. Antigravity, Codex, Claude Code, Cursor, DeepSeek
 Harness, Kimi Code, and ZCode integrations contain installation and
 tool-mapping differences only.
 
@@ -61,7 +61,7 @@ Core rules:
 Prerequisites:
 
 - Node.js 22 or newer for the bundled validator.
-- One of the six target hosts. Use a disposable profile while this version
+- One of the seven target hosts. Use a disposable profile while this version
   remains a non-release candidate.
 - A project repository in which `docs/project-lifecycle/` may be created.
 
@@ -214,8 +214,9 @@ the README diverges from that retained evidence.
 
 | Host | Status | Observed version | Evidence |
 | --- | --- | --- | --- |
+| antigravity | NOT_TESTED | — | availability:antigravity:unavailable |
 | codex | FAILED | 0.147.0-alpha.6.5 | invariant-failures:codex:8, targeted-regression:codex:4of4, trace-set:codex:ae5b5ad |
-| claude | NOT_TESTED | — | availability:claude:unavailable |
+| claude | FAILED | 2.1.286 | invariant-failures:claude:11, trace-set:claude:4adc72b |
 | cursor | NOT_TESTED | — | availability:cursor:unavailable |
 | dsh | NOT_TESTED | — |  |
 | kimi | FAILED | 0.29.2 | invariant-failures:kimi:15, targeted-regression:kimi:6of6, trace-set:kimi:ae5b5ad |
@@ -227,6 +228,7 @@ conformance and Skill discovery alone never produce `SUPPORTED`.
 
 ## Installation and host guides
 
+- [Antigravity installation and removal](integrations/antigravity/README.md)
 - [Codex installation and removal](integrations/codex/README.md)
 - [Claude Code installation and removal](integrations/claude/README.md)
 - [Cursor installation and removal](integrations/cursor/README.md)
@@ -276,7 +278,7 @@ Project Lifecycle is licensed under the [Apache License 2.0](LICENSE).
 - Codex and Kimi currently fail the complete retained native run set. A later
   bounded remediation regression passed Codex 4/4 and Kimi 6/6 affected
   scenario families, but it does not replace the complete support gate.
-- Claude Code, Cursor, and ZCode have no retained native run evidence.
+- Antigravity, Cursor, DeepSeek Harness, and ZCode have no retained native run evidence.
 - The host is responsible for authenticating external approvals and controlling
   any model or network transport. References, receipts, and hashes bind local
   decisions but do not authenticate a human by themselves.
@@ -286,4 +288,4 @@ Project Lifecycle is licensed under the [Apache License 2.0](LICENSE).
   and both shared Skills are discovered natively. See the
   [migration recipe](docs/migrations/knowledgevault-agent-app.md).
 
-See [RELEASE-NOTES.md](RELEASE-NOTES.md) for the exact 0.7.0 candidate scope and upgrade notes.
+See [RELEASE-NOTES.md](RELEASE-NOTES.md) for the exact 0.9.0 candidate scope and upgrade notes.

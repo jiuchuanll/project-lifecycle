@@ -15,6 +15,10 @@ This Skill owns Feedback, PRD and non-PRD delivery assets, architecture and guid
 
 When deterministic validation is needed from an installed plugin, resolve `<plugin-root>` by ascending two directories from the directory that contains this `SKILL.md`, then execute `<plugin-root>/bin/project-lifecycle`. If the host cannot execute that wrapper, use `node <plugin-root>/dist/project-lifecycle.mjs` as the only fallback. Never invoke files under `<plugin-root>/scripts/`, run package scripts, install dependencies, or modify a plugin cache; source entry points are repository-development-only.
 
+Every durable asset is one English/Chinese logical pair: the English file ends in `-en.md` and the Chinese mirror is the same path without `-en` (never `-zh-CN.md` or a translated filename).
+
+Canonical delivery paths under `docs/project-lifecycle/delivery/` (English shown; the Chinese mirror drops `-en`): Feedback `feedback/<id>-en.md`; PRD or non-PRD owner `prds/<id>/<id>-en.md` or `non-prd/<id>/<id>-en.md`; a child of an owner (`architecture/`, `guidance/`, `batches/`, `test-reports/`, `closure/`) lives beneath that owner, for example `prds/<owner-id>/closure/<child-id>-en.md`, where the child carries its own artifact ID and may differ from the owner's. Choose the owner by the work, not by the record kind: a migration, repair, or operations record keeps its own non-PRD root at `non-prd/<id>/<id>-en.md` even when it summarizes an earlier PRD delivery or references one, and it does not become a child of a PRD owner merely because that PRD exists. [Delivery assets](references/delivery-assets.md) remains authoritative.
+
 The installed delivery commands are `inspect-delivery-layout`, `preview-delivery-layout-migration`, `migrate-delivery-layout`, `validate-delivery-layout`, `preview-delivery-asset`, `materialize-delivery-asset`, `close-delivery`, and `generate-delivery-indexes`. Inspection and preview are read-only. For normal creation, use `preview-delivery-asset` followed by `materialize-delivery-asset --update-indexes` with the same JSON request. Exact-content retries of the integrated command are safe; its result distinguishes a saved document pair from a failed index update. Migration requires the exact preview plan hash and source fingerprint plus explicit approval and backup references. Materialization and index generation require a validated layout-v2 tree. Before creating delivery files, follow the template and JSON-envelope workflow in [Delivery assets](references/delivery-assets.md#creation-and-indexing-workflow); do not invent Frontmatter fields or handwrite generated indexes.
 
 <!-- plugin-runtime-contract
@@ -46,6 +50,19 @@ intent_materialized_without_acceptance: false
 
 Return exactly one listed primary route, or return no route with the temporary `NEEDS_USER` stop. Never substitute a lifecycle state, scenario family, workflow type, document kind, or newly invented label for a primary route. Before any durable write, select one non-null solution ID from the presented acceptable range; if current evidence cannot support one, stop instead of writing. Creating a Feedback, PRD, non-PRD owner, architecture asset, or knowledge candidate records intent and scope only—it is not implementation or acceptance and must not be reported as materialized intent.
 
+
+<!-- human-gate-vocabulary
+purpose: Report a required human gate by its identifier from this closed list, not by prose. The named state or reference remains authoritative for when the gate applies.
+gates:
+  - ROUTE_CLARIFICATION
+  - FEEDBACK_SCOPE_CONFIRMATION
+  - PRD_DECOMPOSITION_APPROVAL
+  - MULTI_REPOSITORY_ACCEPTANCE
+  - CONFLICT_RESOLUTION
+  - ARCHIVE_ACCESS_APPROVAL
+  - CLOSURE_ACCEPTANCE
+-->
+
 ## Reference Routing
 
 Load only the reference needed for the current state or unresolved decision. Load `intake-routing.md` only for a new intake or a material main-flow correction. For an existing durable owner, read its Frontmatter and current Context Receipt before consulting intake routing again.
@@ -54,7 +71,7 @@ Load only the reference needed for the current state or unresolved decision. Loa
 | --- | --- |
 | New intake, no durable owner, material ambiguity, or main-flow correction | [Intake routing](references/intake-routing.md) |
 | Preserve Feedback history, decide whether a PRD is justified, or connect many Feedback and PRD records | [Feedback and PRD boundaries](references/feedback-and-prd-boundaries.md) |
-| Decide which delivery artifact is justified or what each artifact may own | [Delivery assets](references/delivery-assets.md) |
+| Decide which delivery artifact is justified, what each artifact may own, or name any delivery file path (always load before stating or writing a path) | [Delivery assets](references/delivery-assets.md) |
 | Coordinate parallel PRDs, worktrees, baselines, dependencies, conflicts, or cross-repository work | [Parallel delivery](references/parallel-delivery.md) |
 | Record or resolve an exceptional cross-owner requirement | [Obligations](references/obligations.md) |
 | Accept, close, retain, summarize, hand off knowledge, or clean runtime state | [Closure and retention](references/closure-and-retention.md) |
